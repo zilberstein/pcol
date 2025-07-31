@@ -10,7 +10,8 @@
     "manifestFile": "lake-manifest.json",
     "inputRev": null,
     "inherited": false,
-    "configFile": "lakefile.lean"}],
- ],
+    "configFile": "lakefile.lean"
+    }
+],
  "name": "semantics",
  "lakeDir": ".lake"}
