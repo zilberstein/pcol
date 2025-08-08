@@ -53,54 +53,60 @@ lemma dist_decomp {α : Type} :
     · simp; intro hlu hs hl
       use ⟨f, ⟨hs, hl⟩⟩
   }
-lemma hassum_le_bot {α : Type} {μ : Distr α} :
-  ∑' (x : α), μ.1 x ≤ 1 := by {
-    rcases μ with ⟨f, ⟨hs, hl⟩⟩
-    have hs' := (Summable.hasSum_iff ⟨1, hs⟩).1 hs
-    rw [← tsum_univ]
-    have hhh := tsum_subtype_le f (Set.univ) hl ⟨1, hs⟩
 
-    rw [hs'] at hhh
-    simp
-    rw [← hs']
-    apply
+def fin_exp (α : Type) := { f : WithBot α → NNReal // Finite { x | f x ≠ 0 } }
 
-  }
-
-lemma sum_sup {α : Type} {f : α → ℝ } {r : ℝ} :
-  (∑' x, f x) ≤ r ↔ iSup (fun s : Finset α => ∑ x ∈ s, f x) ≤ r:= by {
-    sorry
-   }
-
-lemma sum_decomp {α : Type} :
-  { f : WithBot α → ℝ | HasSum f 1 ∧ ∀ x, 0 ≤ f x } =
-  Set.iInter (fun s : Finset α => { f : WithBot α → ℝ | (∑ x ∈ s, f x) ≤ 1 }) := by {
-
-    calc
-      { f : WithBot α → ℝ | HasSum f 1 ∧ ∀ x, 0 ≤ f x }
-        = { f : WithBot α → ℝ | HasSum (fun ) 1 ∧ ∀ x, 0 ≤ f x }
-    ext f; simp; constructor
-    · intro hs s; sorry
-    · sorry
-  }
-
-def fin_distrs {α : Type} := { μ : Distr α | Finite (supp μ ) }
+def restr {α : Type} [DecidableEq α] (f : WithBot α → NNReal) (s : Finset (WithBot α)) : fin_exp α :=
+  Subtype.mk (fun x => if x ∈ s then f x else 0)
+  (by {
+    apply Set.Finite.subset (Finset.finite_toSet s)
+    intros x hx; simp at hx; exact hx.1
+  })
 
 -- Lemma B.4.2 of MM'05
-lemma closed_finitary_half_space {α : Type} {f : WithBot α → NNReal} {r : NNReal} :
-  Finite { x | f x ≠ 0 } →
-  IsClosed { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f x) ≤ r } := by {
-    intro hf
+lemma closed_finitary_half_space {α : Type} {f : fin_exp α} {r : NNReal} :
+  IsClosed { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f.val x) ≤ r } := by {
+    sorry
+  }
+
+-- I think this is true, but worst case we can make f bounded
+lemma convex_sum_summable {α : Type} {f : WithBot α → NNReal} {μ : Distr α} :
+  Summable (fun x => μ.val x * f x) := by {
     sorry
   }
 
 -- Lemma B.4.3 of MM'05
-lemma closed_infinitary_half_space {α : Type} (f : WithBot α → NNReal) (r : NNReal) :
+lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (f : WithBot α → NNReal) (r : NNReal) :
   IsClosed { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f x) ≤ r } := by {
-    sorry
+    have he :
+      { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f x) ≤ r } =
+      Set.iInter (fun s : Finset (WithBot α) =>
+        { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * (restr f s).val x) ≤ r }) := by {
+          ext g; simp; constructor
+          · rintro ⟨⟨μ, heq⟩, hle⟩ s; constructor
+            · use μ
+            · have hr : ∀ x, (restr f s).val x ≤ f x := by {
+                intro x; unfold restr; simp
+                by_cases h: x ∈ s
+                · simp [h]
+                · simp [h]
+              }
+              apply (le_trans _ hle)
+              apply tsum_le_tsum
+              · intro x; apply mul_le_mul
+                · linarith
+                · exact (hr x)
+                · unfold restr; simp
+                · have h := (μ.2.2 x); simp [h, heq]
+              · rw [heq]; apply convex_sum_summable
+              · rw [heq]; apply convex_sum_summable
+          · sorry -- This case (the reverse inclusion) is a lot harder
+        }
+    rw [he]
+    exact isClosed_iInter (fun _ => closed_finitary_half_space)
   }
 
-lemma isClosed_distr {α : Type} :
+lemma isClosed_distr {α : Type} [DecidableEq α] :
   IsClosed { f : WithBot α → ℝ | HasSum f 1 ∧ ∀ x, 0 ≤ f x } := by {
     let const (_ : WithBot α) : NNReal := 1
     have h :
@@ -119,7 +125,7 @@ lemma isClosed_distr {α : Type} :
 }
 
 -- Lemma B.4.4 of MM'05
-instance {α : Type} : CompactSpace (Distr α) := {
+instance {α : Type} [DecidableEq α] : CompactSpace (Distr α) := {
   isCompact_univ := by {
     have hi := (Topology.isInducing_iff (fun μ : Distr α => μ.1)).2 (by rfl)
     apply (Topology.IsInducing.isCompact_iff hi).2
@@ -131,7 +137,7 @@ instance {α : Type} : CompactSpace (Distr α) := {
 }
 
 -- Intersection of sequence of closed sets of distributions is nonempty
-theorem chain_inter_nonempty {α : Type} (c : ℕ → Set (Distr α)) :
+theorem chain_inter_nonempty {α : Type} [DecidableEq α] (c : ℕ → Set (Distr α)) :
   (∀ n : ℕ, c (n+1) ⊆ c n) →
   (∀ n : ℕ, IsClosed (c n) ∧ (c n).Nonempty) →
   (Set.iInter c).Nonempty := by {
