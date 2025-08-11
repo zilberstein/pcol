@@ -64,10 +64,8 @@ lemma closed_finitary_half_space {α : Type} {e : α →₀ NNReal} {r : NNReal}
       have hf : (Function.support fun x ↦ d x * e x) ⊆ e.support := by simp
       rw [tsum_eq_sum' hf]
     }
-    have hcf : Continuous f := by {
-      apply continuous_finset_sum; intro x hx
-      exact Continuous.mul (continuous_apply x) continuous_const
-    }
+    have hcf : Continuous f :=
+      continuous_finset_sum e.support fun x _ => Continuous.mul (continuous_apply x) continuous_const
     rw [heq]
     exact isClosed_le hcf continuous_const
   }
@@ -78,7 +76,6 @@ lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (e : α → NNRe
     have he :
       { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } =
       Set.iInter (fun s : Finset α =>
-      -- TODO: simplify this proof with Summable.tsum_le_of_sum_le and sum_le_tsum
         { g : α → NNReal | ∑' x, g x * restr e s x ≤ r }) := by {
           ext g; simp; constructor
           · rintro ⟨hs, hb⟩ s
