@@ -4,7 +4,7 @@ import Mathlib
 def Distr (α : Type) := { μ : WithBot α → ℝ // HasSum μ 1 ∧ ∀x, 0 ≤ μ x }
 
 instance {α : Type} : FunLike (Distr α) (WithBot α) ℝ where
-  coe d x := d.1 x
+  coe d := d.1
   coe_injective' _ _ h := Subtype.eq h
 
 def supp {α : Type} (μ : Distr α) : Set (WithBot α) := { x | μ x ≠ 0 }
@@ -15,119 +15,142 @@ lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
     exact (le_hasSum hs x (fun y _ => hl y))
   }
 
-instance {α : Type} : TopologicalSpace (Distr α) :=
-  TopologicalSpace.induced (fun μ => μ.1) Pi.topologicalSpace
+-- Inject a Distribution into α-dimensional Euclidean Space
+def distr_inj {α : Type} (μ : Distr α) : α → NNReal := Real.toNNReal ∘ μ ∘ WithBot.some
 
-lemma unit_interval_compact : IsCompact { r : ℝ | 0 ≤ r ∧ r ≤ 1 } := by {
-  have h : { r : ℝ | 0 ≤ r ∧ r ≤ 1 } = Metric.closedBall 0.5 0.5 := by {
+instance {α : Type} : TopologicalSpace (Distr α) :=
+  TopologicalSpace.induced distr_inj Pi.topologicalSpace
+
+lemma unit_interval_compact : IsCompact { r : NNReal | r ≤ 1 } := by {
+  have h : { r : NNReal | r ≤ 1 } = Metric.closedBall 0.5 0.5 := by {
+    have h1 : (0.5 + 0.5 : ℝ) = ↑(1 : NNReal) := by rw [NNReal.coe_one]; linarith
     ext r; constructor
-    · intro hr; simp; rcases hr with ⟨hl, hu⟩
-      rw [Real.dist_eq]
-      apply abs_le'.2; constructor; linarith; linarith
+    · simp; intro hu
+      rw [NNReal.dist_eq]
+      apply abs_le'.2; apply NNReal.coe_le_coe.2 at hu; constructor
+      · simp; rw [h1]; exact hu
+      · simp
     · intro hr; simp at hr
-      rw [Real.dist_eq] at hr; apply abs_le'.1 at hr
-      constructor; linarith; linarith
+      rw [NNReal.dist_eq] at hr; apply abs_le'.1 at hr
+      rcases hr with ⟨hr, _⟩; simp at hr; rw [h1] at hr
+      exact (NNReal.coe_le_coe.2 hr)
   }
-  rw [h]
   apply Metric.isCompact_iff_isClosed_bounded.2
   constructor
-  · exact Metric.isClosed_closedBall
-  · exists 1; simp; intros x hx y hy
-    calc
-      |x - y| = dist x y                := Real.dist_eq x y
-      _       ≤ dist x 0.5 + dist 0.5 y := dist_triangle x 0.5 y
-      _       = dist x 0.5 + dist y 0.5 := by rw [dist_comm 0.5 y]
-      _       ≤ 1 := by linarith
+  · rw [h]; exact Metric.isClosed_closedBall
+  · use { r : ℝ | 1 < r ∨ r < 0}; constructor
+    · simp; constructor
+      · use -1; intro x hx; right; linarith
+      · use 2; intro x hx; left; linarith
+    · rintro ⟨r, hr⟩ hs ht; cases hs with
+      | inl h1 => simp at h1; simp at ht; apply NNReal.coe_le_coe.2 at ht; simp at ht; linarith
+      | inr h2 => simp at h2; linarith
 }
 
-lemma dist_decomp {α : Type} :
-  Set.range (fun μ : Distr α => μ.1) =
-  { f : WithBot α → ℝ | ∀ x, f x ∈  { r : ℝ | 0 ≤ r ∧ r ≤ 1 }} ∩
-  { f : WithBot α → ℝ | HasSum f 1 ∧ ∀ x, 0 ≤ f x } := by {
-    ext f; constructor
-    · rintro ⟨⟨g, ⟨hs, hl⟩⟩, hf⟩; constructor
-      · intro x
-        rw [← hf]; simp
-        exact ⟨hl x, distr_upper_bound ⟨g, ⟨hs, hl⟩⟩ x⟩
-      · simp [← hf]; exact ⟨hs, hl⟩
-    · simp; intro hlu hs hl
-      use ⟨f, ⟨hs, hl⟩⟩
-  }
 
-def fin_exp (α : Type) := { f : WithBot α → NNReal // Finite { x | f x ≠ 0 } }
-
-def restr {α : Type} [DecidableEq α] (f : WithBot α → NNReal) (s : Finset (WithBot α)) : fin_exp α :=
-  Subtype.mk (fun x => if x ∈ s then f x else 0)
-  (by {
-    apply Set.Finite.subset (Finset.finite_toSet s)
-    intros x hx; simp at hx; exact hx.1
-  })
+noncomputable def restr {α : Type} [DecidableEq α] (f : α → NNReal) (s : Finset α) : α →₀ NNReal :=
+  Finsupp.mk
+    { x ∈ s | f x ≠ 0 }
+    (fun x => if x ∈ s then f x else 0)
+    (by simp)
 
 -- Lemma B.4.2 of MM'05
-lemma closed_finitary_half_space {α : Type} {f : fin_exp α} {r : NNReal} :
-  IsClosed { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f.val x) ≤ r } := by {
-    sorry
+lemma closed_finitary_half_space {α : Type} {e : α →₀ NNReal} {r : NNReal} :
+  IsClosed { d : α → NNReal | (∑' x, d x * e x) ≤ r } := by {
+    let f (d : α → NNReal) : NNReal := ∑ x ∈ e.support, d x * e x
+    let g (_ : α → NNReal) : NNReal := r
+    have heq : { d : α → NNReal | (∑' x, d x * e x) ≤ r } = { d | f d ≤ g d } := by {
+      ext d; simp
+      have hf : (Function.support fun x ↦ d x * e x) ⊆ e.support := by simp
+      rw [tsum_eq_sum' hf]
+    }
+    have hcf : Continuous f := by {
+      apply continuous_finset_sum; intro x hx
+      exact Continuous.mul (continuous_apply x) continuous_const
+    }
+    rw [heq]
+    exact isClosed_le hcf continuous_const
   }
 
--- I think this is true, but worst case we can make f bounded
-lemma convex_sum_summable {α : Type} {f : WithBot α → NNReal} {μ : Distr α} :
-  Summable (fun x => μ.val x * f x) := by {
-    sorry
+-- lemma hasSum_toNNReal {α : Type} {f : α → ENNReal} (hsum : ∑' x, f x ≠ ⊤) :
+--     HasSum (fun x => (f x).toNNReal) (∑' x, (f x).toNNReal) := by
+--   lift f to α → NNReal using ENNReal.ne_top_of_tsum_ne_top hsum
+--   simp only [← NNReal.coe_tsum, NNReal.hasSum_coe]
+--   exact (tsum_coe_ne_top_iff_summable.1 hsum).hasSum
+
+lemma summable_bounded {α : Type} {r : NNReal} {f : α → NNReal} (h : ∑' x : α, f x ≤ r) :
+  Summable f := by {
+    apply ENNReal.tsum_coe_ne_top_iff_summable.1
+    have heq : (↑(∑' (x : α), f x) : ENNReal) = ∑' (b : α), ↑(f b) := by {
+      sorry
+    }
+    rw [← heq]
+    exact ENNReal.coe_ne_top
   }
 
 -- Lemma B.4.3 of MM'05
-lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (f : WithBot α → NNReal) (r : NNReal) :
-  IsClosed { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f x) ≤ r } := by {
+lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (e : α → NNReal) (r : NNReal) :
+  IsClosed { d : α → NNReal | ∑' x, d x * e x ≤ r } := by {
     have he :
-      { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * f x) ≤ r } =
-      Set.iInter (fun s : Finset (WithBot α) =>
-        { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * (restr f s).val x) ≤ r }) := by {
+      { g : α → NNReal | ∑' x, g x * e x ≤ r } =
+      Set.iInter (fun s : Finset α =>
+        { g : α → NNReal | ∑' x, g x * restr e s x ≤ r }) := by {
           ext g; simp; constructor
-          · rintro ⟨⟨μ, heq⟩, hle⟩ s; constructor
-            · use μ
-            · have hr : ∀ x, (restr f s).val x ≤ f x := by {
-                intro x; unfold restr; simp
-                by_cases h: x ∈ s
-                · simp [h]
-                · simp [h]
-              }
-              apply (le_trans _ hle)
-              apply tsum_le_tsum
-              · intro x; apply mul_le_mul
-                · linarith
-                · exact (hr x)
-                · unfold restr; simp
-                · have h := (μ.2.2 x); simp [h, heq]
-              · rw [heq]; apply convex_sum_summable
-              · rw [heq]; apply convex_sum_summable
-          · sorry -- This case (the reverse inclusion) is a lot harder
+          · intro hb s
+            have hle : ∀ x, (fun y => g y * restr e s y) x ≤ (fun y => g y * e y) x := by {
+              intro x; simp [restr]; by_cases h : (x ∈ s); simp [h]; simp [h]
+            }
+            apply (le_trans _ hb)
+            apply tsum_le_tsum
+            · intro x; apply hle
+            · apply summable_of_finite_support; simp; apply Set.Finite.inf_of_right; simp
+            · exact (summable_bounded hb)
+          · intro h
+            sorry -- This case (the reverse inclusion) is a lot harder
         }
     rw [he]
     exact isClosed_iInter (fun _ => closed_finitary_half_space)
   }
 
 lemma isClosed_distr {α : Type} [DecidableEq α] :
-  IsClosed { f : WithBot α → ℝ | HasSum f 1 ∧ ∀ x, 0 ≤ f x } := by {
-    let const (_ : WithBot α) : NNReal := 1
+  IsClosed { f : α → NNReal | (∑' x : α, f x) ≤ 1 } := by {
+    let const (_ : α) : NNReal := 1
+    have heq (f : α → NNReal) : (fun x => f x) = fun x => f x * const x := by ext x; simp [const]
     have h :
-      { f : WithBot α → ℝ | HasSum f 1 ∧ ∀ x, 0 ≤ f x } =
-      { g | (∃ μ : Distr α, g = μ.val) ∧ (∑' x, g x * const x) ≤ 1 } := by {
-        ext f; simp; constructor
-        · rintro ⟨hs, hl⟩; constructor
-          · use ⟨f, ⟨hs, hl⟩⟩
-          · unfold const; simp
-            apply (Summable.hasSum_iff ⟨1, hs⟩).1 at hs
-            rw [hs]
-        · rintro ⟨⟨⟨g, ⟨hs, hl⟩⟩, heq⟩, hs'⟩
-          simp [heq]; exact ⟨hs, hl⟩
-    }
+      { f : α → NNReal | (∑' x : α, f x) ≤ 1 } =
+      { f | ∑' x, f x * const x ≤ 1 } := by {
+        ext f; simp; rw [heq]
+      }
     rw [h]; exact (closed_infinitary_half_space const 1)
 }
+
+lemma dist_decomp {α : Type} :
+  Set.range distr_inj =
+  { f : α → NNReal | ∀ x, f x ≤ 1 } ∩
+  { f : α → NNReal | (∑' x : α, f x) ≤ 1 } := by {
+    ext f; constructor
+    · rintro ⟨⟨g, ⟨hs, hl⟩⟩, hf⟩; constructor
+      · intro x
+        rw [← hf, distr_inj]; simp
+        exact distr_upper_bound ⟨g, ⟨hs, hl⟩⟩ x
+      · simp [← hf, distr_inj]
+        have h := (Summable.hasSum_iff ⟨1, hs⟩).1 hs
+        apply (congrArg Real.toNNReal) at h
+        rw [Real.toNNReal_one] at h
+        rw [← h]
+        unfold Real.toNNReal at h
+        sorry
+        -- rw [NNReal.coe_tsum_of_nonneg hl] at h
+        -- let g' (x : WithBot α) : NNReal := ⟨g x, hl x⟩
+        -- let hg : (fun x => g x) = fun x => ↑(g' x) := by simp [g']
+        -- rw [hg]; rw [← NNReal.tsum_eq_toNNReal_tsum]
+    · simp [distr_inj]; intro hlu hs; sorry
+  }
 
 -- Lemma B.4.4 of MM'05
 instance {α : Type} [DecidableEq α] : CompactSpace (Distr α) := {
   isCompact_univ := by {
-    have hi := (Topology.isInducing_iff (fun μ : Distr α => μ.1)).2 (by rfl)
+    have hi := (Topology.isInducing_iff (@distr_inj α)).2 (by rfl)
     apply (Topology.IsInducing.isCompact_iff hi).2
     simp; rw [dist_decomp]
     apply IsCompact.inter_right
