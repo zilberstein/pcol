@@ -15,6 +15,8 @@ lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
     exact (le_hasSum hs x (fun y _ => hl y))
   }
 
+--lemma distr_bot {α : Type} (μ : Distr α) : μ ⊥ = 1 - ∑' x : α, μ x := by sorry
+
 -- Inject a Distribution into α-dimensional Euclidean Space
 def distr_inj {α : Type} (μ : Distr α) : α → NNReal := Real.toNNReal ∘ μ ∘ WithBot.some
 
@@ -72,31 +74,15 @@ lemma closed_finitary_half_space {α : Type} {e : α →₀ NNReal} {r : NNReal}
     exact isClosed_le hcf continuous_const
   }
 
--- lemma hasSum_toNNReal {α : Type} {f : α → ENNReal} (hsum : ∑' x, f x ≠ ⊤) :
---     HasSum (fun x => (f x).toNNReal) (∑' x, (f x).toNNReal) := by
---   lift f to α → NNReal using ENNReal.ne_top_of_tsum_ne_top hsum
---   simp only [← NNReal.coe_tsum, NNReal.hasSum_coe]
---   exact (tsum_coe_ne_top_iff_summable.1 hsum).hasSum
-
-lemma summable_bounded {α : Type} {r : NNReal} {f : α → NNReal} (h : ∑' x : α, f x ≤ r) :
-  Summable f := by {
-    apply ENNReal.tsum_coe_ne_top_iff_summable.1
-    have heq : (↑(∑' (x : α), f x) : ENNReal) = ∑' (b : α), ↑(f b) := by {
-      sorry
-    }
-    rw [← heq]
-    exact ENNReal.coe_ne_top
-  }
-
 -- Lemma B.4.3 of MM'05
 lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (e : α → NNReal) (r : NNReal) :
-  IsClosed { d : α → NNReal | ∑' x, d x * e x ≤ r } := by {
+  IsClosed { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } := by {
     have he :
-      { g : α → NNReal | ∑' x, g x * e x ≤ r } =
+      { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } =
       Set.iInter (fun s : Finset α =>
         { g : α → NNReal | ∑' x, g x * restr e s x ≤ r }) := by {
           ext g; simp; constructor
-          · intro hb s
+          · rintro ⟨hs, hb⟩ s
             have hle : ∀ x, (fun y => g y * restr e s y) x ≤ (fun y => g y * e y) x := by {
               intro x; simp [restr]; by_cases h : (x ∈ s); simp [h]; simp [h]
             }
@@ -104,47 +90,81 @@ lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (e : α → NNRe
             apply tsum_le_tsum
             · intro x; apply hle
             · apply summable_of_finite_support; simp; apply Set.Finite.inf_of_right; simp
-            · exact (summable_bounded hb)
+            · exact hs
           · intro h
-            sorry -- This case (the reverse inclusion) is a lot harder
+            have hhh : (∑' (x : α), ↑(g x * e x) : ENNReal) ≤ ↑r := by {
+              rw [ENNReal.tsum_eq_iSup_sum]
+              apply iSup_le_iff.2
+              intro s
+              have heq : ∀ x ∈ s, (fun x => (↑(g x * e x) : ENNReal)) x =
+                                  (fun x => ↑(g x * restr e s x)) x := by {
+                intro x hx; simp [restr, hx]
+              }
+              rw [Finset.sum_congr rfl heq]
+              rw [← tsum_eq_sum]
+              · rw [← ENNReal.coe_tsum]
+                · simp [h]
+                · apply summable_of_finite_support; simp; apply Set.Finite.inf_of_right; simp
+              · intro x hx; simp [restr]; intro hx'; contradiction
+            }
+            have hs : Summable fun x ↦ g x * e x := by {
+              apply ENNReal.tsum_coe_ne_top_iff_summable.1
+              apply lt_top_iff_ne_top.1
+              have ht : (↑r : ENNReal) < ⊤ := ENNReal.coe_lt_top
+              exact lt_of_le_of_lt hhh ht
+            }
+            rw [← ENNReal.coe_tsum hs] at hhh; simp at hhh
+            exact ⟨hs, hhh⟩
         }
     rw [he]
     exact isClosed_iInter (fun _ => closed_finitary_half_space)
   }
 
 lemma isClosed_distr {α : Type} [DecidableEq α] :
-  IsClosed { f : α → NNReal | (∑' x : α, f x) ≤ 1 } := by {
+  IsClosed { f : α → NNReal | Summable f ∧ tsum f ≤ 1 } := by {
     let const (_ : α) : NNReal := 1
-    have heq (f : α → NNReal) : (fun x => f x) = fun x => f x * const x := by ext x; simp [const]
+    have heq (f : α → NNReal) : f = fun x => f x * const x := by ext x; simp [const]
     have h :
-      { f : α → NNReal | (∑' x : α, f x) ≤ 1 } =
-      { f | ∑' x, f x * const x ≤ 1 } := by {
-        ext f; simp; rw [heq]
+      { f : α → NNReal | Summable f ∧ tsum f ≤ 1 } =
+      { f | Summable (fun x => f x * const x) ∧ ∑' x, f x * const x ≤ 1 } := by {
+        ext f; simp; rw [← heq f]
       }
     rw [h]; exact (closed_infinitary_half_space const 1)
 }
 
+lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f ≤ 1) :
+  ∃ μ : Distr α, distr_inj μ = f := by {
+    let g (x : WithBot α) : ℝ := match x with
+      | none => ↑(1 - ∑' y : α, f y)
+      | some y => ↑(f y)
+    let μ : Distr α := Subtype.mk g (by {
+      unfold g; constructor; sorry
+      intro x; cases x; simp; simp
+    })
+    use μ; ext x; simp [μ, g]; sorry
+  }
+
 lemma dist_decomp {α : Type} :
   Set.range distr_inj =
   { f : α → NNReal | ∀ x, f x ≤ 1 } ∩
-  { f : α → NNReal | (∑' x : α, f x) ≤ 1 } := by {
+  { f : α → NNReal | Summable f ∧ tsum f ≤ 1 } := by {
     ext f; constructor
-    · rintro ⟨⟨g, ⟨hs, hl⟩⟩, hf⟩; constructor
+    · rintro ⟨μ, hf⟩; constructor
       · intro x
         rw [← hf, distr_inj]; simp
-        exact distr_upper_bound ⟨g, ⟨hs, hl⟩⟩ x
+        exact distr_upper_bound μ x
       · simp [← hf, distr_inj]
-        have h := (Summable.hasSum_iff ⟨1, hs⟩).1 hs
+        have h := (Summable.hasSum_iff ⟨1, μ.2.1⟩).1 μ.2.1
         apply (congrArg Real.toNNReal) at h
         rw [Real.toNNReal_one] at h
         rw [← h]
-        unfold Real.toNNReal at h
-        sorry
-        -- rw [NNReal.coe_tsum_of_nonneg hl] at h
-        -- let g' (x : WithBot α) : NNReal := ⟨g x, hl x⟩
-        -- let hg : (fun x => g x) = fun x => ↑(g' x) := by simp [g']
-        -- rw [hg]; rw [← NNReal.tsum_eq_toNNReal_tsum]
-    · simp [distr_inj]; intro hlu hs; sorry
+        have hs' : HasSum (Real.toNNReal ∘ μ ∘ WithBot.some) (1 - ∑' x : α, (μ x).toNNReal) := by {
+          sorry
+        }
+        constructor
+        · exact ⟨_, hs'⟩
+        · simp [HasSum.tsum_eq hs', h]
+    · simp [distr_inj]; intro hlu hs hb; exact dist_invert hs hb
   }
 
 -- Lemma B.4.4 of MM'05
