@@ -15,10 +15,8 @@ lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
     exact (le_hasSum hs x (fun y _ => hl y))
   }
 
---lemma distr_bot {α : Type} (μ : Distr α) : μ ⊥ = 1 - ∑' x : α, μ x := by sorry
-
 -- Inject a Distribution into α-dimensional Euclidean Space
-def distr_inj {α : Type} (μ : Distr α) : α → NNReal := Real.toNNReal ∘ μ ∘ WithBot.some
+def distr_inj {α : Type} (μ : Distr α) : α → NNReal := Real.toNNReal ∘ μ.val ∘ WithBot.some
 
 instance {α : Type} : TopologicalSpace (Distr α) :=
   TopologicalSpace.induced distr_inj Pi.topologicalSpace
@@ -80,6 +78,7 @@ lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (e : α → NNRe
     have he :
       { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } =
       Set.iInter (fun s : Finset α =>
+      -- TODO: simplify this proof with Summable.tsum_le_of_sum_le and sum_le_tsum
         { g : α → NNReal | ∑' x, g x * restr e s x ≤ r }) := by {
           ext g; simp; constructor
           · rintro ⟨hs, hb⟩ s
@@ -132,16 +131,54 @@ lemma isClosed_distr {α : Type} [DecidableEq α] :
     rw [h]; exact (closed_infinitary_half_space const 1)
 }
 
+noncomputable def to_distr {α : Type} (f : α → NNReal) : WithBot α → ℝ :=
+  fun x => match x with
+    | none => ↑(1 - ∑' y : α, f y)
+    | some y => ↑(f y)
+
+lemma to_distr_sum {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f ≤ 1) :
+  HasSum (to_distr f) 1 := by {
+    rcases h with ⟨r, hr⟩
+    let g : α ⊕ PUnit.{1} → ℝ := to_distr f ∘ (Equiv.optionEquivSumPUnit α).invFun
+    have hs : HasSum (g ∘ Sum.inl) r := by {
+      have h : g ∘ Sum.inl = (↑) ∘ f := by ext x; simp [to_distr, g]
+      rw [h]; exact NNReal.hasSum_coe.2 hr
+    }
+    have ht : tsum f = r := (Summable.hasSum_iff ⟨r, hr⟩).1 hr
+    have hn : HasSum (g ∘ Sum.inr) (1 - r) := by {
+      have h : g ∘ Sum.inr = fun _ => ↑(1 - r) := by ext x; simp [g, to_distr, ht]
+      rw [h]
+      have heq : (1 - ↑r : ℝ) = (fun (x : PUnit.{1}) ↦ ↑(1 - r)) default := by rw [ht] at h'; simp [h']
+      rw [heq]; apply hasSum_unique
+    }
+    have hh := HasSum.sum hs hn
+    simp [g] at hh
+    exact (Equiv.hasSum_iff (Equiv.optionEquivSumPUnit α).symm).1 hh
+  }
+
+lemma dist_inj_sum_le_1 {α : Type} {μ : Distr α} :
+  Summable (distr_inj μ) ∧ tsum (distr_inj μ) ≤ 1 := by {
+  rcases μ with ⟨d, ⟨hs, hl⟩⟩; simp [distr_inj]
+  have hsm := Summable.toNNReal (Summable.comp_injective ⟨1, hs⟩ (Option.some_injective α))
+  constructor
+  · exact hsm
+  · have hs' := HasSum.toNNReal hl hs
+    simp at hs'; rw [← (Summable.hasSum_iff ⟨1, hs'⟩).1 hs']
+    apply tsum_le_tsum_of_inj some (Option.some_injective α)
+    · simp
+    · intro x; simp; apply le_refl
+    · exact hsm
+    · exact ⟨1, hs'⟩
+}
+
 lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f ≤ 1) :
   ∃ μ : Distr α, distr_inj μ = f := by {
-    let g (x : WithBot α) : ℝ := match x with
-      | none => ↑(1 - ∑' y : α, f y)
-      | some y => ↑(f y)
-    let μ : Distr α := Subtype.mk g (by {
-      unfold g; constructor; sorry
-      intro x; cases x; simp; simp
+    let μ : Distr α := Subtype.mk (to_distr f) (by {
+      constructor
+      · exact to_distr_sum h h'
+      · unfold to_distr; intro x; cases x; simp; simp
     })
-    use μ; ext x; simp [μ, g]; sorry
+    use μ; ext x; simp [μ, distr_inj, to_distr]
   }
 
 lemma dist_decomp {α : Type} :
@@ -153,17 +190,7 @@ lemma dist_decomp {α : Type} :
       · intro x
         rw [← hf, distr_inj]; simp
         exact distr_upper_bound μ x
-      · simp [← hf, distr_inj]
-        have h := (Summable.hasSum_iff ⟨1, μ.2.1⟩).1 μ.2.1
-        apply (congrArg Real.toNNReal) at h
-        rw [Real.toNNReal_one] at h
-        rw [← h]
-        have hs' : HasSum (Real.toNNReal ∘ μ ∘ WithBot.some) (1 - ∑' x : α, (μ x).toNNReal) := by {
-          sorry
-        }
-        constructor
-        · exact ⟨_, hs'⟩
-        · simp [HasSum.tsum_eq hs', h]
+      · simp [← hf]; exact dist_inj_sum_le_1
     · simp [distr_inj]; intro hlu hs hb; exact dist_invert hs hb
   }
 
