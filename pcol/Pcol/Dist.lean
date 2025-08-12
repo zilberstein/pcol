@@ -47,86 +47,41 @@ lemma unit_interval_compact : IsCompact { r : NNReal | r ≤ 1 } := by {
       | inr h2 => simp at h2; linarith
 }
 
-
-noncomputable def restr {α : Type} [DecidableEq α] (f : α → NNReal) (s : Finset α) : α →₀ NNReal :=
-  Finsupp.mk
-    { x ∈ s | f x ≠ 0 }
-    (fun x => if x ∈ s then f x else 0)
-    (by simp)
-
 -- Lemma B.4.2 of MM'05
-lemma closed_finitary_half_space {α : Type} {e : α →₀ NNReal} {r : NNReal} :
-  IsClosed { d : α → NNReal | (∑' x, d x * e x) ≤ r } := by {
-    let f (d : α → NNReal) : NNReal := ∑ x ∈ e.support, d x * e x
-    let g (_ : α → NNReal) : NNReal := r
-    have heq : { d : α → NNReal | (∑' x, d x * e x) ≤ r } = { d | f d ≤ g d } := by {
-      ext d; simp
-      have hf : (Function.support fun x ↦ d x * e x) ⊆ e.support := by simp
-      rw [tsum_eq_sum' hf]
-    }
-    have hcf : Continuous f :=
-      continuous_finset_sum e.support fun x _ => Continuous.mul (continuous_apply x) continuous_const
-    rw [heq]
+lemma closed_finitary_half_space {α : Type} {s : Finset α} {e : α → NNReal} {r : NNReal} :
+  IsClosed { d : α → NNReal | (∑ x ∈ s, d x * e x) ≤ r } := by {
+    have hcf : Continuous fun (d : α → NNReal) => ∑ x ∈ s, d x * e x :=
+      continuous_finset_sum s fun x _ => Continuous.mul (continuous_apply x) continuous_const
     exact isClosed_le hcf continuous_const
   }
 
--- Lemma B.4.3 of MM'05
-lemma closed_infinitary_half_space {α : Type} [DecidableEq α] (e : α → NNReal) (r : NNReal) :
-  IsClosed { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } := by {
+-- Infinitary half-space is equal to the intersection of all equivalent finitary half-spaces
+lemma infinitary_half_space_fin_approx {α : Type} (e : α → NNReal) (r : NNReal) :
+  { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } =
+  ⋂ (s : Finset α), { g : α → NNReal | ∑ x ∈ s, g x * e x ≤ r } := by {
+    ext d; simp
     have he :
-      { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } =
-      Set.iInter (fun s : Finset α =>
-        { g : α → NNReal | ∑' x, g x * restr e s x ≤ r }) := by {
-          ext g; simp; constructor
-          · rintro ⟨hs, hb⟩ s
-            have hle : ∀ x, (fun y => g y * restr e s y) x ≤ (fun y => g y * e y) x := by {
-              intro x; simp [restr]; by_cases h : (x ∈ s); simp [h]; simp [h]
-            }
-            apply (le_trans _ hb)
-            apply tsum_le_tsum
-            · intro x; apply hle
-            · apply summable_of_finite_support; simp; apply Set.Finite.inf_of_right; simp
-            · exact hs
-          · intro h
-            have hhh : (∑' (x : α), ↑(g x * e x) : ENNReal) ≤ ↑r := by {
-              rw [ENNReal.tsum_eq_iSup_sum]
-              apply iSup_le_iff.2
-              intro s
-              have heq : ∀ x ∈ s, (fun x => (↑(g x * e x) : ENNReal)) x =
-                                  (fun x => ↑(g x * restr e s x)) x := by {
-                intro x hx; simp [restr, hx]
-              }
-              rw [Finset.sum_congr rfl heq]
-              rw [← tsum_eq_sum]
-              · rw [← ENNReal.coe_tsum]
-                · simp [h]
-                · apply summable_of_finite_support; simp; apply Set.Finite.inf_of_right; simp
-              · intro x hx; simp [restr]; intro hx'; contradiction
-            }
-            have hs : Summable fun x ↦ g x * e x := by {
-              apply ENNReal.tsum_coe_ne_top_iff_summable.1
-              apply lt_top_iff_ne_top.1
-              have ht : (↑r : ENNReal) < ⊤ := ENNReal.coe_lt_top
-              exact lt_of_le_of_lt hhh ht
-            }
-            rw [← ENNReal.coe_tsum hs] at hhh; simp at hhh
-            exact ⟨hs, hhh⟩
-        }
-    rw [he]
-    exact isClosed_iInter (fun _ => closed_finitary_half_space)
+      Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r ↔
+      (∑' x, (↑(d x * e x) : ENNReal)) ≤ ↑r := by {
+      constructor
+      · rintro ⟨hs, hb⟩; rw [← ENNReal.coe_tsum hs]; exact ENNReal.coe_le_coe.2 hb
+      · intro hb
+        have hs :=
+          ENNReal.tsum_coe_ne_top_iff_summable.1 (lt_top_iff_ne_top.1 (lt_of_le_of_lt hb ENNReal.coe_lt_top))
+        rw [← ENNReal.coe_tsum hs] at hb; exact ⟨hs, ENNReal.coe_le_coe.1 hb⟩
+    }
+    apply Iff.trans he
+    rw [ENNReal.tsum_eq_iSup_sum]
+    apply Iff.trans iSup_le_iff; apply forall_congr'; intro s
+    rw [← ENNReal.coe_finset_sum]; exact ENNReal.coe_le_coe
   }
 
-lemma isClosed_distr {α : Type} [DecidableEq α] :
-  IsClosed { f : α → NNReal | Summable f ∧ tsum f ≤ 1 } := by {
-    let const (_ : α) : NNReal := 1
-    have heq (f : α → NNReal) : f = fun x => f x * const x := by ext x; simp [const]
-    have h :
-      { f : α → NNReal | Summable f ∧ tsum f ≤ 1 } =
-      { f | Summable (fun x => f x * const x) ∧ ∑' x, f x * const x ≤ 1 } := by {
-        ext f; simp; rw [← heq f]
-      }
-    rw [h]; exact (closed_infinitary_half_space const 1)
-}
+-- Lemma B.4.3 of MM'05
+lemma closed_infinitary_half_space {α : Type} (e : α → NNReal) (r : NNReal) :
+  IsClosed { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } := by {
+    rw [infinitary_half_space_fin_approx]
+    exact isClosed_iInter fun _ => closed_finitary_half_space
+  }
 
 noncomputable def to_distr {α : Type} (f : α → NNReal) : WithBot α → ℝ :=
   fun x => match x with
@@ -160,28 +115,24 @@ lemma dist_inj_sum_le_1 {α : Type} {μ : Distr α} :
   constructor
   · exact hsm
   · have hs' := HasSum.toNNReal hl hs
-    simp at hs'; rw [← (Summable.hasSum_iff ⟨1, hs'⟩).1 hs']
-    apply tsum_le_tsum_of_inj some (Option.some_injective α)
-    · simp
-    · intro x; simp; apply le_refl
-    · exact hsm
-    · exact ⟨1, hs'⟩
+    simp at hs'; rw [← HasSum.tsum_eq hs']
+    apply tsum_le_tsum_of_inj some (Option.some_injective α) (by simp) (by simp) hsm ⟨1, hs'⟩
 }
 
 lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f ≤ 1) :
   ∃ μ : Distr α, distr_inj μ = f := by {
-    let μ : Distr α := Subtype.mk (to_distr f) (by {
-      constructor
-      · exact to_distr_sum h h'
-      · unfold to_distr; intro x; cases x; simp; simp
-    })
+    have hl (x : WithBot α) : 0 ≤ to_distr f x := by unfold to_distr; cases x; simp; simp
+    let μ : Distr α := Subtype.mk (to_distr f) ⟨to_distr_sum h h', hl⟩
     use μ; ext x; simp [μ, distr_inj, to_distr]
   }
 
+-- The space of distributions can be decomposed into functions α → [0, 1] intersected with
+-- functions whose sum is at most 1
 lemma dist_decomp {α : Type} :
+  let e (_ : α): NNReal := 1
   Set.range distr_inj =
   { f : α → NNReal | ∀ x, f x ≤ 1 } ∩
-  { f : α → NNReal | Summable f ∧ tsum f ≤ 1 } := by {
+  { f : α → NNReal | Summable (fun x => f x * e x) ∧ ∑' x, f x * e x ≤ 1 } := by {
     ext f; constructor
     · rintro ⟨μ, hf⟩; constructor
       · intro x
@@ -192,19 +143,22 @@ lemma dist_decomp {α : Type} :
   }
 
 -- Lemma B.4.4 of MM'05
-instance {α : Type} [DecidableEq α] : CompactSpace (Distr α) := {
+instance {α : Type} : CompactSpace (Distr α) := {
   isCompact_univ := by {
     have hi := (Topology.isInducing_iff (@distr_inj α)).2 (by rfl)
     apply (Topology.IsInducing.isCompact_iff hi).2
+    -- Distr α = [0, 1]^α ∩ { f : α → NNReal | tsum f ≤ 1 }
     simp; rw [dist_decomp]
+    -- The set above is the intersection of a compact set and a closed set, so it is compact
     apply IsCompact.inter_right
+      -- [0, 1]^α is compact by Tychonoff's Theorem
     · exact (isCompact_pi_infinite (fun _ => unit_interval_compact))
-    · exact isClosed_distr
+    · exact (closed_infinitary_half_space _ 1)
   }
 }
 
 -- Intersection of sequence of closed sets of distributions is nonempty
-theorem chain_inter_nonempty {α : Type} [DecidableEq α] (c : ℕ → Set (Distr α)) :
+theorem chain_inter_nonempty {α : Type} (c : ℕ → Set (Distr α)) :
   (∀ n : ℕ, c (n+1) ⊆ c n) →
   (∀ n : ℕ, IsClosed (c n) ∧ (c n).Nonempty) →
   (Set.iInter c).Nonempty := by {
