@@ -18,6 +18,7 @@ lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
 -- Inject a Distribution into α-dimensional Euclidean Space
 def distr_inj {α : Type} (μ : Distr α) : α → NNReal := Real.toNNReal ∘ μ.val ∘ WithBot.some
 
+-- Topology on distributions is the product of Euclidean topologies
 instance {α : Type} : TopologicalSpace (Distr α) :=
   TopologicalSpace.induced distr_inj Pi.topologicalSpace
 
@@ -27,9 +28,7 @@ lemma unit_interval_compact : IsCompact { r : NNReal | r ≤ 1 } := by {
     ext r; constructor
     · simp; intro hu
       rw [NNReal.dist_eq]
-      apply abs_le'.2; apply NNReal.coe_le_coe.2 at hu; constructor
-      · simp; rw [h1]; exact hu
-      · simp
+      apply abs_le'.2; apply NNReal.coe_le_coe.2 at hu; simp; rw [h1]; exact hu
     · intro hr; simp at hr
       rw [NNReal.dist_eq] at hr; apply abs_le'.1 at hr
       rcases hr with ⟨hr, _⟩; simp at hr; rw [h1] at hr
@@ -47,15 +46,16 @@ lemma unit_interval_compact : IsCompact { r : NNReal | r ≤ 1 } := by {
       | inr h2 => simp at h2; linarith
 }
 
--- Lemma B.4.2 of MM'05
-lemma closed_finitary_half_space {α : Type} {s : Finset α} {e : α → NNReal} {r : NNReal} :
+-- Based on Lemma B.4.2 of MM'05, except we use the fact that { x | f x ≤ r } is closed
+-- for any continuous function f instead of using projections
+lemma closed_finitary_half_space {α : Type} {e : α → NNReal} {r : NNReal} (s : Finset α) :
   IsClosed { d : α → NNReal | (∑ x ∈ s, d x * e x) ≤ r } := by {
     have hcf : Continuous fun (d : α → NNReal) => ∑ x ∈ s, d x * e x :=
       continuous_finset_sum s fun x _ => Continuous.mul (continuous_apply x) continuous_const
     exact isClosed_le hcf continuous_const
   }
 
--- Infinitary half-space is equal to the intersection of all equivalent finitary half-spaces
+-- Infinitary half-space is equal to the intersection of all related finitary half-spaces
 lemma infinitary_half_space_fin_approx {α : Type} (e : α → NNReal) (r : NNReal) :
   { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } =
   ⋂ (s : Finset α), { g : α → NNReal | ∑ x ∈ s, g x * e x ≤ r } := by {
@@ -70,18 +70,14 @@ lemma infinitary_half_space_fin_approx {α : Type} (e : α → NNReal) (r : NNRe
           ENNReal.tsum_coe_ne_top_iff_summable.1 (lt_top_iff_ne_top.1 (lt_of_le_of_lt hb ENNReal.coe_lt_top))
         rw [← ENNReal.coe_tsum hs] at hb; exact ⟨hs, ENNReal.coe_le_coe.1 hb⟩
     }
-    apply Iff.trans he
-    rw [ENNReal.tsum_eq_iSup_sum]
-    apply Iff.trans iSup_le_iff; apply forall_congr'; intro s
-    rw [← ENNReal.coe_finset_sum]; exact ENNReal.coe_le_coe
+    rw [he, ENNReal.tsum_eq_iSup_sum, iSup_le_iff]
+    apply forall_congr'; intro s; rw [← ENNReal.coe_finset_sum]; exact ENNReal.coe_le_coe
   }
 
 -- Lemma B.4.3 of MM'05
 lemma closed_infinitary_half_space {α : Type} (e : α → NNReal) (r : NNReal) :
-  IsClosed { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } := by {
-    rw [infinitary_half_space_fin_approx]
-    exact isClosed_iInter fun _ => closed_finitary_half_space
-  }
+  IsClosed { d : α → NNReal | Summable (fun x => d x * e x) ∧ ∑' x, d x * e x ≤ r } := by
+    rw [infinitary_half_space_fin_approx]; exact isClosed_iInter closed_finitary_half_space
 
 noncomputable def to_distr {α : Type} (f : α → NNReal) : WithBot α → ℝ :=
   fun x => match x with
@@ -126,8 +122,8 @@ lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f 
     use μ; ext x; simp [μ, distr_inj, to_distr]
   }
 
--- The space of distributions can be decomposed into functions α → [0, 1] intersected with
--- functions whose sum is at most 1
+-- The space of distributions can be decompose as follows:
+--   Distr α = [0, 1]^α ∩ { f : α → NNReal | tsum f ≤ 1 }
 lemma dist_decomp {α : Type} :
   let e (_ : α): NNReal := 1
   Set.range distr_inj =
@@ -135,9 +131,7 @@ lemma dist_decomp {α : Type} :
   { f : α → NNReal | Summable (fun x => f x * e x) ∧ ∑' x, f x * e x ≤ 1 } := by {
     ext f; constructor
     · rintro ⟨μ, hf⟩; constructor
-      · intro x
-        rw [← hf, distr_inj]; simp
-        exact distr_upper_bound μ x
+      · intro x; rw [← hf, distr_inj]; simp; exact distr_upper_bound μ x
       · simp [← hf]; exact dist_inj_sum_le_1
     · simp [distr_inj]; intro hlu hs hb; exact dist_invert hs hb
   }
@@ -153,6 +147,7 @@ instance {α : Type} : CompactSpace (Distr α) := {
     apply IsCompact.inter_right
       -- [0, 1]^α is compact by Tychonoff's Theorem
     · exact (isCompact_pi_infinite (fun _ => unit_interval_compact))
+      -- Infinitary half-space is closed
     · exact (closed_infinitary_half_space _ 1)
   }
 }
