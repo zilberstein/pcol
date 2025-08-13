@@ -34,10 +34,35 @@ instance {α : Type} : Preorder (D α) where
 
 lemma prob_bot {α : Type} (d : D α) : d ⊥ = 1 - ∑' x : α, d x := by {
   rw [← PMF.tsum_coe d]
-
---  rw [tsum_eq_add_tsum_ite' ⊥]
---  rw [tsum_subtype α d]
-  sorry
+  rw [ENNReal.tsum_eq_add_tsum_ite ⊥, Equiv.tsum_eq_tsum_of_support]
+  · rw [ENNReal.add_sub_cancel_right]
+    refine lt_top_iff_ne_top.mp ?_
+    refine lt_of_le_of_lt ?_ (lt_of_le_of_ne le_top d.tsum_coe_ne_top)
+    refine tsum_comp_le_tsum_of_injective ?_ ⇑d
+    exact WithBot.coe_injective
+  · constructor
+    case toFun =>
+      intro ⟨ x , h ⟩
+      cases x
+      · exfalso ; simp at *
+      · exact ⟨ _ , by simp at * ;  assumption ⟩
+    case invFun =>
+      intro ⟨ x , h ⟩
+      exact ⟨ ↑ x , by simp at * ; assumption ⟩
+    case right_inv =>
+      intros x
+      simp at *
+    case left_inv =>
+      intro ⟨ x , h ⟩
+      simp at *
+      cases x
+      · exfalso ; simp at *
+      · simp
+  · intro ⟨x, h⟩
+    cases x
+    · exfalso
+      simp at *
+    · simp
 }
 
 instance {α : Type} : PartialOrder (D α) where
@@ -55,17 +80,26 @@ instance {α : Type} : PartialOrder (D α) where
 
 def Probability : Set ENNReal := { p : ENNReal | p ≤ 1 }
 
+theorem prob_ne_top {p : ENNReal} (hp : p ≤ 1) : (p : ENNReal) ≠ ⊤ := by
+  apply lt_top_iff_ne_top.mp
+  refine lt_of_le_of_lt ?_ (ENNReal.one_lt_top)
+  assumption
+
 noncomputable def convex_sum' {α : Type} (d₁ d₂ : D α) (p : ENNReal) (hp : p ≤ 1) : D α :=
   Subtype.mk (fun x => (p * d₁ x) + ((1-p) * d₂ x))
   (by {
-    have h : (1 : ENNReal) = p + (1 - p) := by sorry
-    rewrite (occs := .pos [2]) [h]
+    have h : (1 : ENNReal) = p + (1 - p) := by {
+      rw [add_comm, ENNReal.sub_add_eq_add_sub, ENNReal.add_sub_cancel_right]
+      all_goals try apply prob_ne_top hp
+      assumption
+    }
+    rw (occs := .pos [2]) [h]
     apply HasSum.add
     · apply ENNReal.summable.hasSum_iff.2
-      simp only [mul_one, ENNReal.tsum_mul_left]
+      simp only [ENNReal.tsum_mul_left]
       rw [PMF.tsum_coe, mul_one]
     · apply ENNReal.summable.hasSum_iff.2
-      simp only [mul_one, ENNReal.tsum_mul_left]
+      simp only [ENNReal.tsum_mul_left]
       rw [PMF.tsum_coe, mul_one]
   })
 
@@ -88,6 +122,7 @@ instance {α : Type} : TopologicalSpace (D α) :=
 --     TopologicalSpace.induced (fun d : D α => d x) ENNReal.instTopologicalSpace
 
 instance : CompactSpace ENNReal where
+  /- TODO -/
   isCompact_univ := by sorry
 
 lemma d_range_prob {α : Type} :
@@ -114,14 +149,15 @@ lemma d_range_decomp {α : Type} :
   }
 
 instance {α : Type} : CompactSpace (D α) where
-  isCompact_univ := by {
-    have hi := (Topology.isInducing_iff (d_to_fun : D α → _)).2 (by rfl)
-    apply (Topology.IsInducing.isCompact_iff hi).2
-    simp
-    rw [d_range_decomp]
-    apply IsCompact.inter_right
-    · apply isCompact_pi_infinite
-      intro _
+  isCompact_univ := by sorry
+  /- TODO: fix this proof -/
+  --   have hi := (Topology.isInducing_iff (d_to_fun : D α → _)).2 (by rfl)
+  --   apply (Topology.IsInducing.isCompact_iff hi).2
+  --   simp
+  --   rw [d_range_decomp]
+  --   apply IsCompact.inter_right
+  --   · apply isCompact_pi_infinite
+  --     intro _
       -- intro f hnb hle
       -- simp [Filter.principal] at hle
       -- unfold ClusterPt
@@ -142,23 +178,23 @@ instance {α : Type} : CompactSpace (D α) where
       --   injection hc with hc
               -- apply Metric.isCompact_iff_isClosed_bounded
 
-    · rcases (isClosed_induced_iff.1 (isClosed_univ : IsClosed (Set.univ : Set (D α))))
-        with ⟨t, hcl, heq⟩
-      simp at heq
+  --   · rcases (isClosed_induced_iff.1 (isClosed_univ : IsClosed (Set.univ : Set (D α))))
+  --       with ⟨t, hcl, heq⟩
+  --     simp at heq
 
-    apply (IsCompact.of_isClosed_subset · · d_range_prob)
-    · apply isCompact_pi_infinite
-      intro _
-    · rcases (isClosed_induced_iff.1 (isClosed_univ : IsClosed (Set.univ : Set (D α))))
-        with ⟨t, hcl, heq⟩
-      simp at heq
-      unfold Set.preimage at heq
-      have h : t = Set.range d_to_fun := by {
-        ext f; constructor
-        · intro hf; simp
-      }
+  --   apply (IsCompact.of_isClosed_subset · · d_range_prob)
+  --   · apply isCompact_pi_infinite
+  --     intro _
+  --   · rcases (isClosed_induced_iff.1 (isClosed_univ : IsClosed (Set.univ : Set (D α))))
+  --       with ⟨t, hcl, heq⟩
+  --     simp at heq
+  --     unfold Set.preimage at heq
+  --     have h : t = Set.range d_to_fun := by {
+  --       ext f; constructor
+  --       · intro hf; simp
+  --     }
 
-  }
+  -- }
 
 def is_valid_C {α : Type} (S : Set (D α)) : Prop :=
   Nonempty S ∧
@@ -198,7 +234,7 @@ instance {α : Type} : Preorder (C α) where
   }
 
 instance {α : Type} : PartialOrder (C α) where
-  le_antisymm S T h₁ h₂ :=
+  le_antisymm _ _ h₁ h₂ :=
     Subtype.eq <|
       (le_antisymm (le_iff_supset.1 h₂) (le_iff_supset.1 h₁) )
 
@@ -251,87 +287,91 @@ lemma nonempty_subtype_map {α : Type} {P : α → Prop}: ∀ s : Set {x // P x}
 -- }
 
 instance {α : Type} : DCPO (C α) where
-  dSup d := Subtype.mk (Set.sInter (Functor.map Subtype.val d.val)) <| by
-    constructor
-    · rcases d with ⟨s, hne, hdir⟩
-      let s' := Subtype.val <$> s
-      have hS : Nonempty s' := by {
-        rcases hne with ⟨t, ht⟩
-        use t.val; simp [s']
-        exact ⟨t.2, ht⟩
-      }
-      have hdir' : DirectedOn (· ⊇ ·) s' := by {
-        rintro x ⟨x', hx', hx⟩ y ⟨y', hy', hy⟩
-        rcases (hdir x' hx' y' hy') with ⟨z, ⟨hz, hxz, hyz⟩⟩
-        use z.val; constructor
-        · simp [s']; exact ⟨z.2, hz⟩
-        · simp [Superset, ← hx, ← hy]
-          exact ⟨ le_iff_supset.1 hxz, le_iff_supset.1 hyz ⟩
-      }
-      have hne' : ∀ t ∈ s', t.Nonempty := by {
-        rintro t ⟨⟨t', ⟨u,hnet⟩, _⟩, _, ht⟩
-        simp [← ht]
-        use u
-      }
-      have hSc : ∀ t ∈ s', IsCompact t := by {
-        rintro t ⟨_, _, ht⟩
-        rw [← ht]
-        apply convex_set_compact
-      }
-      have hScl : ∀ t ∈ s', IsClosed t := by {
-        rintro t ⟨⟨t', _, _, hcl, _⟩, _, ht⟩
-        rw [← ht]
-        assumption
-      }
-      have h :=
-        IsCompact.nonempty_sInter_of_directed_nonempty_isCompact_isClosed
-          hdir' hne' hSc hScl
-      rcases h with ⟨d, _⟩
-      use d
-    · constructor
-      · intro d hd d' hd' p hp
-        sorry
-      · constructor
-        · apply isClosed_sInter
-          intro T ht
-          rcases ht with ⟨ ⟨U, ⟨_, _, hc, _⟩⟩, _, hxt ⟩
-          rw [← hxt]
-          assumption
-        · intro d hd d' hle T ht
-          have ht' := ht
-          rcases ht' with ⟨⟨U, ⟨_, _, _, hup⟩⟩, hu, ht1⟩
-          have hut : U = T := by rw [← ht1]
-          rw [hut] at hup
-          exact (hup d (Set.mem_sInter.1 hd _ ht) d' hle)
-  dSupIsLub := by {
-    intro s
-    constructor
-    · unfold upperBounds; intro t ht
-      apply le_iff_supset.2
-      intro u hu
-      apply (Set.mem_sInter.2 hu)
-      simp; constructor
-      · rcases t with ⟨t', hv⟩
-        exact hv
-      · exact ht
-    · intro T ht
-      apply le_iff_supset.2
-      intro d hd
-      unfold upperBounds at ht; simp at ht
-      have h : ∀ U ∈ Subtype.val <$> S, d ∈ U := by {
-        intro U hu
-        rcases hu with ⟨ V, hv, hvu ⟩
-        rw [← hvu] at *
-        exact (le_iff_supset.1 (ht hv) hd)
-      }
-      intro U hu
-      exact (h U hu)
-  }
+  dSup d := by sorry
+  /- TODO: fix this proof -/
+--Subtype.mk (Set.sInter (Functor.map Subtype.val d.val)) <| by
+--    constructor
+--    · rcases d with ⟨s, hne, hdir⟩
+--      let s' := Subtype.val <$> s
+--      have hS : Nonempty s' := by {
+--        rcases hne with ⟨t, ht⟩
+--        use t.val; simp [s']
+--        exact ⟨t.2, ht⟩
+--      }
+--      have hdir' : DirectedOn (· ⊇ ·) s' := by {
+--        rintro x ⟨x', hx', hx⟩ y ⟨y', hy', hy⟩
+--        rcases (hdir x' hx' y' hy') with ⟨z, ⟨hz, hxz, hyz⟩⟩
+--        use z.val; constructor
+--        · simp [s']; exact ⟨z.2, hz⟩
+--        · simp [Superset, ← hx, ← hy]
+--          exact ⟨ le_iff_supset.1 hxz, le_iff_supset.1 hyz ⟩
+--      }
+--      have hne' : ∀ t ∈ s', t.Nonempty := by {
+--        rintro t ⟨⟨t', ⟨u,hnet⟩, _⟩, _, ht⟩
+--        simp [← ht]
+--        use u
+--      }
+--      have hSc : ∀ t ∈ s', IsCompact t := by {
+--        rintro t ⟨_, _, ht⟩
+--        rw [← ht]
+--        apply convex_set_compact
+--      }
+--      have hScl : ∀ t ∈ s', IsClosed t := by {
+--        rintro t ⟨⟨t', _, _, hcl, _⟩, _, ht⟩
+--        rw [← ht]
+--        assumption
+--      }
+--      have h :=
+--        IsCompact.nonempty_sInter_of_directed_nonempty_isCompact_isClosed
+--          hdir' hne' hSc hScl
+--      rcases h with ⟨d, _⟩
+--      use d
+--    · constructor
+--      · intro d hd d' hd' p hp
+--        sorry
+--      · constructor
+--        · apply isClosed_sInter
+--          intro T ht
+--          rcases ht with ⟨ ⟨U, ⟨_, _, hc, _⟩⟩, _, hxt ⟩
+--          rw [← hxt]
+--          assumption
+--        · intro d hd d' hle T ht
+--          have ht' := ht
+--          rcases ht' with ⟨⟨U, ⟨_, _, _, hup⟩⟩, hu, ht1⟩
+--          have hut : U = T := by rw [← ht1]
+--          rw [hut] at hup
+--          exact (hup d (Set.mem_sInter.1 hd _ ht) d' hle)
+  dSupIsLub := by sorry
+-- by {
+--    intro s
+--    constructor
+--    · unfold upperBounds; intro t ht
+--      apply le_iff_supset.2
+--      intro u hu
+--      apply (Set.mem_sInter.2 hu)
+--      simp; constructor
+--      · rcases t with ⟨t', hv⟩
+--        exact hv
+--      · exact ht
+--    · intro T ht
+--      apply le_iff_supset.2
+--      intro d hd
+--      unfold upperBounds at ht; simp at ht
+--      have h : ∀ U ∈ Subtype.val <$> S, d ∈ U := by {
+--        intro U hu
+--        rcases hu with ⟨ V, hv, hvu ⟩
+--        rw [← hvu] at *
+--        exact (le_iff_supset.1 (ht hv) hd)
+--      }
+--      intro U hu
+--      exact (h U hu)
+-- }
 
 
 noncomputable def pure_d {α : Type} (x : α) : D α := PMF.pure x
 
 lemma up_closed_singleton {α : Type} : ∀ x : α, ∀ d : D α,
+  /- TODO -/
   pure_d x ≤ d → d = pure_d x := by {
     intro x d h
     apply PMF.ext
@@ -342,6 +382,7 @@ lemma up_closed_singleton {α : Type} : ∀ x : α, ∀ d : D α,
   }
 
 lemma singleton_valid {α : Type} : ∀ x : α, is_valid_C {(PMF.pure x : (D α))} := by {
+  /- TODO -/
   intro x; unfold is_valid_C; constructor
   · simp
   · constructor
@@ -432,13 +473,14 @@ lemma chain_dir {α : Type} [Preorder α] [OrderBot α] :
     }
 
 theorem KleeneFixpoint {α : Type} [CompletePartialOrder α] [OrderBot α] (f : α → α):
+  /- TODO -/
   Monotone f →
   ScottContinuous f →
-  IsLfp f (⨆ (n : ℕ), iter f n ⊥) := by{
+  IsLfp f (⨆ (n : ℕ), iter f n ⊥) := by {
     intro hm hc
-    constructor
-    · rcases (chain_dir f hm) with ⟨hne, hdir⟩
-      specialize hc hne hdir
-      symm
-
+    sorry
+  -- constructor
+  --  · rcases (chain_dir f hm) with ⟨hne, hdir⟩
+  --    specialize hc hne hdir
+  --    symm
   }
