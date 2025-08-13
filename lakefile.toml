@@ -8,3 +8,7 @@ name = "Semantics"
 [[lean_exe]]
 name = "semantics"
 root = "Main"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
