@@ -22,30 +22,6 @@ def distr_inj {α : Type} (μ : Distr α) : α → NNReal := Real.toNNReal ∘ �
 instance {α : Type} : TopologicalSpace (Distr α) :=
   TopologicalSpace.induced distr_inj Pi.topologicalSpace
 
-lemma unit_interval_compact : IsCompact { r : NNReal | r ≤ 1 } := by {
-  have h : { r : NNReal | r ≤ 1 } = Metric.closedBall 0.5 0.5 := by {
-    have h1 : (0.5 + 0.5 : ℝ) = ↑(1 : NNReal) := by rw [NNReal.coe_one]; linarith
-    ext r; constructor
-    · simp; intro hu
-      rw [NNReal.dist_eq]
-      apply abs_le'.2; apply NNReal.coe_le_coe.2 at hu; simp; rw [h1]; exact hu
-    · intro hr; simp at hr
-      rw [NNReal.dist_eq] at hr; apply abs_le'.1 at hr
-      rcases hr with ⟨hr, _⟩; simp at hr; rw [h1] at hr
-      exact (NNReal.coe_le_coe.2 hr)
-  }
-  apply Metric.isCompact_iff_isClosed_bounded.2
-  constructor
-  · rw [h]; exact Metric.isClosed_closedBall
-  · use { r : ℝ | 1 < r ∨ r < 0}; constructor
-    · simp; constructor
-      · use -1; intro x hx; right; linarith
-      · use 2; intro x hx; left; linarith
-    · rintro ⟨r, hr⟩ hs ht; cases hs with
-      | inl h1 => simp at h1; simp at ht; apply NNReal.coe_le_coe.2 at ht; simp at ht; linarith
-      | inr h2 => simp at h2; linarith
-}
-
 -- Based on Lemma B.4.2 of MM'05, except we use the fact that { x | f x ≤ r } is closed
 -- for any continuous function f instead of using projections
 lemma closed_finitary_half_space {α : Type} {e : α → NNReal} {r : NNReal} (s : Finset α) :
@@ -127,7 +103,7 @@ lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f 
 lemma dist_decomp {α : Type} :
   let e (_ : α): NNReal := 1
   Set.range distr_inj =
-  { f : α → NNReal | ∀ x, f x ≤ 1 } ∩
+  { f : α → NNReal | ∀ x, f x ∈ Set.Icc 0 1 } ∩
   { f : α → NNReal | Summable (fun x => f x * e x) ∧ ∑' x, f x * e x ≤ 1 } := by {
     ext f; constructor
     · rintro ⟨μ, hf⟩; constructor
@@ -146,9 +122,9 @@ instance {α : Type} : CompactSpace (Distr α) := {
     -- The set above is the intersection of a compact set and a closed set, so it is compact
     apply IsCompact.inter_right
       -- [0, 1]^α is compact by Tychonoff's Theorem
-    · exact (isCompact_pi_infinite (fun _ => unit_interval_compact))
+    · exact isCompact_pi_infinite fun _ => isCompact_Icc
       -- Infinitary half-space is closed
-    · exact (closed_infinitary_half_space _ 1)
+    · exact closed_infinitary_half_space _ 1
   }
 }
 
