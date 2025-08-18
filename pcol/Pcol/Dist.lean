@@ -4,8 +4,16 @@ import Mathlib
 def Distr (α : Type) := PMF (WithBot α)
 
 instance {α : Type} : FunLike (Distr α) (WithBot α) ENNReal where
-  coe d := d.1
+  coe := Subtype.val
   coe_injective' _ _ h := Subtype.eq h
+
+lemma distr_coe {α : Type} {μ : Distr α} {x : WithBot α} : μ x = μ.val x := by
+  rcases μ with ⟨d, hs⟩; simp [DFunLike.coe]
+
+@[ext]
+theorem distr_ext {α : Type} {μ ν : Distr α} (h : ∀ x, μ x = ν x) : μ = ν := by {
+    apply Subtype.ext; ext x; exact h x
+  }
 
 lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
   μ x ≤ 1 := by {
@@ -19,6 +27,9 @@ def distr_inj {α : Type} (μ : Distr α) : α → NNReal := ENNReal.toNNReal �
 -- Topology on distributions is the product of Euclidean topologies
 instance {α : Type} : TopologicalSpace (Distr α) :=
   TopologicalSpace.induced distr_inj Pi.topologicalSpace
+
+instance {α : Type} : T1Space (Distr α) where
+  t1 μ := by sorry
 
 -- Based on Lemma B.4.2 of MM'05, except we use the fact that { x | f x ≤ r } is closed
 -- for any continuous function f instead of using projections

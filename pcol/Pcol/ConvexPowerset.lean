@@ -3,6 +3,7 @@ import Mathlib
 import Pcol.Dist
 
 open ENNReal
+open PMF
 
 -- Orders on Probability Distributions
 
@@ -73,8 +74,6 @@ instance {α : Type} : PartialOrder (Distr α) where
     · apply h
   }
 
-def Probability : Set ENNReal := { p : ENNReal | p ≤ 1 }
-
 theorem prob_ne_top {p : ENNReal} (hp : p ≤ 1) : (p : ENNReal) ≠ ⊤ := by
   apply lt_top_iff_ne_top.mp
   refine lt_of_le_of_lt ?_ (ENNReal.one_lt_top)
@@ -110,6 +109,26 @@ def UpClosed {α : Type} [LE α] (S : Set α) : Prop :=
 def upClosure {α : Type} [LE α] (S : Set α) : Set α :=
   { y | ∀ x ∈ S , x ≤ y }
 
+lemma dist_le_bot_ge {α : Type} {μ : Distr α} {ν : Distr α} (hle : μ ≤ ν) : ν ⊥ ≤ μ ⊥ := by {
+  rw [prob_bot, prob_bot]; simp
+  have hs := tsum_le_tsum hle ENNReal.summable ENNReal.summable
+  apply le_trans _ (add_le_add_left hs _)
+  rw [ENNReal.sub_add_eq_add_sub, ENNReal.add_sub_cancel_right]
+  rcases μ with ⟨d, h⟩
+  -- This is annoying to prove, but it's not hard
+  · sorry
+  · sorry
+  · sorry
+}
+
+lemma proper_dist_maximal {α : Type} {μ ν : Distr α} (hbot : μ ⊥ = 0) :
+  μ ≤ ν → μ = ν := by {
+    intro hle; ext x; cases x
+    · have h := dist_le_bot_ge hle; rw [hbot] at h
+      simp [hbot, le_bot_iff.1 h]
+    · sorry
+  }
+
 def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
   Nonempty S ∧
     ConvexSet S ∧
@@ -120,35 +139,30 @@ def C (α : Type) : Type :=
   { S : Set (Distr α) // is_valid_C S }
 
 instance : Monad C where
-  pure a := ⟨ upClosure {PMF.pure ↑a}, by {
-    refine ⟨?_,?_ ,?_,?_⟩
-    · refine nonempty_subtype.mpr ?_
-      refine ⟨ PMF.pure ↑a , ?_ ⟩
-      intros p h
-      simp at *
-      rw [h]
-    · intros d₁ hd₁ d₂ hd₂ p hp d₃ hd₃
-      rw [hd₃]
+  pure a := ⟨ {PMF.pure ↑a}, by {
+    refine ⟨by simp,?_ , ?_, ?_⟩
+    · unfold ConvexSet; simp; intros p hp
       unfold convex_sum'
-      intros x
+      ext x
       classical
       match em (x = a) with
       | Or.inl heq =>
-        simp [heq]
-        rw [PMF.pure_apply_self]
-        have h₁ := hd₁ d₃ hd₃
-        have h₂ := hd₂ d₃ hd₃
-        -- rw [ENNReal.sub_mul]
-        sorry
+        nth_rewrite 1 [@DFunLike.coe,instFunLikeDistrWithBotENNReal]; simp
+        rw [heq, pure_apply_self]
+        simp
+        have ht : p ≠ ⊤ := ne_top_of_le_ne_top (by simp) hp
+        rw [add_comm, ENNReal.sub_add_eq_add_sub hp ht, ENNReal.add_sub_cancel_right ht]
       | Or.inr hne =>
         rw [PMF.pure_apply_of_ne]
-        · simp
+        · nth_rewrite 1 [@DFunLike.coe,instFunLikeDistrWithBotENNReal]; simp; refine ⟨?_ ,?_⟩
+          all_goals { right; exact PMF.pure_apply_of_ne _ _ hne }
         · refine Ne.intro ?_
           intros hc
-          apply WithBot.coe_injective at hc
           contradiction
-    · sorry
-    · sorry
+    · exact isClosed_singleton
+    · unfold UpClosed; simp; intro μ hμ
+      symm; apply proper_dist_maximal _ hμ
+      rw [PMF.pure_apply_of_ne]; simp
   } ⟩
 
   bind pa pb := sorry
