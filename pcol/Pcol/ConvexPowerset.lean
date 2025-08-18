@@ -1,38 +1,33 @@
 import Init.Prelude
 import Mathlib
+import Pcol.Dist
 
 open ENNReal
 
 -- Orders on Probability Distributions
 
-def D (α : Type) : Type := PMF (WithBot α)
-
-instance {α : Type} : FunLike (D α) (WithBot α) ENNReal where
-  coe d x := d.1 x
-  coe_injective' _ _ h := Subtype.eq h
-
-instance {α : Type} : LE (D α) where
+instance {α : Type} : LE (Distr α) where
   le d₁ d₂ := ∀ x : α, d₁ x ≤ d₂ x
 
-noncomputable instance {α : Type} : Bot (D α) where
+noncomputable instance {α : Type} : Bot (Distr α) where
   bot := PMF.pure ⊥
-noncomputable instance {α : Type} : OrderBot (D α) where
+noncomputable instance {α : Type} : OrderBot (Distr α) where
   bot_le := by {
     intro d x
-    unfold Bot.bot instBotD; simp
+    unfold Bot.bot instBotDistr; simp
     rw [PMF.pure_apply_of_ne, ← ENNReal.bot_eq_zero]
     exact bot_le
     simp
   }
 
-instance {α : Type} : Preorder (D α) where
+instance {α : Type} : Preorder (Distr α) where
   le_refl d x := le_refl (d x)
   le_trans :=  by {
     intros d₁ d₂ d₃ h₁ h₂ x
     apply le_trans (h₁ x) (h₂ x)
   }
 
-lemma prob_bot {α : Type} (d : D α) : d ⊥ = 1 - ∑' x : α, d x := by {
+lemma prob_bot {α : Type} (d : Distr α) : d ⊥ = 1 - ∑' x : α, d x := by {
   rw [← PMF.tsum_coe d]
   rw [ENNReal.tsum_eq_add_tsum_ite ⊥, Equiv.tsum_eq_tsum_of_support]
   · rw [ENNReal.add_sub_cancel_right]
@@ -65,7 +60,7 @@ lemma prob_bot {α : Type} (d : D α) : d ⊥ = 1 - ∑' x : α, d x := by {
     · simp
 }
 
-instance {α : Type} : PartialOrder (D α) where
+instance {α : Type} : PartialOrder (Distr α) where
   le_antisymm := by {
     intro d₁ d₂ h₁ h₂
     apply PMF.ext
@@ -85,7 +80,7 @@ theorem prob_ne_top {p : ENNReal} (hp : p ≤ 1) : (p : ENNReal) ≠ ⊤ := by
   refine lt_of_le_of_lt ?_ (ENNReal.one_lt_top)
   assumption
 
-noncomputable def convex_sum' {α : Type} (d₁ d₂ : D α) (p : ENNReal) (hp : p ≤ 1) : D α :=
+noncomputable def convex_sum' {α : Type} (d₁ d₂ : Distr α) (p : ENNReal) (hp : p ≤ 1) : Distr α :=
   Subtype.mk (fun x => (p * d₁ x) + ((1-p) * d₂ x))
   (by {
     have h : (1 : ENNReal) = p + (1 - p) := by {
@@ -104,7 +99,7 @@ noncomputable def convex_sum' {α : Type} (d₁ d₂ : D α) (p : ENNReal) (hp :
   })
 
 
-def ConvexSet {α : Type} (S : Set (D α)) : Prop :=
+def ConvexSet {α : Type} (S : Set (Distr α)) : Prop :=
   ∀ d₁ ∈ S, ∀ d₂ ∈ S, ∀ p : ENNReal,
     (h : p ≤ 1) →
     convex_sum' d₁ d₂ p h ∈ S
@@ -115,98 +110,14 @@ def UpClosed {α : Type} [LE α] (S : Set α) : Prop :=
 def upClosure {α : Type} [LE α] (S : Set α) : Set α :=
   { y | ∀ x ∈ S , x ≤ y }
 
-def d_to_fun {α : Type} (d : D α) : WithBot α → ENNReal := d.val
-
-instance {α : Type} : TopologicalSpace (D α) :=
-  TopologicalSpace.induced d_to_fun Pi.topologicalSpace
-
--- instance {α : Type} : TopologicalSpace (D α) :=
---   ⨅ (x : WithBot α),
---     TopologicalSpace.induced (fun d : D α => d x) ENNReal.instTopologicalSpace
-
-instance : CompactSpace ENNReal where
-  /- TODO -/
-  isCompact_univ := by sorry
-
-lemma d_range_prob {α : Type} :
-  Set.range d_to_fun ⊆ { f : WithBot α → ENNReal | ∀ x, f x ∈ Probability } := by {
-    unfold Set.range
-    rintro f ⟨⟨g, hs⟩, hd⟩ x
-    simp [Probability, d_to_fun, ← hd] at *
-    exact (PMF.coe_le_one ⟨g, hs⟩ x)
-  }
-
-lemma d_range_decomp {α : Type} :
-  Set.range d_to_fun =
-  { f : WithBot α → ENNReal | ∀ x, f x ∈ Probability } ∩
-  { f : WithBot α → ENNReal | HasSum f 1 } := by {
-    ext f; constructor
-    · intro hf; constructor
-      · exact (d_range_prob hf)
-      · rcases hf with ⟨⟨p, hs⟩, hd⟩
-        simp [← hd]
-        apply hs
-    · rintro ⟨_, hf⟩
-      simp at *
-      use ⟨f, hf⟩; rfl
-  }
-
-instance {α : Type} : CompactSpace (D α) where
-  isCompact_univ := by sorry
-  /- TODO: fix this proof -/
-  --   have hi := (Topology.isInducing_iff (d_to_fun : D α → _)).2 (by rfl)
-  --   apply (Topology.IsInducing.isCompact_iff hi).2
-  --   simp
-  --   rw [d_range_decomp]
-  --   apply IsCompact.inter_right
-  --   · apply isCompact_pi_infinite
-  --     intro _
-      -- intro f hnb hle
-      -- simp [Filter.principal] at hle
-      -- unfold ClusterPt
-      -- unfold LE.le at hle
-      -- unfold Preorder.toLE at hle
-      -- unfold PartialOrder.toPreorder at hle
-      -- unfold Filter.instPartialOrder at hle
-      -- simp at hle
-      -- use 1
-      -- constructor
-      -- · simp [Probability]
-      -- · simp [nhds, Filter.instInf]
-      --   apply Filter.neBot_iff.2
-      --   unfold Bot.bot
-      --   unfold Filter.instBot
-      --   simp
-      --   intro hc
-      --   injection hc with hc
-              -- apply Metric.isCompact_iff_isClosed_bounded
-
-  --   · rcases (isClosed_induced_iff.1 (isClosed_univ : IsClosed (Set.univ : Set (D α))))
-  --       with ⟨t, hcl, heq⟩
-  --     simp at heq
-
-  --   apply (IsCompact.of_isClosed_subset · · d_range_prob)
-  --   · apply isCompact_pi_infinite
-  --     intro _
-  --   · rcases (isClosed_induced_iff.1 (isClosed_univ : IsClosed (Set.univ : Set (D α))))
-  --       with ⟨t, hcl, heq⟩
-  --     simp at heq
-  --     unfold Set.preimage at heq
-  --     have h : t = Set.range d_to_fun := by {
-  --       ext f; constructor
-  --       · intro hf; simp
-  --     }
-
-  -- }
-
-def is_valid_C {α : Type} (S : Set (D α)) : Prop :=
+def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
   Nonempty S ∧
     ConvexSet S ∧
     IsClosed S ∧
     UpClosed S
 
 def C (α : Type) : Type :=
-  { S : Set (D α) // is_valid_C S }
+  { S : Set (Distr α) // is_valid_C S }
 
 instance : Monad C where
   pure a := ⟨ upClosure {PMF.pure ↑a}, by {
@@ -405,9 +316,9 @@ instance {α : Type} : DCPO (C α) where
 -- }
 
 
-noncomputable def pure_d {α : Type} (x : α) : D α := PMF.pure x
+noncomputable def pure_d {α : Type} (x : α) : Distr α := PMF.pure x
 
-lemma up_closed_singleton {α : Type} : ∀ x : α, ∀ d : D α,
+lemma up_closed_singleton {α : Type} : ∀ x : α, ∀ d : Distr α,
   /- TODO -/
   pure_d x ≤ d → d = pure_d x := by {
     intro x d h
@@ -418,7 +329,7 @@ lemma up_closed_singleton {α : Type} : ∀ x : α, ∀ d : D α,
     | coe z => sorry
   }
 
-lemma singleton_valid {α : Type} : ∀ x : α, is_valid_C {(PMF.pure x : (D α))} := by {
+lemma singleton_valid {α : Type} : ∀ x : α, is_valid_C {(PMF.pure x : (Distr α))} := by {
   /- TODO -/
   intro x; unfold is_valid_C; constructor
   · simp
