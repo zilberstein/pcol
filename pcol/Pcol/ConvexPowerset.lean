@@ -227,12 +227,8 @@ instance : Monad C where
         rw [PMF.pure_apply_self]
         have h₁ := hd₁ d₃ hd₃
         have h₂ := hd₂ d₃ hd₃
-        rw [←Subtype.coe_eq_of_eq_mk]
-        rotate_left
-        · apply Subtype.coe_mk
-          sorry
-        · simp
-          sorry
+        -- rw [ENNReal.sub_mul]
+        sorry
       | Or.inr hne =>
         rw [PMF.pure_apply_of_ne]
         · simp
