@@ -7,8 +7,7 @@ instance {α : Type} : FunLike (Distr α) (WithBot α) ENNReal where
   coe := Subtype.val
   coe_injective' _ _ h := Subtype.eq h
 
-lemma distr_coe {α : Type} {μ : Distr α} {x : WithBot α} : μ x = μ.val x := by
-  rcases μ with ⟨d, hs⟩; simp [DFunLike.coe]
+lemma distr_coe {α : Type} {μ : Distr α} {x : WithBot α} : μ x = μ.val x := rfl
 
 @[ext]
 theorem distr_ext {α : Type} {μ ν : Distr α} (h : ∀ x, μ x = ν x) : μ = ν := by {

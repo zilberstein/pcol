@@ -147,14 +147,14 @@ instance : Monad C where
       classical
       match em (x = a) with
       | Or.inl heq =>
-        nth_rewrite 1 [@DFunLike.coe,instFunLikeDistrWithBotENNReal]; simp
+        nth_rewrite 1 [distr_coe]; simp
         rw [heq, pure_apply_self]
         simp
         have ht : p ≠ ⊤ := ne_top_of_le_ne_top (by simp) hp
         rw [add_comm, ENNReal.sub_add_eq_add_sub hp ht, ENNReal.add_sub_cancel_right ht]
       | Or.inr hne =>
         rw [PMF.pure_apply_of_ne]
-        · nth_rewrite 1 [@DFunLike.coe,instFunLikeDistrWithBotENNReal]; simp; refine ⟨?_ ,?_⟩
+        · nth_rewrite 1 [distr_coe]; simp; refine ⟨?_ ,?_⟩
           all_goals { right; exact PMF.pure_apply_of_ne _ _ hne }
         · refine Ne.intro ?_
           intros hc
