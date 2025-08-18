@@ -112,6 +112,9 @@ def ConvexSet {α : Type} (S : Set (D α)) : Prop :=
 def UpClosed {α : Type} [LE α] (S : Set α) : Prop :=
   ∀ x ∈ S, ∀ y ≥ x, y ∈ S
 
+def upClosure {α : Type} [LE α] (S : Set α) : Set α :=
+  { y | ∀ x ∈ S , x ≤ y }
+
 def d_to_fun {α : Type} (d : D α) : WithBot α → ENNReal := d.val
 
 instance {α : Type} : TopologicalSpace (D α) :=
@@ -204,6 +207,44 @@ def is_valid_C {α : Type} (S : Set (D α)) : Prop :=
 
 def C (α : Type) : Type :=
   { S : Set (D α) // is_valid_C S }
+
+instance : Monad C where
+  pure a := ⟨ upClosure {PMF.pure ↑a}, by {
+    refine ⟨?_,?_ ,?_,?_⟩
+    · refine nonempty_subtype.mpr ?_
+      refine ⟨ PMF.pure ↑a , ?_ ⟩
+      intros p h
+      simp at *
+      rw [h]
+    · intros d₁ hd₁ d₂ hd₂ p hp d₃ hd₃
+      rw [hd₃]
+      unfold convex_sum'
+      intros x
+      classical
+      match em (x = a) with
+      | Or.inl heq =>
+        simp [heq]
+        rw [PMF.pure_apply_self]
+        have h₁ := hd₁ d₃ hd₃
+        have h₂ := hd₂ d₃ hd₃
+        rw [←Subtype.coe_eq_of_eq_mk]
+        rotate_left
+        · apply Subtype.coe_mk
+          sorry
+        · simp
+          sorry
+      | Or.inr hne =>
+        rw [PMF.pure_apply_of_ne]
+        · simp
+        · refine Ne.intro ?_
+          intros hc
+          apply WithBot.coe_injective at hc
+          contradiction
+    · sorry
+    · sorry
+  } ⟩
+
+  bind pa pb := sorry
 
 def SmythOrd {α : Type} [LE α] (S T : Set α) :=
   ∀ y ∈ T, ∃ x ∈ S, x ≤ y
