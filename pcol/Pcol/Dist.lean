@@ -1,6 +1,8 @@
 import Init.Prelude
 import Mathlib
 
+open ENNReal
+
 def Distr (α : Type) := PMF (WithBot α)
 
 instance {α : Type} : FunLike (Distr α) (WithBot α) ENNReal where
@@ -20,15 +22,69 @@ lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
     exact (le_hasSum hs x (fun _ _ => bot_le))
   }
 
+lemma prob_bot {α : Type} (d : Distr α) : d ⊥ = 1 - ∑' x : α, d x := by {
+  rw [← PMF.tsum_coe d]
+  rw [ENNReal.tsum_eq_add_tsum_ite ⊥, Equiv.tsum_eq_tsum_of_support]
+  · rw [ENNReal.add_sub_cancel_right]
+    refine lt_top_iff_ne_top.mp ?_
+    refine lt_of_le_of_lt ?_ (lt_of_le_of_ne le_top d.tsum_coe_ne_top)
+    refine tsum_comp_le_tsum_of_injective ?_ ⇑d
+    exact WithBot.coe_injective
+  · constructor
+    case toFun =>
+      intro ⟨ x , h ⟩
+      cases x
+      · exfalso ; simp at *
+      · exact ⟨ _ , by simp at * ;  assumption ⟩
+    case invFun =>
+      intro ⟨ x , h ⟩
+      exact ⟨ ↑ x , by simp at * ; assumption ⟩
+    case right_inv =>
+      intros x
+      simp at *
+    case left_inv =>
+      intro ⟨ x , h ⟩
+      simp at *
+      cases x
+      · exfalso ; simp at *
+      · simp
+  · intro ⟨x, h⟩
+    cases x
+    · exfalso
+      simp at *
+    · simp
+}
+
 -- Inject a Distribution into α-dimensional Euclidean Space
 def distr_inj {α : Type} (μ : Distr α) : α → NNReal := ENNReal.toNNReal ∘ μ.val ∘ WithBot.some
+
+lemma distr_inj_injective {α : Type} : @Function.Injective (Distr α) (α → NNReal) distr_inj := by {
+  intro μ ν heq
+  have h : ∀ x : α, μ x = ν x := by {
+    intro x; unfold distr_inj at heq; simp [distr_coe]
+    have hnt (ξ : Distr α) : tsum ξ.val ≠ ⊤ := by simp [HasSum.tsum_eq ξ.2]
+    have hbot ξ := ENNReal.ne_top_of_tsum_ne_top (hnt ξ) (WithBot.some x)
+    apply (ENNReal.toNNReal_eq_toNNReal_iff' (hbot μ) (hbot ν)).1 (congrFun heq x)
+  }
+  ext x; match x with
+  | ⊥ => simp [prob_bot, tsum_congr h]
+  | WithBot.some y => exact h y
+}
 
 -- Topology on distributions is the product of Euclidean topologies
 instance {α : Type} : TopologicalSpace (Distr α) :=
   TopologicalSpace.induced distr_inj Pi.topologicalSpace
 
 instance {α : Type} : T1Space (Distr α) where
-  t1 μ := by sorry
+  t1 μ := by {
+    have hi := (Topology.isInducing_iff (@distr_inj α)).2 (by rfl)
+    apply (Topology.IsInducing.isClosed_iff hi).2
+    use {distr_inj μ}; constructor
+    · exact isClosed_singleton
+    · unfold Set.preimage; ext ν; simp
+      refine ⟨?_, congrArg _⟩
+      intro h; exact distr_inj_injective h
+  }
 
 -- Based on Lemma B.4.2 of MM'05, except we use the fact that { x | f x ≤ r } is closed
 -- for any continuous function f instead of using projections

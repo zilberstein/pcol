@@ -28,39 +28,6 @@ instance {α : Type} : Preorder (Distr α) where
     apply le_trans (h₁ x) (h₂ x)
   }
 
-lemma prob_bot {α : Type} (d : Distr α) : d ⊥ = 1 - ∑' x : α, d x := by {
-  rw [← PMF.tsum_coe d]
-  rw [ENNReal.tsum_eq_add_tsum_ite ⊥, Equiv.tsum_eq_tsum_of_support]
-  · rw [ENNReal.add_sub_cancel_right]
-    refine lt_top_iff_ne_top.mp ?_
-    refine lt_of_le_of_lt ?_ (lt_of_le_of_ne le_top d.tsum_coe_ne_top)
-    refine tsum_comp_le_tsum_of_injective ?_ ⇑d
-    exact WithBot.coe_injective
-  · constructor
-    case toFun =>
-      intro ⟨ x , h ⟩
-      cases x
-      · exfalso ; simp at *
-      · exact ⟨ _ , by simp at * ;  assumption ⟩
-    case invFun =>
-      intro ⟨ x , h ⟩
-      exact ⟨ ↑ x , by simp at * ; assumption ⟩
-    case right_inv =>
-      intros x
-      simp at *
-    case left_inv =>
-      intro ⟨ x , h ⟩
-      simp at *
-      cases x
-      · exfalso ; simp at *
-      · simp
-  · intro ⟨x, h⟩
-    cases x
-    · exfalso
-      simp at *
-    · simp
-}
-
 instance {α : Type} : PartialOrder (Distr α) where
   le_antisymm := by {
     intro d₁ d₂ h₁ h₂
