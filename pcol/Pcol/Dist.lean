@@ -7,8 +7,6 @@ instance {α : Type} : FunLike (Distr α) (WithBot α) ENNReal where
   coe d := d.1
   coe_injective' _ _ h := Subtype.eq h
 
-def supp {α : Type} (μ : Distr α) : Set (WithBot α) := { x | μ x ≠ 0 }
-
 lemma distr_upper_bound {α : Type} (μ : Distr α) (x : WithBot α) :
   μ x ≤ 1 := by {
     rcases μ with ⟨d, hs⟩
@@ -100,7 +98,7 @@ lemma dist_inj_sum_le_1 {α : Type} {μ : Distr α} : Summable (distr_inj μ) �
   · rw [← Function.comp_assoc, ← HasSum.tsum_eq hs₁]
     apply tsum_le_tsum_of_inj some (Option.some_injective α) (by simp) _ hsm ⟨1, hs₁⟩
     simp [distr_inj]; intro x; have hx := ENNReal.ne_top_of_tsum_ne_top hnt (WithBot.some x)
-    apply (ENNReal.toNNReal_le_toNNReal hx hx).2 (le_refl _)
+    exact (ENNReal.toNNReal_le_toNNReal hx hx).2 (le_refl _)
 }
 
 lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f ≤ 1) :
@@ -110,7 +108,7 @@ lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f 
     use μ; ext x; simp [μ, distr_inj, to_distr]
   }
 
--- The space of distributions can be decompose as follows:
+-- The space of distributions can be decomposed as follows:
 --   Distr α = [0, 1]^α ∩ { f : α → NNReal | tsum f ≤ 1 }
 lemma dist_decomp {α : Type} :
   let e (_ : α): NNReal := 1
