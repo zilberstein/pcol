@@ -70,6 +70,10 @@ def ConvexSet {α : Type} (S : Set (Distr α)) : Prop :=
     (h : p ≤ 1) →
     convex_sum' d₁ d₂ p h ∈ S
 
+-- We may actually need to switch to this definition
+noncomputable def ConvexSet' {α : Type} (s : Set (Distr α)) : Prop :=
+  ∀ ξ : PMF ↑s, PMF.bind ξ Subtype.val ∈ s
+
 def UpClosed {α : Type} [LE α] (S : Set α) : Prop :=
   ∀ x ∈ S, ∀ y ≥ x, y ∈ S
 
