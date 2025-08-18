@@ -90,10 +90,27 @@ lemma dist_le_bot_ge {α : Type} {μ : Distr α} {ν : Distr α} (hle : μ ≤ �
 
 lemma proper_dist_maximal {α : Type} {μ ν : Distr α} (hbot : μ ⊥ = 0) :
   μ ≤ ν → μ = ν := by {
-    intro hle; ext x; cases x
-    · have h := dist_le_bot_ge hle; rw [hbot] at h
-      simp [hbot, le_bot_iff.1 h]
-    · sorry
+    rcases μ with ⟨d₁, hs₁⟩; rcases ν with ⟨d₂, hs₂⟩
+    intro hle; ext x; simp [distr_coe]
+    have h0 : d₂ ⊥ = 0 := by {
+      have h := dist_le_bot_ge hle
+      simp [distr_coe] at *
+      rw [hbot] at h; simp [hbot, le_bot_iff.1 h]
+    }
+    match x with
+    | ⊥ => simp [distr_coe] at hbot; simp [h0, hbot]
+    | WithBot.some y =>
+      simp [instLEDistr, distr_coe] at hle
+      apply (LE.le.not_lt_iff_eq (hle y)).1; intro hc
+      have hs : 1 < tsum d₂ := by {
+        rw [← HasSum.tsum_eq hs₁]; apply ENNReal.tsum_lt_tsum
+        · simp [HasSum.tsum_eq hs₁]
+        · intro z; match z with
+          | ⊥ => simp [distr_coe] at hbot; rw [h0, hbot]
+          | WithBot.some w => exact hle w
+        · exact hc
+      }
+      apply HasSum.tsum_eq at hs₂; rw [← hs₂] at hs; exact lt_irrefl _ hs
   }
 
 def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
@@ -104,6 +121,14 @@ def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
 
 def C (α : Type) : Type :=
   { S : Set (Distr α) // is_valid_C S }
+
+instance {α : Type} : Bot (C α) where
+  bot := Subtype.mk Set.univ (by unfold is_valid_C; simp [isClosed_univ, ConvexSet, UpClosed])
+
+def with_bot {α β : Type} (f : α → C β) (x : WithBot α) : C β :=
+  match x with
+  | ⊥ => ⊥
+  | WithBot.some y => f y
 
 instance : Monad C where
   pure a := ⟨ {PMF.pure ↑a}, by {
@@ -132,7 +157,7 @@ instance : Monad C where
       rw [PMF.pure_apply_of_ne]; simp
   } ⟩
 
-  bind pa pb := sorry
+  bind := by sorry
 
 def SmythOrd {α : Type} [LE α] (S T : Set α) :=
   ∀ y ∈ T, ∃ x ∈ S, x ≤ y
@@ -152,6 +177,9 @@ lemma le_iff_supset {α : Type} {S T : C α} :
       · exact (Set.mem_of_subset_of_mem h hd)
       · simp
   }
+
+instance {α : Type} : OrderBot (C α) where
+  bot_le s := by apply le_iff_supset.2; simp [Bot.bot]
 
 instance {α : Type} : Preorder (C α) where
   le_refl S := le_iff_supset.2 (le_refl S.val)
