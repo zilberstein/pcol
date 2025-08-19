@@ -120,7 +120,7 @@ lemma proper_dist_maximal {α : Type} {μ ν : Distr α} (hbot : μ ⊥ = 0) :
   }
 
 def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
-  Nonempty S ∧
+  S.Nonempty ∧
     ConvexSet S ∧
     IsClosed S ∧
     UpClosed S
@@ -240,119 +240,54 @@ instance {α : Type} : OrderBot (C α) where
     apply Set.subset_univ
   }
 
-def DirSet (α : Type) [LE α]:=
-  { s : Set α // Nonempty s ∧ DirectedOn (· ≤ ·) s }
-
-class DCPO (α : Type) extends PartialOrder α where
-  dSup : DirSet α → α
-  dSupIsLub : ∀ d, IsLUB d.val (dSup d)
-
-lemma convex_set_compact {α : Type} : ∀ s : C α, IsCompact s.val := by {
-  intro s
-  apply IsCompact.of_isClosed_subset isCompact_univ
-  · rcases s with ⟨s, _, _, hc, _⟩
-    apply hc
-  · simp
-}
-
-lemma nonempty_subtype_map {α : Type} {P : α → Prop}: ∀ s : Set {x // P x},
-  Nonempty s ↔ Nonempty (Subtype.val <$> s) := by {
-    intro s
-    constructor
-    · rintro ⟨⟨x, p⟩, hx⟩
-      use x; simp [p]; assumption
-    · rintro ⟨x, ⟨x', ⟨hx', p⟩⟩⟩
-      use x'
+noncomputable instance {α : Type} : SupSet (C α) where
+  sSup s := by {
+    let t := Set.sInter (Subtype.val '' s)
+    by_cases h : is_valid_C t
+    · exact ⟨t, h⟩
+    · exact ⊥
   }
 
--- lemma nonempty_inter_subtype {α : Type} {p : Set α → Prop} :
---   ∀ s : Set { t // p t },
---     Nonempty (Set.sInter s) →
---     Nonempty (Set.sInter (Subtype.val <$> s)) := by {
---       intro
--- }
+lemma sSup_of_directed {α : Type} {s : Set (C α)} (hd : DirectedOn (· ≤ ·) s) :
+  (sSup s).val = (Subtype.val '' s).sInter := by {
+    have hv (h : s.Nonempty) : is_valid_C (Subtype.val '' s).sInter := by {
+      have hne' := Set.nonempty_coe_sort.2 (Set.Nonempty.image Subtype.val h)
+      refine ⟨?_,?_,?_,?_⟩
+      · apply IsCompact.nonempty_sInter_of_directed_nonempty_isCompact_isClosed (hS := hne')
+        · rintro x ⟨x', hxs, hx⟩ y ⟨y', hys, hy⟩
+          rcases hd x' hxs y' hys with ⟨t, ht, htx, hty⟩; use t.val
+          simp ; refine ⟨⟨t.2, ht⟩, ?_, ?_⟩
+          · rw [← hx]; exact le_iff_supset.1 htx
+          · rw [← hy]; exact le_iff_supset.1 hty
+        · rintro u ⟨⟨v, hne, _⟩, _, hvu⟩; rw [← hvu]; exact hne
+        · rintro u ⟨⟨v, _, _, hcl, _⟩, _, hvu⟩; rw [← hvu]
+          exact IsCompact.of_isClosed_subset CompactSpace.isCompact_univ hcl (Set.subset_univ _)
+        · rintro u ⟨⟨v, _, _, hcl, _⟩, _, hvu⟩; rw [← hvu]; exact hcl
+      · sorry -- This case is very hard
+      · apply isClosed_sInter; rintro t ⟨⟨t', ⟨_, _, hcl, _⟩⟩, _, htt'⟩
+        rw [← htt']; exact hcl
+      · rintro μ hμ ν hge t ⟨⟨c, hv⟩, hcs, hct⟩
+        have hμc : μ ∈ c := by {
+          apply hμ; exact ⟨⟨c, hv⟩, hcs, rfl⟩
+        }
+        simp [← hct]; rcases hv with ⟨_,_,_,hu⟩; exact hu _ hμc _ (ge_iff_le.1 hge)
+    }
+    simp [sSup]; by_cases hne : s.Nonempty
+    · rw [dite_cond_eq_true]; exact propext ⟨fun _ => trivial, fun _ => hv hne⟩
+    · simp [Set.not_nonempty_iff_eq_empty.1 hne, Bot.bot]
+      by_cases hv : is_valid_C (⋂₀ (Subtype.val '' s))
+      · rw [dite_cond_eq_true]; exact propext ⟨fun _ => trivial, fun _ => hv⟩
+      · rw [dite_cond_eq_false]; exact propext ⟨hv, False.elim⟩
+  }
 
-instance {α : Type} : DCPO (C α) where
-  dSup d := by sorry
-  /- TODO: fix this proof -/
---Subtype.mk (Set.sInter (Functor.map Subtype.val d.val)) <| by
---    constructor
---    · rcases d with ⟨s, hne, hdir⟩
---      let s' := Subtype.val <$> s
---      have hS : Nonempty s' := by {
---        rcases hne with ⟨t, ht⟩
---        use t.val; simp [s']
---        exact ⟨t.2, ht⟩
---      }
---      have hdir' : DirectedOn (· ⊇ ·) s' := by {
---        rintro x ⟨x', hx', hx⟩ y ⟨y', hy', hy⟩
---        rcases (hdir x' hx' y' hy') with ⟨z, ⟨hz, hxz, hyz⟩⟩
---        use z.val; constructor
---        · simp [s']; exact ⟨z.2, hz⟩
---        · simp [Superset, ← hx, ← hy]
---          exact ⟨ le_iff_supset.1 hxz, le_iff_supset.1 hyz ⟩
---      }
---      have hne' : ∀ t ∈ s', t.Nonempty := by {
---        rintro t ⟨⟨t', ⟨u,hnet⟩, _⟩, _, ht⟩
---        simp [← ht]
---        use u
---      }
---      have hSc : ∀ t ∈ s', IsCompact t := by {
---        rintro t ⟨_, _, ht⟩
---        rw [← ht]
---        apply convex_set_compact
---      }
---      have hScl : ∀ t ∈ s', IsClosed t := by {
---        rintro t ⟨⟨t', _, _, hcl, _⟩, _, ht⟩
---        rw [← ht]
---        assumption
---      }
---      have h :=
---        IsCompact.nonempty_sInter_of_directed_nonempty_isCompact_isClosed
---          hdir' hne' hSc hScl
---      rcases h with ⟨d, _⟩
---      use d
---    · constructor
---      · intro d hd d' hd' p hp
---        sorry
---      · constructor
---        · apply isClosed_sInter
---          intro T ht
---          rcases ht with ⟨ ⟨U, ⟨_, _, hc, _⟩⟩, _, hxt ⟩
---          rw [← hxt]
---          assumption
---        · intro d hd d' hle T ht
---          have ht' := ht
---          rcases ht' with ⟨⟨U, ⟨_, _, _, hup⟩⟩, hu, ht1⟩
---          have hut : U = T := by rw [← ht1]
---          rw [hut] at hup
---          exact (hup d (Set.mem_sInter.1 hd _ ht) d' hle)
-  dSupIsLub := by sorry
--- by {
---    intro s
---    constructor
---    · unfold upperBounds; intro t ht
---      apply le_iff_supset.2
---      intro u hu
---      apply (Set.mem_sInter.2 hu)
---      simp; constructor
---      · rcases t with ⟨t', hv⟩
---        exact hv
---      · exact ht
---    · intro T ht
---      apply le_iff_supset.2
---      intro d hd
---      unfold upperBounds at ht; simp at ht
---      have h : ∀ U ∈ Subtype.val <$> S, d ∈ U := by {
---        intro U hu
---        rcases hu with ⟨ V, hv, hvu ⟩
---        rw [← hvu] at *
---        exact (le_iff_supset.1 (ht hv) hd)
---      }
---      intro U hu
---      exact (h U hu)
--- }
-
+noncomputable instance {α : Type} : CompletePartialOrder (C α) where
+  lubOfDirected d hd := by {
+    constructor
+    · intro c hc; apply le_iff_supset.2
+      rw [sSup_of_directed hd]; intro μ hμ; apply hμ; simp; exact ⟨c.2, hc⟩
+    · intro c hc; apply le_iff_supset.2; rw [sSup_of_directed hd]
+      rintro μ hμ t ⟨t', hth, htt'⟩; rw [← htt']; exact le_iff_supset.1 (hc hth) hμ
+  }
 
 noncomputable def pure_d {α : Type} (x : α) : Distr α := PMF.pure x
 
