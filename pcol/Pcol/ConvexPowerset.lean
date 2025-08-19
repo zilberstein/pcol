@@ -64,7 +64,6 @@ noncomputable def convex_sum' {α : Type} (d₁ d₂ : Distr α) (p : ENNReal) (
       rw [PMF.tsum_coe, mul_one]
   })
 
-
 def ConvexSet {α : Type} (S : Set (Distr α)) : Prop :=
   ∀ d₁ ∈ S, ∀ d₂ ∈ S, ∀ p : ENNReal,
     (h : p ≤ 1) →
@@ -84,12 +83,15 @@ lemma dist_le_bot_ge {α : Type} {μ : Distr α} {ν : Distr α} (hle : μ ≤ �
   rw [prob_bot, prob_bot]; simp
   have hs := tsum_le_tsum hle ENNReal.summable ENNReal.summable
   apply le_trans _ (add_le_add_left hs _)
-  rw [ENNReal.sub_add_eq_add_sub, ENNReal.add_sub_cancel_right]
-  rcases μ with ⟨d, h⟩
-  -- This is annoying to prove, but it's not hard
-  · sorry
-  · sorry
-  · sorry
+  have hle1 : ∑' (x : α), μ x ≤ 1 := by {
+    rcases μ with ⟨d, h⟩; simp [distr_coe] at *; rw [← HasSum.tsum_eq h]
+    exact tsum_le_tsum_of_inj WithBot.some WithBot.coe_injective (by simp)
+      (fun x => le_refl (d ↑x))
+      ENNReal.summable
+      ENNReal.summable
+  }
+  rw [ENNReal.sub_add_eq_add_sub hle1, ENNReal.add_sub_cancel_right]
+  all_goals { exact ne_top_of_le_ne_top (b := 1) (by simp) hle1 }
 }
 
 lemma proper_dist_maximal {α : Type} {μ ν : Distr α} (hbot : μ ⊥ = 0) :
