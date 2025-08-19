@@ -163,7 +163,30 @@ instance : Monad C where
       rw [PMF.pure_apply_of_ne]; simp
   } ⟩
 
-  bind := by sorry
+  bind {α β : Type} (s : C α) (k : α → C β) :=
+    Subtype.mk (distr_bind s.val (Subtype.val ∘ k)) (by {
+    rcases s with ⟨s, ⟨hne, hu, hcv, hcm⟩⟩; unfold distr_bind
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · rcases hne with ⟨μ, hμ⟩
+      let g t := Option.elim t Set.univ (Subtype.val ∘ k)
+      have hf : (μ.support.pi g).Nonempty := by {
+        apply (Set.pi_nonempty_iff (s := μ.support) (t := g)).2
+        intro x; match x with
+        | ⊥ => use ⊥; intro hb; simp [g, Option.elim]
+        | WithBot.some y =>
+            let u := k y
+            rcases hk : (k y) with ⟨t, ⟨⟨ν, hν⟩, _⟩⟩; use ν; intro hy
+            simp [g, Option.elim, hk, hν]
+      }
+      rcases hf with ⟨f, hf⟩; use (PMF.bind μ f); simp; use μ
+      refine ⟨hμ, ?_⟩; use f; refine ⟨?_, rfl⟩
+      · intro x hx; unfold g at hf; exact Set.mem_pi.1 hf x hx
+    · sorry
+    · apply bind_closed
+      intro x; rcases hk : k x with @⟨t, ⟨_, _, hcl, _⟩⟩
+      simp [hk, hcl]
+    · sorry
+  })
 
 def SmythOrd {α : Type} [LE α] (S T : Set α) :=
   ∀ y ∈ T, ∃ x ∈ S, x ≤ y

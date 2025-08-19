@@ -220,3 +220,18 @@ theorem chain_inter_nonempty {α : Type} (c : ℕ → Set (Distr α)) :
     · exact IsCompact.of_isClosed_subset CompactSpace.isCompact_univ (h 0).1 (Set.subset_univ (c 0))
     · intro i; exact (h i).1
   }
+
+noncomputable def distr_bind {α β : Type} (s : Set (Distr α)) (k : α → Set (Distr β)) : Set (Distr β) :=
+  ⋃ μ ∈ s, ⋃ f ∈ μ.support.pi (Option.elim · Set.univ k), { PMF.bind μ f }
+--  { f : WithBot α → Distr β | ∀ x : α, ↑x ∈ μ.support → f x ∈ k x },
+
+
+lemma bind_closed {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)} (h : ∀ x : α , IsClosed (k x)) :
+  IsClosed (distr_bind s k) := by {
+    have hi := (Topology.isInducing_iff (@distr_inj β)).2 (by rfl)
+    apply (Topology.IsInducing.isClosed_iff hi).2
+    use (distr_inj <$> distr_bind s k)
+    refine ⟨?_, Function.Injective.preimage_image distr_inj_injective _⟩
+    · unfold distr_bind; simp [Set.image_iUnion]
+      sorry
+  }
