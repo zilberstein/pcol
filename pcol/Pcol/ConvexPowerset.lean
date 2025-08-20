@@ -73,9 +73,6 @@ def ConvexSet {α : Type} (S : Set (Distr α)) : Prop :=
 noncomputable def ConvexSet' {α : Type} (s : Set (Distr α)) : Prop :=
   ∀ ξ : PMF ↑s, PMF.bind ξ Subtype.val ∈ s
 
-def UpClosed {α : Type} [LE α] (S : Set α) : Prop :=
-  ∀ x ∈ S, ∀ y ≥ x, y ∈ S
-
 def upClosure {α : Type} [LE α] (S : Set α) : Set α :=
   { y | ∀ x ∈ S , x ≤ y }
 
@@ -123,13 +120,13 @@ def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
   S.Nonempty ∧
     ConvexSet S ∧
     IsClosed S ∧
-    UpClosed S
+    IsUpperSet S
 
 def C (α : Type) : Type :=
   { S : Set (Distr α) // is_valid_C S }
 
 instance {α : Type} : Bot (C α) where
-  bot := Subtype.mk Set.univ (by unfold is_valid_C; simp [isClosed_univ, ConvexSet, UpClosed])
+  bot := Subtype.mk Set.univ (by unfold is_valid_C; simp [isClosed_univ, ConvexSet, IsUpperSet])
 
 def with_bot {α β : Type} (f : α → C β) (x : WithBot α) : C β :=
   match x with
@@ -158,9 +155,9 @@ instance : Monad C where
           intros hc
           contradiction
     · exact isClosed_singleton
-    · unfold UpClosed; simp; intro μ hμ
-      symm; apply proper_dist_maximal _ hμ
-      rw [PMF.pure_apply_of_ne]; simp
+    · unfold IsUpperSet; simp; intro μ ν hle hμ
+      rw [← hμ]; symm; apply proper_dist_maximal _ hle
+      rw [hμ, PMF.pure_apply_of_ne]; simp
   } ⟩
 
   bind {α β : Type} (s : C α) (k : α → C β) :=
@@ -200,7 +197,7 @@ lemma le_iff_supset {α : Type} {S T : C α} :
     · intro h d hd
       rcases (h d hd) with ⟨ d', hd', hle ⟩
       rcases S with ⟨S, ⟨_, _, _, hu⟩⟩
-      apply (hu d' hd' d hle)
+      exact hu hle hd'
     · intro h d hd
       exists d; constructor
       · exact (Set.mem_of_subset_of_mem h hd)
@@ -248,6 +245,7 @@ noncomputable instance {α : Type} : SupSet (C α) where
     · exact ⊥
   }
 
+-- For any directed set, the supremum is equal to set intersection
 lemma sSup_of_directed {α : Type} {s : Set (C α)} (hd : DirectedOn (· ≤ ·) s) :
   (sSup s).val = (Subtype.val '' s).sInter := by {
     have hv (h : s.Nonempty) : is_valid_C (Subtype.val '' s).sInter := by {
@@ -266,11 +264,9 @@ lemma sSup_of_directed {α : Type} {s : Set (C α)} (hd : DirectedOn (· ≤ ·)
       · sorry -- This case is very hard
       · apply isClosed_sInter; rintro t ⟨⟨t', ⟨_, _, hcl, _⟩⟩, _, htt'⟩
         rw [← htt']; exact hcl
-      · rintro μ hμ ν hge t ⟨⟨c, hv⟩, hcs, hct⟩
-        have hμc : μ ∈ c := by {
-          apply hμ; exact ⟨⟨c, hv⟩, hcs, rfl⟩
-        }
-        simp [← hct]; rcases hv with ⟨_,_,_,hu⟩; exact hu _ hμc _ (ge_iff_le.1 hge)
+      · rintro μ ν hle hμ t ⟨⟨c, hv⟩, hcs, hct⟩
+        have hμc : μ ∈ c := by apply hμ; exact ⟨⟨c, hv⟩, hcs, rfl⟩
+        simp [← hct]; rcases hv with ⟨_,_,_,hu⟩; exact hu hle hμc
     }
     simp [sSup]; by_cases hne : s.Nonempty
     · rw [dite_cond_eq_true]; exact propext ⟨fun _ => trivial, fun _ => hv hne⟩

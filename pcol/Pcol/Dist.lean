@@ -209,29 +209,57 @@ instance {α : Type} : CompactSpace (Distr α) := {
   }
 }
 
--- Intersection of sequence of closed sets of distributions is nonempty
-theorem chain_inter_nonempty {α : Type} (c : ℕ → Set (Distr α)) :
-  (∀ n : ℕ, c (n+1) ⊆ c n) →
-  (∀ n : ℕ, IsClosed (c n) ∧ (c n).Nonempty) →
-  (Set.iInter c).Nonempty := by {
-    intro hc h
-    apply (IsCompact.nonempty_iInter_of_sequence_nonempty_isCompact_isClosed c hc)
-    · intro i; exact (h i).2
-    · exact IsCompact.of_isClosed_subset CompactSpace.isCompact_univ (h 0).1 (Set.subset_univ (c 0))
-    · intro i; exact (h i).1
-  }
-
 noncomputable def distr_bind {α β : Type} (s : Set (Distr α)) (k : α → Set (Distr β)) : Set (Distr β) :=
   ⋃ μ ∈ s, ⋃ f ∈ μ.support.pi (Option.elim · Set.univ k), { PMF.bind μ f }
 --  { f : WithBot α → Distr β | ∀ x : α, ↑x ∈ μ.support → f x ∈ k x },
 
+noncomputable def distr_bind' {α β : Type} (x : Distr α × (α → Distr β)) : β → NNReal :=
+  distr_inj (PMF.bind x.1 (Option.elim · (PMF.pure ⊥) x.2))
 
-lemma bind_closed {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)} (h : ∀ x : α , IsClosed (k x)) :
+lemma distr_bind_continuous {α β : Type} :
+  @Continuous (Distr α × (α → Distr β)) (β → NNReal) _ _ distr_bind' := by {
+    unfold distr_bind'; unfold distr_inj
+    apply continuous_pi
+    intro y; simp
+    have heq {γ : Type} (g : γ → ENNReal) : (fun x => (g x).toNNReal) = (ENNReal.toNNReal ∘ g) := rfl
+    rw [heq]
+    apply ContinuousOn.comp_continuous ENNReal.continuousOn_toNNReal
+    · sorry
+    · rintro ⟨μ, k⟩; simp
+      rcases hb : PMF.bind μ fun x ↦ Option.elim x (PMF.pure ⊥) k with ⟨ν, hs⟩; simp
+      apply ENNReal.ne_top_of_tsum_ne_top; simp [HasSum.tsum_eq hs]
+  }
+
+lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)} :
+  distr_inj '' distr_bind s k =
+--  distr_bind' '' { p | p.1 ∈ s ∧ p.2 ∈ { x | WithBot.some x ∈ p.1.support}.pi k } := by {
+  distr_bind' '' Set.prod s (Set.univ.pi k) := by {
+--    rw [distr_inj, distr_bind, distr_bind', Set.image_iUnion, Set.image_prod]
+    ext f; constructor
+    · intro hf; unfold distr_bind'; simp
+      unfold distr_bind at hf; simp [Set.image_iUnion] at hf
+      rcases hf with ⟨μ, hμ, g, hg, hgf⟩
+      use μ; use (g ∘ WithBot.some)
+      refine ⟨⟨hμ, ?_⟩, ?_⟩
+      · intro x _; sorry -- exact hg x
+      · sorry
+    · sorry
+  }
+
+-- Lemma B.3 of Zilberstein et al. POPL'25
+lemma bind_closed {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)}
+  (hcs : IsClosed s)
+  (h : ∀ x : α , IsClosed (k x)) :
   IsClosed (distr_bind s k) := by {
+    -- Move into the product topology NNReal^α
     have hi := (Topology.isInducing_iff (@distr_inj β)).2 (by rfl)
     apply (Topology.IsInducing.isClosed_iff hi).2
-    use (distr_inj <$> distr_bind s k)
+    use (distr_inj '' distr_bind s k)
     refine ⟨?_, Function.Injective.preimage_image distr_inj_injective _⟩
-    · unfold distr_bind; simp [Set.image_iUnion]
-      sorry
+    rw [distr_bind_image]
+    -- Any compact set is closed, since we are working in a compact space
+    have hc : IsCompact (Set.prod s (Set.univ.pi k)) :=
+      IsClosed.isCompact (IsClosed.prod hcs (isClosed_set_pi fun x _ => h x))
+    -- The image of a continuous function in a Hausdorff space is closed
+    exact IsCompact.isClosed (hc.image distr_bind_continuous)
   }
