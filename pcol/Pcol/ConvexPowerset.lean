@@ -175,13 +175,13 @@ instance : Monad C where
             rcases hk : (k y) with ⟨t, ⟨⟨ν, hν⟩, _⟩⟩; use ν; intro hy
             simp [g, Option.elim, hk, hν]
       }
-      rcases hf with ⟨f, hf⟩; use (PMF.bind μ f); simp; use μ
-      refine ⟨hμ, ?_⟩; use f; refine ⟨?_, rfl⟩
-      · intro x hx; unfold g at hf; exact Set.mem_pi.1 hf x hx
+      rcases hf with ⟨f, hf⟩; use (PMF.bind μ f); simp; use μ; use f
+      refine ⟨⟨hμ, ?_⟩, rfl⟩
+      intro x hx; unfold g at hf; exact Set.mem_pi.1 hf x hx
     · sorry
-    · apply bind_closed
-      intro x; rcases hk : k x with @⟨t, ⟨_, _, hcl, _⟩⟩
-      simp [hk, hcl]
+    · apply bind_closed hcv
+      · intro x; rcases hk : k x with @⟨t, ⟨hne, _, _, _⟩⟩; simp [hk, hne]
+      · intro x; rcases hk : k x with @⟨t, ⟨_, _, hc, _⟩⟩; simp [hk, hc]
     · sorry
   })
 
@@ -257,10 +257,9 @@ lemma sSup_of_directed {α : Type} {s : Set (C α)} (hd : DirectedOn (· ≤ ·)
           simp ; refine ⟨⟨t.2, ht⟩, ?_, ?_⟩
           · rw [← hx]; exact le_iff_supset.1 htx
           · rw [← hy]; exact le_iff_supset.1 hty
-        · rintro u ⟨⟨v, hne, _⟩, _, hvu⟩; rw [← hvu]; exact hne
-        · rintro u ⟨⟨v, _, _, hcl, _⟩, _, hvu⟩; rw [← hvu]
-          exact IsCompact.of_isClosed_subset CompactSpace.isCompact_univ hcl (Set.subset_univ _)
-        · rintro u ⟨⟨v, _, _, hcl, _⟩, _, hvu⟩; rw [← hvu]; exact hcl
+        · rintro _ ⟨⟨_, hne, _⟩, _, hvu⟩; rw [← hvu]; exact hne
+        · rintro _ ⟨⟨_, _, _, hcl, _⟩, _, hvu⟩; rw [← hvu]; exact IsClosed.isCompact hcl
+        · rintro _ ⟨⟨_, _, _, hcl, _⟩, _, hvu⟩; rw [← hvu]; exact hcl
       · sorry -- This case is very hard
       · apply isClosed_sInter; rintro t ⟨⟨t', ⟨_, _, hcl, _⟩⟩, _, htt'⟩
         rw [← htt']; exact hcl

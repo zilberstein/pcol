@@ -56,7 +56,7 @@ lemma prob_bot {α : Type} (d : Distr α) : d ⊥ = 1 - ∑' x : α, d x := by {
 }
 
 -- Inject a Distribution into α-dimensional Euclidean Space
-def distr_inj {α : Type} (μ : Distr α) : α → NNReal := ENNReal.toNNReal ∘ μ.val ∘ WithBot.some
+def distr_inj {α : Type} (μ : Distr α) : α → NNReal := ENNReal.toNNReal ∘ μ ∘ WithBot.some
 
 lemma distr_inj_injective {α : Type} : @Function.Injective (Distr α) (α → NNReal) distr_inj := by {
   intro μ ν heq
@@ -75,10 +75,12 @@ lemma distr_inj_injective {α : Type} : @Function.Injective (Distr α) (α → N
 instance {α : Type} : TopologicalSpace (Distr α) :=
   TopologicalSpace.induced distr_inj Pi.topologicalSpace
 
+lemma distr_inducing {α : Type} : @Topology.IsInducing (Distr α) (α → NNReal) _ _ distr_inj :=
+  (Topology.isInducing_iff (@distr_inj α)).2 (by rfl)
+
 instance {α : Type} : T1Space (Distr α) where
   t1 μ := by {
-    have hi := (Topology.isInducing_iff (@distr_inj α)).2 (by rfl)
-    apply (Topology.IsInducing.isClosed_iff hi).2
+    apply distr_inducing.isClosed_iff.2
     use {distr_inj μ}; constructor
     · exact isClosed_singleton
     · unfold Set.preimage; ext ν; simp
@@ -171,7 +173,7 @@ lemma dist_invert {α : Type} {f : α → NNReal} (h : Summable f) (h' : tsum f 
   ∃ μ : Distr α, distr_inj μ = f := by {
     have hl (x : WithBot α) : 0 ≤ to_distr f x := by unfold to_distr; cases x; simp; simp
     let μ : Distr α := Subtype.mk (to_distr f) (to_distr_sum h h')
-    use μ; ext x; simp [μ, distr_inj, to_distr]
+    use μ; ext x; simp [μ, distr_inj, to_distr, distr_coe]
   }
 
 -- The space of distributions can be decomposed as follows:
@@ -196,8 +198,7 @@ lemma dist_decomp {α : Type} :
 -- Lemma B.4.4 of MM'05
 instance {α : Type} : CompactSpace (Distr α) := {
   isCompact_univ := by {
-    have hi := (Topology.isInducing_iff (@distr_inj α)).2 (by rfl)
-    apply (Topology.IsInducing.isCompact_iff hi).2
+    apply distr_inducing.isCompact_iff.2
     -- Distr α = [0, 1]^α ∩ { f : α → NNReal | tsum f ≤ 1 }
     simp; rw [dist_decomp]
     -- The set above is the intersection of a compact set and a closed set, so it is compact
@@ -209,57 +210,101 @@ instance {α : Type} : CompactSpace (Distr α) := {
   }
 }
 
+lemma prob_not_top {α : Type} {μ : Distr α} {x : WithBot α} : μ x ≠ ⊤ := by {
+  rw [distr_coe]; apply ENNReal.ne_top_of_tsum_ne_top; simp [HasSum.tsum_eq μ.2]
+}
+
 noncomputable def distr_bind {α β : Type} (s : Set (Distr α)) (k : α → Set (Distr β)) : Set (Distr β) :=
-  ⋃ μ ∈ s, ⋃ f ∈ μ.support.pi (Option.elim · Set.univ k), { PMF.bind μ f }
+  Function.uncurry PMF.bind '' ⋃ μ ∈ s, {μ} ×ˢ μ.support.pi (Option.elim · Set.univ k)
 --  { f : WithBot α → Distr β | ∀ x : α, ↑x ∈ μ.support → f x ∈ k x },
 
-noncomputable def distr_bind' {α β : Type} (x : Distr α × (α → Distr β)) : β → NNReal :=
-  distr_inj (PMF.bind x.1 (Option.elim · (PMF.pure ⊥) x.2))
-
-lemma distr_bind_continuous {α β : Type} :
-  @Continuous (Distr α × (α → Distr β)) (β → NNReal) _ _ distr_bind' := by {
-    unfold distr_bind'; unfold distr_inj
-    apply continuous_pi
-    intro y; simp
-    have heq {γ : Type} (g : γ → ENNReal) : (fun x => (g x).toNNReal) = (ENNReal.toNNReal ∘ g) := rfl
-    rw [heq]
-    apply ContinuousOn.comp_continuous ENNReal.continuousOn_toNNReal
-    · sorry
-    · rintro ⟨μ, k⟩; simp
-      rcases hb : PMF.bind μ fun x ↦ Option.elim x (PMF.pure ⊥) k with ⟨ν, hs⟩; simp
-      apply ENNReal.ne_top_of_tsum_ne_top; simp [HasSum.tsum_eq hs]
+lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)}
+  (hne : ∀ x, (k x).Nonempty) :
+  distr_bind s k = Function.uncurry PMF.bind '' (s ×ˢ Set.univ.pi (Option.elim · Set.univ k)) := by {
+    ext ν; constructor
+    · rintro ⟨⟨μ, f⟩, hmem, hν⟩
+      simp at hmem; rcases hmem with ⟨hmem, hμ⟩
+      have h : ∀ (x : WithBot α), ∃ y, y ∈ (Option.elim · Set.univ k) x ∧ (x ∈ μ.support → y = f x) := by {
+        intro x; by_cases h : x ∈ μ.support
+        · exact ⟨f x, hmem x h, fun _ => rfl⟩
+        · match x with
+          | ⊥ => refine ⟨PMF.pure ⊥, by simp [Option.elim], fun hc => False.elim (h hc)⟩
+          | WithBot.some z =>
+            rcases (hne z) with ⟨y, hy⟩
+            refine ⟨y, ?_, fun hc => False.elim (h hc)⟩
+            simp [Option.elim]; exact hy
+      }
+      choose g hg using h
+      simp; refine ⟨μ, hμ, g, ?_, ?_⟩
+      · intro x; exact (hg x).1
+      · simp at hν; rw [← hν]
+        unfold PMF.bind; ext z; simp [distr_coe]
+        refine tsum_congr ?_
+        intro x; by_cases hx : x ∈ μ.support
+        · rw [(hg x).2 hx]
+        · simp at hx; rw [hx]; simp
+    · rintro ⟨⟨μ, f⟩, hmem, hν⟩
+      simp at hmem; rcases hmem with ⟨hμ, hf⟩
+      simp [distr_bind]; refine ⟨μ, f, ⟨hμ, ?_⟩, ?_⟩
+      · intro x _; exact hf x
+      · simp at hν; exact hν
   }
 
-lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)} :
-  distr_inj '' distr_bind s k =
---  distr_bind' '' { p | p.1 ∈ s ∧ p.2 ∈ { x | WithBot.some x ∈ p.1.support}.pi k } := by {
-  distr_bind' '' Set.prod s (Set.univ.pi k) := by {
---    rw [distr_inj, distr_bind, distr_bind', Set.image_iUnion, Set.image_prod]
-    ext f; constructor
-    · intro hf; unfold distr_bind'; simp
-      unfold distr_bind at hf; simp [Set.image_iUnion] at hf
-      rcases hf with ⟨μ, hμ, g, hg, hgf⟩
-      use μ; use (g ∘ WithBot.some)
-      refine ⟨⟨hμ, ?_⟩, ?_⟩
-      · intro x _; sorry -- exact hg x
-      · sorry
-    · sorry
+ instance {α : Type} [TopologicalSpace α] : TopologicalSpace (WithBot α) :=
+   TopologicalSpace.induced (Equiv.optionEquivSumPUnit α).toFun (@instTopologicalSpaceSum α Unit _ _)
+
+lemma get_prob_continuous {α : Type} {x : WithBot α} : Continuous fun (μ : Distr α) => μ x := by sorry
+
+lemma distr_bind_continuous {α β : Type} :
+  @Continuous (Distr α × (WithBot α → Distr β)) (β → NNReal) _ _
+  (distr_inj ∘ Function.uncurry PMF.bind) := by {
+    refine continuous_pi ?_; intro y
+    simp [distr_inj, Function.uncurry]
+    refine ContinuousOn.comp_continuous ENNReal.continuousOn_toNNReal ?_ (fun _ => prob_not_top)
+    -- Now, show that the infinite sum in continuous
+    simp [PMF.bind, distr_coe]
+    refine Continuous.congr ?_
+      (fun d => Eq.trans (congrArg _ (Eq.symm (ENNReal.tsum_toReal_eq ?_))) (ENNReal.ofReal_toReal ?_))
+    · refine Continuous.comp ENNReal.continuous_ofReal ?_ (g := ENNReal.ofReal)
+      let f (n : WithBot α) (x : Distr α × (WithBot α → Distr β)) := (x.1 n * x.2 n y).toReal
+      refine continuous_tsum ?_ ?_ ?_ (u := fun _ => 1) (f := f)
+      · intro x; unfold f
+        refine ContinuousOn.comp_continuous ENNReal.continuousOn_toReal ?_ ?_ (g := ENNReal.toReal)
+        · refine Continuous.ennreal_mul ?_ ?_ (fun _ => Or.inr prob_not_top) (fun _ => Or.inr prob_not_top)
+          · exact Continuous.comp get_prob_continuous continuous_fst
+          · have heq : (fun (p : Distr α × (WithBot α → Distr β)) ↦ (p.2 x) y) = (fun μ => μ y) ∘ (fun k => k x) ∘ Prod.snd := rfl
+            rw [heq]; refine Continuous.comp get_prob_continuous ?_
+            refine Continuous.comp (continuous_apply x) continuous_snd
+        · intro _; exact ENNReal.mul_ne_top prob_not_top prob_not_top
+      · sorry -- This is actually not true
+      · rintro x ⟨μ, k⟩; simp [f]
+        refine le_trans (b := 1 * 1) (mul_le_mul ?_ ?_ (by simp) (by simp)) (by simp)
+        all_goals { simp [distr_upper_bound, ENNReal.toReal_le_of_le_ofReal] }
+    · intro d; exact ENNReal.mul_ne_top prob_not_top prob_not_top
+    · refine ne_top_of_le_ne_top d.1.tsum_coe_ne_top ?_
+      refine tsum_le_tsum ?_ ENNReal.summable ENNReal.summable
+      intro x
+      exact le_trans (b := d.1 x * 1) (mul_le_mul (le_refl _) (distr_upper_bound _ _) bot_le bot_le) (by simp)
   }
 
 -- Lemma B.3 of Zilberstein et al. POPL'25
 lemma bind_closed {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)}
   (hcs : IsClosed s)
+  (hne : ∀ x : α , (k x).Nonempty)
   (h : ∀ x : α , IsClosed (k x)) :
   IsClosed (distr_bind s k) := by {
     -- Move into the product topology NNReal^α
-    have hi := (Topology.isInducing_iff (@distr_inj β)).2 (by rfl)
-    apply (Topology.IsInducing.isClosed_iff hi).2
-    use (distr_inj '' distr_bind s k)
+    refine distr_inducing.isClosed_iff.2 ⟨distr_inj '' distr_bind s k, ?_⟩
     refine ⟨?_, Function.Injective.preimage_image distr_inj_injective _⟩
-    rw [distr_bind_image]
+    rw [distr_bind_image hne, ← Set.image_comp]
     -- Any compact set is closed, since we are working in a compact space
-    have hc : IsCompact (Set.prod s (Set.univ.pi k)) :=
-      IsClosed.isCompact (IsClosed.prod hcs (isClosed_set_pi fun x _ => h x))
+    have hx (x : WithBot α) : IsClosed (Option.elim x Set.univ k) := by {
+      match x with
+      | ⊥ => simp [Option.elim]
+      | WithBot.some y => simp [Option.elim]; exact h y
+    }
+    have hc : IsCompact (Set.prod s (Set.univ.pi (Option.elim · Set.univ k))) :=
+      IsClosed.isCompact (IsClosed.prod hcs (isClosed_set_pi fun x _ => hx x))
     -- The image of a continuous function in a Hausdorff space is closed
     exact IsCompact.isClosed (hc.image distr_bind_continuous)
   }
