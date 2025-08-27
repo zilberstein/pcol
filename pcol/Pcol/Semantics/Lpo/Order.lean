@@ -1,25 +1,19 @@
 import Mathlib
 import Pcol.Semantics.Lpo.Basic
 
-def is_down_closed (ord : Rel Node Node) (X : Set Node) : Prop :=
-  ∀ x ∈ X, ∀ y, ord y x → y ∈ X
-
-def up_closure (ord : Rel Node Node) (X : Set Node) : Set Node :=
-  { x | ∃ y ∈ X, ord y x }
-
 structure LE_Lpo {l : Type} [LE l] [Bot l] (a b : Lpo l) : Prop where
   nodes : a.nodes ⊆ b.nodes
-  downcl : is_down_closed b.rel a.nodes
+  downcl : b.rel.is_down_closed a.nodes
   rel : ∀ x ∈ a.nodes, ∀ y ∈ a.nodes, a.rel x y = b.rel x y
   lab : ∀ x, a.lab x ≤ b.lab x
   form : ∀ x ∈ a.nodes, a.form x = b.form x
-  succ : ∀ x ∈ a.nodes, a.rel.succ x = b.rel.succ x \ up_closure b.rel a.bots
+  succ : ∀ x ∈ a.nodes, a.rel.succ x = b.rel.succ x \ b.rel.up_closure a.bots
 
 instance {l : Type} [LE l] [Bot l] : LE (Lpo l) where
   le a b := LE_Lpo a b
 
 lemma up_closure_same_empty {l : Type} [Bot l] {a : Lpo l} :
-  up_closure a.rel a.bots = ∅ := by { sorry }
+  a.rel.up_closure a.bots = ∅ := by { sorry }
 --     match a with
 --     | ⟨a', ⟨_, hbot, _⟩⟩ =>
 --       unfold up_closure; ext x; constructor
@@ -165,7 +159,7 @@ theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo
     · simp [Lpo.rel]; intro h ha; sorry
   · simp [lowerBounds, upperBounds]; intro a ha; constructor
     · simp [Lpo.nodes]; intro b hb; exact (ha hb).nodes
-    · simp [is_down_closed, Lpo.nodes]; intro x b hb hx y hyx; refine ⟨b, hb, ?_⟩
+    · simp [Rel.is_down_closed, Lpo.nodes]; intro x b hb hx y hyx; refine ⟨b, hb, ?_⟩
       exact (ha hb).downcl x hx y hyx
     · simp [Lpo.nodes, Lpo.rel]; intro x b hb hx y c hc hy; constructor
       · intro ⟨e, he, hr⟩

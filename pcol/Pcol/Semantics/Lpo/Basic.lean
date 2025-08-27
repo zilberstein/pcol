@@ -17,9 +17,21 @@ namespace Form
 def true {α : Type} : Form α := fun _ => True
 def false {α : Type} : Form α := fun _ => False
 def and {α : Type} (p : Form α) (q : Form α) : Form α := fun v => p v ∧ q v
+def not {α : Type} (p : Form α) : Form α := fun v => ¬(p v)
 def literal {α : Type} (x : α) : Form α := fun v => x ∈ v
 
 def sat {α : Type} (p : Form α) : Prop := ∃ v, p v
+
+-- Need to work this part out
+instance {α : Type} : DecidablePred (Form.true : Set α → Prop) := by sorry
+instance {α : Type} : DecidablePred (Form.false : Set α → Prop) := by sorry
+instance {α : Type} {φ ψ : Form α} [DecidablePred φ] [DecidablePred ψ] :
+  DecidablePred (Form.and φ ψ : Set α → Prop) := by sorry
+instance {α : Type} {φ : Form α} [DecidablePred φ] :
+  DecidablePred (Form.not φ : Set α → Prop) := by sorry
+instance {α : Type} : DecidablePred (Form.sat : Form α → Prop) := by sorry
+
+
 
 def vars (p : Form Node) : Set Node :=
   { x | ∃ v, p v ≠ p (fun y => if x = y then ¬(v y) else v y) }
@@ -38,6 +50,15 @@ def is_succ_chain {α : Type} (ord : Rel α α) (l : List α) : Prop :=
   | [] => False
   | List.cons x xs =>
     (xs.foldr (fun (x : α) (acc : α × Prop) => (x, acc.2 ∧ x ∈ ord.succ acc.1)) (x, True)).2
+
+def is_down_closed (ord : Rel Node Node) (X : Set Node) : Prop :=
+  ∀ x ∈ X, ∀ y, ord y x → y ∈ X
+
+def IsUpClosed (ord : Rel Node Node) (X : Set Node) : Prop :=
+  ∀ x ∈ X, ∀ y, ord x y → y ∈ X
+
+def up_closure (ord : Rel Node Node) (X : Set Node) : Set Node :=
+  { x | ∃ y ∈ X, ord y x }
 
 noncomputable def lev {a : Type} (ord : Rel a a) (x : a) : ℕ :=
   sSup { n : ℕ | ∃ l : List a, n = l.length - 1 ∧ is_succ_chain ord l ∧ l.getLast? = Option.some x }
