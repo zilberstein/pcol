@@ -25,9 +25,53 @@ instance {act test : Type} [LE act] [LE test] : LE (Label act test) where
       | Label.lab_test b' => b ≤ b'
       | _ => False
 
+lemma lab_is_act_le {act test : Type} {a : act} {l : Label act test}
+  [Preorder act] [Preorder test]
+  (hle : Label.lab_act a ≤ l) :
+  ∃ a', l = Label.lab_act a' ∧ a ≤ a' := by {
+    match l with
+    | Label.lab_bot => simp [LE.le] at hle
+    | Label.lab_fork => simp [LE.le] at hle
+    | Label.lab_act a' => simp [LE.le] at hle; exact ⟨a', rfl, hle⟩
+    | Label.lab_test _ => simp [LE.le] at hle
+  }
+
+lemma lab_is_test_le {act test : Type} {b : test} {l : Label act test}
+  [Preorder act] [Preorder test]
+  (hle : Label.lab_test b ≤ l) :
+  ∃ b', l = Label.lab_test b' ∧ b ≤ b' := by {
+    match l with
+    | Label.lab_bot => simp [LE.le] at hle
+    | Label.lab_fork => simp [LE.le] at hle
+    | Label.lab_act _ => simp [LE.le] at hle
+    | Label.lab_test b' => simp [LE.le] at hle; exact ⟨b', rfl, hle⟩
+  }
+
 instance {act test : Type} [Preorder act] [Preorder test] : Preorder (Label act test) where
-  le_refl := sorry
-  le_trans := sorry
+  le_refl := by intro l; simp [LE.le]; cases l; all_goals simp
+  le_trans := by {
+    intro l₁ l₂ l₃ h12 h23; simp [LE.le]
+    match l₁ with
+    | Label.lab_bot => simp
+    | Label.lab_fork =>
+        simp [LE.le] at h12; simp [h12, LE.le] at h23
+        exact h23
+    | Label.lab_act a =>
+        rcases lab_is_act_le h12 with ⟨a₂, hl₂, ha₂⟩; subst hl₂
+        rcases lab_is_act_le h23 with ⟨a₃, hl₃, ha₃⟩; subst hl₃
+        simp at *; exact le_trans ha₂ ha₃
+    | Label.lab_test b =>
+        rcases lab_is_test_le h12 with ⟨b₂, hl₂, hb₂⟩; subst hl₂
+        rcases lab_is_test_le h23 with ⟨b₃, hl₃, hb₃⟩; subst hl₃
+        simp at *; exact le_trans hb₂ hb₃
+  }
+
+instance {act test : Type} [PartialOrder act] [PartialOrder test] : PartialOrder (Label act test) where
+  le_antisymm l₁ l₂ h12 h21 := by {
+    cases l₁ <;> cases l₂ <;> simp [LE.le] at *
+    · exact le_antisymm h12 h21
+    · exact le_antisymm h12 h21
+  }
 
 class Linearizable (t : Type → Type) (α : Type)
   [Monad t] [∀ {β : Type}, Preorder (t β)]
@@ -144,30 +188,6 @@ lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
 
 --   }
 
-lemma lab_is_act_le {act test : Type} {α β : Lpo (Label act test)} {x : Node} {a : act}
-  [Preorder act] [Preorder test]
-  (hle : α ≤ β) (ha : α.lab x = Label.lab_act a) :
-  ∃ a', β.lab x = Label.lab_act a' ∧ a ≤ a' := by {
-    have hlab := hle.lab x; rw [ha] at hlab
-    match heq : β.lab x with
-    | Label.lab_bot => simp [heq, LE.le] at hlab
-    | Label.lab_fork => simp [heq, LE.le] at hlab
-    | Label.lab_act a' => simp [heq, LE.le] at hlab; exact ⟨a', rfl, hlab⟩
-    | Label.lab_test _ => simp [heq, LE.le] at hlab
-  }
-
-lemma lab_is_test_le {act test : Type} {α β : Lpo (Label act test)} {x : Node} {b : test}
-  [Preorder act] [Preorder test]
-  (hle : α ≤ β) (ha : α.lab x = Label.lab_test b) :
-  ∃ b', β.lab x = Label.lab_test b' ∧ b ≤ b' := by {
-    have hlab := hle.lab x; rw [ha] at hlab
-    match heq : β.lab x with
-    | Label.lab_bot => simp [heq, LE.le] at hlab
-    | Label.lab_fork => simp [heq, LE.le] at hlab
-    | Label.lab_act _ => simp [heq, LE.le] at hlab
-    | Label.lab_test b' => simp [heq, LE.le] at hlab; exact ⟨b', rfl, hlab⟩
-  }
-
 theorem lin_rec_mono {m : Type → Type} {α act test : Type}
   [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
   [OrderBot (m α)] [Linearizable m α]
@@ -207,8 +227,8 @@ theorem lin_rec_mono {m : Type → Type} {α act test : Type}
               · intro hc; rw [hc, hl] at hyb; contradiction
               · exact hbot _ hy hyb
         | Label.lab_act ac =>
-            rcases lab_is_act_le hle hl with ⟨a', hbx, hxle⟩
-            unfold Lpofin.lab; rw [hbx]
+            have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
+            rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx]
             refine Linearizable.bind_mono (α := α) (Sem.sem_mono (c := act) st hxle) ?_
             apply hind
             · exact Finset.erase_ssubset hx.1
@@ -217,8 +237,8 @@ theorem lin_rec_mono {m : Type → Type} {α act test : Type}
             · sorry --intro y hy; exact hs _ (Finset.erase_subset _ _ hy)
             · sorry
         | Label.lab_test bb =>
-            rcases lab_is_test_le hle hl with ⟨a', hbx, hxle⟩
-            unfold Lpofin.lab; rw [hbx]
+            have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
+            rcases lab_is_test_le hlx with ⟨b', hbx, hxle⟩; rw [hbx]
             refine Linearizable.bind_mono (α := α) (Sem.sem_mono (c := test) st hxle) ?_
             -- Need to prove that a.form = b.form
             sorry
