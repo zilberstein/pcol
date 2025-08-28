@@ -9,19 +9,24 @@ instance {l : Type} [LE l] [Bot l] : LE (Pom l) where
   le p q := ∃ a b, a ≤ b ∧ p = Quotient.mk' a ∧ q = Quotient.mk' b
 
 namespace Pom
--- lemma le_iff_exists_exists {l : Type} [Bot l] [LE l] {p q : Pom l} :
---   p ≤ q ↔ ∃ a ∈ p, ∃ b ∈ q, a ≤ b := by {
---     constructor
---     · intro hpq; rcases p with ⟨s, a, ha, _⟩
---       exact ⟨a, ha, hpq a ha⟩
---     · intro ⟨a, ha, hle⟩ a' ha'
---       rcases p with ⟨s, b, hb, hiso⟩
---       -- Need to prove that IsIsomorphic is an eqivalence relation
---       sorry
---   }
 
--- lemma le_iff_forall_exists {l : Type} [Bot l] [LE l] {p q : Pom l} :
---   p ≤ q ↔ ∃ b ∈ q, ∃ a ∈ p, a ≤ b := by sorry
+lemma le_iff_1 {l : Type} [Bot l] [LE l] {p q : Pom l} :
+  p ≤ q ↔ ∀ a, p = Quotient.mk' a → ∃ b, q = Quotient.mk' b ∧ a ≤ b := by {
+  constructor
+  · intro hle a ha; rcases hle with ⟨a', b', hab, ha', hb'⟩
+    rw [ha] at ha'
+    rcases Quotient.eq.1 ha' with ⟨f, hf, hperm⟩
+    -- b should be b' premuted by the inverse of f, then the rest is
+    -- pretty easy, assuming we have a lemms that
+    -- a ≤ b ↔ a.permute f ≤ b.premute f
+    sorry
+  · sorry
+}
+
+lemma le_iff_2 {l : Type} [Bot l] [LE l] {p q : Pom l} :
+  p ≤ q ↔ ∀ b, q = Quotient.mk' b → ∃ a, p = Quotient.mk' a ∧ a ≤ b := by {
+    sorry
+  }
 
 def singleton {l : Type} [Bot l] (ℓ : l) : Pom l :=
   Quotient.mk' (Lpo.singleton default ℓ)
