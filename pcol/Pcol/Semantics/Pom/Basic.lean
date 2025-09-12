@@ -15,7 +15,7 @@ lemma le_iff_1 {l : Type} [Bot l] [LE l] {p q : Pom l} :
   constructor
   · intro hle a ha; rcases hle with ⟨a', b', hab, ha', hb'⟩
     rw [ha] at ha'
-    rcases Quotient.eq.1 ha' with ⟨f, hf, hperm⟩
+    rcases Quotient.eq.1 ha' with ⟨e, hperm⟩
     -- b should be b' premuted by the inverse of f, then the rest is
     -- pretty easy, assuming we have a lemms that
     -- a ≤ b ↔ a.permute f ≤ b.premute f

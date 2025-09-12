@@ -218,6 +218,11 @@ noncomputable def distr_bind {α β : Type} (s : Set (Distr α)) (k : α → Set
   Function.uncurry PMF.bind '' ⋃ μ ∈ s, {μ} ×ˢ μ.support.pi (Option.elim · Set.univ k)
 --  { f : WithBot α → Distr β | ∀ x : α, ↑x ∈ μ.support → f x ∈ k x },
 
+-- The image of PMF.bind is the same over the following two sets:
+--   { (μ, f) | μ ∈ s ∧ ∀ x ∈ μ.support, f x ∈ k x }
+--   AND
+--   s × { f | ∀ x, f x ∈ k x }
+-- Which is useful, since the latter set in compact
 lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)}
   (hne : ∀ x, (k x).Nonempty) :
   distr_bind s k = Function.uncurry PMF.bind '' (s ×ˢ Set.univ.pi (Option.elim · Set.univ k)) := by {
@@ -243,17 +248,19 @@ lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Dist
         intro x; by_cases hx : x ∈ μ.support
         · rw [(hg x).2 hx]
         · simp at hx; rw [hx]; simp
+    -- The reverse direction is immediate
     · rintro ⟨⟨μ, f⟩, hmem, hν⟩
       simp at hmem; rcases hmem with ⟨hμ, hf⟩
-      simp [distr_bind]; refine ⟨μ, f, ⟨hμ, ?_⟩, ?_⟩
-      · intro x _; exact hf x
+      simp [distr_bind]; refine ⟨μ, f, ⟨hμ, fun x _ => hf x⟩, ?_⟩
       · simp at hν; exact hν
   }
 
  instance {α : Type} [TopologicalSpace α] : TopologicalSpace (WithBot α) :=
    TopologicalSpace.induced (Equiv.optionEquivSumPUnit α).toFun (@instTopologicalSpaceSum α Unit _ _)
 
-lemma get_prob_continuous {α : Type} {x : WithBot α} : Continuous fun (μ : Distr α) => μ x := by sorry
+lemma get_prob_continuous {α : Type} {x : WithBot α} : Continuous fun (μ : Distr α) => μ x := by {
+  sorry
+}
 
 lemma distr_bind_continuous {α β : Type} :
   @Continuous (Distr α × (WithBot α → Distr β)) (β → NNReal) _ _

@@ -82,6 +82,7 @@ structure Lpo_base (l : Type) [Bot l] where
   rel : Rel Node Node
   lab : Node → l
   form : Node → Form Node
+attribute [ext] Lpo_base
 
 structure is_valid_lpo {l : Type} [Bot l] (a : Lpo_base l) : Prop where
   rel_dom : ∀ {x y}, a.rel x y → x ∈ a.nodes ∧ y ∈ a.nodes

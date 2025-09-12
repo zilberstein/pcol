@@ -80,9 +80,9 @@ noncomputable def trunc {l : Type} [Bot l] (a : Lpo l) (n : ℕ) : Lpofin l :=
 
 lemma trunc_equiv {l : Type} [Bot l] {a b : Lpo l} {n : ℕ}
   (heq : a ≈ b) : trunc a n ≈ trunc b n := by {
-  rcases heq with ⟨f, hf, h⟩
-  refine ⟨f, hf, ?_⟩
+  rcases heq with ⟨e, h⟩
   sorry
+  --refine ⟨e, ?_⟩
 }
 
 lemma trunc_le {l : Type} [Preorder l] [OrderBot l] {a : Lpo l} {n : ℕ} :

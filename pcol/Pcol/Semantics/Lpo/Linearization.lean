@@ -1,6 +1,7 @@
 import Mathlib
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
+import Pcol.Semantics.Lpo.FinApprox
 
 inductive Label (act : Type) (test : Type)
   | lab_bot : Label act test
@@ -93,24 +94,6 @@ class Sem (c : Type) (in_type out_type : Type)
     sem_mono [Preorder out_type] (s : in_type) : Monotone (sem · s)
 
 namespace Lpo
-
-def Lpofin (l : Type) [Bot l] := { a : Lpo l // a.nodes.Finite }
-
-instance {l : Type} [LE l] [Bot l] : LE (Lpofin l) where
-  le a b := LE.le a.val b.val
-instance {l : Type} [Preorder l] [Bot l] : Preorder (Lpofin l) :=
-  Preorder.lift Subtype.val
-instance {l : Type} [PartialOrder l] [Bot l] : PartialOrder (Lpofin l) :=
-  PartialOrder.lift Subtype.val Subtype.val_injective
-
-namespace Lpofin
-
-noncomputable def nodes {l : Type} [Bot l] (a : Lpofin l) := a.property.toFinset
-def rel {l : Type} [Bot l] (a : Lpofin l) := a.val.rel
-def lab {l : Type} [Bot l] (a : Lpofin l) := a.val.lab
-def form {l : Type} [Bot l] (a : Lpofin l) := a.val.form
-
-end Lpofin
 
 def next {l : Type} [Bot l] (a : Lpofin l) (s : Finset Node) : Set Node :=
   { x | x ∈ s ∧ ∀ y, a.rel y x → y ∉ s }
