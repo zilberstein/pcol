@@ -1,8 +1,6 @@
 import Init.Prelude
 import Mathlib
 
-open ENNReal
-
 def Distr (α : Type) := PMF (WithBot α)
 
 instance {α : Type} : FunLike (Distr α) (WithBot α) ENNReal where
@@ -28,7 +26,7 @@ lemma prob_bot {α : Type} (d : Distr α) : d ⊥ = 1 - ∑' x : α, d x := by {
   · rw [ENNReal.add_sub_cancel_right]
     refine lt_top_iff_ne_top.mp ?_
     refine lt_of_le_of_lt ?_ (lt_of_le_of_ne le_top d.tsum_coe_ne_top)
-    refine tsum_comp_le_tsum_of_injective ?_ ⇑d
+    refine ENNReal.tsum_comp_le_tsum_of_injective ?_ ⇑d
     exact WithBot.coe_injective
   · constructor
     case toFun =>
@@ -222,7 +220,7 @@ noncomputable def distr_bind {α β : Type} (s : Set (Distr α)) (k : α → Set
 --   { (μ, f) | μ ∈ s ∧ ∀ x ∈ μ.support, f x ∈ k x }
 --   AND
 --   s × { f | ∀ x, f x ∈ k x }
--- Which is useful, since the latter set in compact
+-- Which is useful, since the latter set is compact
 lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)}
   (hne : ∀ x, (k x).Nonempty) :
   distr_bind s k = Function.uncurry PMF.bind '' (s ×ˢ Set.univ.pi (Option.elim · Set.univ k)) := by {
@@ -255,11 +253,58 @@ lemma distr_bind_image {α β : Type} {s : Set (Distr α)} {k : α → Set (Dist
       · simp at hν; exact hν
   }
 
- instance {α : Type} [TopologicalSpace α] : TopologicalSpace (WithBot α) :=
-   TopologicalSpace.induced (Equiv.optionEquivSumPUnit α).toFun (@instTopologicalSpaceSum α Unit _ _)
-
-lemma get_prob_continuous {α : Type} {x : WithBot α} : Continuous fun (μ : Distr α) => μ x := by {
+lemma exits_finsum_within {α β : Type} {d : Distr α} {k : WithBot α → Distr β} {l u : ℝ} {y : β}
+    (hlt : l < u) (hsum : (∑' x, (d x).toReal * (k x y).toReal) ∈ Set.Ioo l u) :
+    ∃ ε > 0, ∃ F : Finset (WithBot α), (∑ x ∈ F, (d x).toReal * (k x y).toReal) ∈ Set.Ioo (l + ε) (u - ε) := by
+  have hsm : Summable fun x => (d x).toReal * (k x y).toReal := by sorry
+  let ε : ℝ := ((∑' x, (d x).toReal * (k x y).toReal) - l) / 2
+  rcases hsum with ⟨hl, hu⟩
+  have hε : ε > 0 := by unfold ε; linarith
+  have htends := (Metric.tendsto_nhds.mp hsm.hasSum ε hε).exists; obtain ⟨F, hF⟩ := htends
+  refine ⟨ε, hε, F, ?_⟩
   sorry
+
+-- Based on Lemma B.3 of the POPL '25 paper. Original Proof due to Dexter Kozen
+lemma distr_bind_tsum_continuous {α β : Type} {y : β} :
+    @Continuous (Distr α × (WithBot α → Distr β)) Real _ _
+      (fun d ↦ ∑' x, (d.1 x * d.2 x y).toReal) := by {
+  refine Real.isTopologicalBasis_Ioo_rat.continuous_iff.mpr ?_
+  intro s hs
+  simp at hs; rcases hs with ⟨l, u, hlt, hs⟩; subst hs
+  refine isOpen_iff_mem_nhds.mpr ?_
+  simp; intro d k hl hu; refine mem_nhds_iff.mpr ?_
+  --
+  rcases exits_finsum_within (Rat.cast_lt.mpr hlt) (Set.mem_Ioo.mpr ⟨hl, hu⟩) with ⟨ε, hε, F, ⟨hFl, hFu⟩⟩
+  --
+
+  let δ := ε / (4 * F.card)
+  have hδ : (2*δ + δ^2) * F.card < ε := by unfold δ; sorry
+  let U := { μ : Distr α | ∀ x ∈ F, (μ x).toReal ∈ Set.Ioo ((d x).toReal - ε) ((d x).toReal + ε)}
+  -- Alternatively, add [DecidableEq α] to context
+  have _ x := Classical.dec (x ∈ F)
+  let V x := if x ∈ F then { ν : Distr β | (ν y).toReal ∈ Set.Ioo ((k x y).toReal - δ) ((k x y).toReal + δ)} else Set.univ
+  refine ⟨U ×ˢ F.toSet.pi V, ?_, ?_, ?_⟩
+  · intro ⟨μ, f⟩; simp [U, V]; intro hu hv; constructor
+    · have hll : l = l + ε - ε := by { linarith } ; rw [hll]
+      refine ((sub_lt_sub_iff_right _).mpr hFl).trans ?_
+      refine (sub_lt_sub_left hδ _).trans ?_
+      have hcr : (2 * δ + δ ^ 2) * F.card = F.card • (2 * δ + δ ^ 2) := by rw [mul_comm]; sorry
+      rw [hcr, ← (sub_right_inj (G := ℝ)).mpr (Finset.sum_const (β := ℝ) _), ← Finset.sum_sub_distrib]
+      sorry
+    · sorry
+  · refine IsOpen.prod (isOpen_induced_iff.mpr ⟨distr_inj '' U, ?_, ?_⟩) ?_
+    · simp [distr_inj, U, Set.image]; refine isOpen_pi_iff.mpr ?_; intro f hf
+      simp at hf; rcases hf with ⟨μ, hμ⟩
+      refine ⟨F.filterMap id ?_, sorry, ?_, ?_⟩
+      · intro a b c; simp; intro ha hb; subst ha hb; rfl
+      · intro x hx; sorry
+      · sorry
+    · exact Set.preimage_image_eq _ distr_inj_injective
+    · refine isOpen_set_pi (Finset.finite_toSet _) ?_
+      intro x hx; unfold V; apply Finset.mem_coe.mp at hx; simp [hx]
+      sorry
+  · simp [U, V]; refine ⟨fun _ _ ↦ hε, ?_⟩
+    intro _ _; unfold δ; refine div_pos hε ?_; sorry
 }
 
 lemma distr_bind_continuous {α β : Type} :
@@ -268,25 +313,11 @@ lemma distr_bind_continuous {α β : Type} :
     refine continuous_pi ?_; intro y
     simp [distr_inj, Function.uncurry]
     refine ContinuousOn.comp_continuous ENNReal.continuousOn_toNNReal ?_ (fun _ => prob_not_top)
-    -- Now, show that the infinite sum in continuous
+    -- Now, show that the infinite sum is continuous
     simp [PMF.bind, distr_coe]
     refine Continuous.congr ?_
       (fun d => Eq.trans (congrArg _ (Eq.symm (ENNReal.tsum_toReal_eq ?_))) (ENNReal.ofReal_toReal ?_))
-    · refine Continuous.comp ENNReal.continuous_ofReal ?_ (g := ENNReal.ofReal)
-      let f (n : WithBot α) (x : Distr α × (WithBot α → Distr β)) := (x.1 n * x.2 n y).toReal
-      refine continuous_tsum ?_ ?_ ?_ (u := fun _ => 1) (f := f)
-      · intro x; unfold f
-        refine ContinuousOn.comp_continuous ENNReal.continuousOn_toReal ?_ ?_ (g := ENNReal.toReal)
-        · refine Continuous.ennreal_mul ?_ ?_ (fun _ => Or.inr prob_not_top) (fun _ => Or.inr prob_not_top)
-          · exact Continuous.comp get_prob_continuous continuous_fst
-          · have heq : (fun (p : Distr α × (WithBot α → Distr β)) ↦ (p.2 x) y) = (fun μ => μ y) ∘ (fun k => k x) ∘ Prod.snd := rfl
-            rw [heq]; refine Continuous.comp get_prob_continuous ?_
-            refine Continuous.comp (continuous_apply x) continuous_snd
-        · intro _; exact ENNReal.mul_ne_top prob_not_top prob_not_top
-      · sorry -- This is actually not true
-      · rintro x ⟨μ, k⟩; simp [f]
-        refine le_trans (b := 1 * 1) (mul_le_mul ?_ ?_ (by simp) (by simp)) (by simp)
-        all_goals { simp [distr_upper_bound, ENNReal.toReal_le_of_le_ofReal] }
+    · refine Continuous.comp ENNReal.continuous_ofReal distr_bind_tsum_continuous (g := ENNReal.ofReal)
     · intro d; exact ENNReal.mul_ne_top prob_not_top prob_not_top
     · refine ne_top_of_le_ne_top d.1.tsum_coe_ne_top ?_
       refine tsum_le_tsum ?_ ENNReal.summable ENNReal.summable
