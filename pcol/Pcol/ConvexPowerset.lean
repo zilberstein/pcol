@@ -116,74 +116,37 @@ lemma proper_dist_maximal {α : Type} {μ ν : Distr α} (hbot : μ ⊥ = 0) :
       apply HasSum.tsum_eq at hs₂; rw [← hs₂] at hs; exact lt_irrefl _ hs
   }
 
-def is_valid_C {α : Type} (S : Set (Distr α)) : Prop :=
-  S.Nonempty ∧
-    ConvexSet S ∧
-    IsClosed S ∧
-    IsUpperSet S
+structure is_valid_C {α : Type} (S : Set (Distr α)) : Prop where
+  nonempty : S.Nonempty
+  convex : Convex ENNReal (Subtype.val '' S)
+  closed : IsClosed S
+  upcl : IsUpperSet S
 
 def C (α : Type) : Type :=
   { S : Set (Distr α) // is_valid_C S }
 
+lemma hassum_1_convex {α : Type} : Convex ENNReal { d : WithBot α → ENNReal | HasSum d 1} := by
+  refine convex_iff_forall_pos.mpr ?_; simp
+  intro d hd d' hd' p q hp hq hpq
+  have heq (r : ENNReal) (e : WithBot α → ENNReal) : r • e = fun x => r • e x := rfl
+  have hr (r : ENNReal) : r = r • 1 := by simp
+  rw [← hpq, heq p d, heq q d']; refine HasSum.add ?_ ?_
+  · nth_rewrite 2 [hr p]; refine (Summable.hasSum_iff ENNReal.summable).mpr ?_
+    rw [ENNReal.tsum_const_smul p, HasSum.tsum_eq hd]
+  · nth_rewrite 2 [hr q]; refine (Summable.hasSum_iff ENNReal.summable).mpr ?_
+    rw [ENNReal.tsum_const_smul q, HasSum.tsum_eq hd']
+
 instance {α : Type} : Bot (C α) where
-  bot := Subtype.mk Set.univ (by unfold is_valid_C; simp [isClosed_univ, ConvexSet, IsUpperSet])
+  bot := Subtype.mk Set.univ (by constructor <;> simp [isClosed_univ, IsUpperSet, hassum_1_convex])
 
 def with_bot {α β : Type} (f : α → C β) (x : WithBot α) : C β :=
   match x with
   | ⊥ => ⊥
   | WithBot.some y => f y
 
-instance : Monad C where
-  pure a := ⟨ {PMF.pure ↑a}, by {
-    refine ⟨by simp,?_ , ?_, ?_⟩
-    · unfold ConvexSet; simp; intros p hp
-      unfold convex_sum'
-      ext x
-      classical
-      match em (x = a) with
-      | Or.inl heq =>
-        nth_rewrite 1 [distr_coe]; simp
-        rw [heq, pure_apply_self]
-        simp
-        have ht : p ≠ ⊤ := ne_top_of_le_ne_top (by simp) hp
-        rw [add_comm, ENNReal.sub_add_eq_add_sub hp ht, ENNReal.add_sub_cancel_right ht]
-      | Or.inr hne =>
-        rw [PMF.pure_apply_of_ne]
-        · nth_rewrite 1 [distr_coe]; simp; refine ⟨?_ ,?_⟩
-          all_goals { right; exact PMF.pure_apply_of_ne _ _ hne }
-        · refine Ne.intro ?_
-          intros hc
-          contradiction
-    · exact isClosed_singleton
-    · unfold IsUpperSet; simp; intro μ ν hle hμ
-      rw [← hμ]; symm; apply proper_dist_maximal _ hle
-      rw [hμ, PMF.pure_apply_of_ne]; simp
-  } ⟩
+instance {α : Type} : Membership (Distr α) (C α) where
+  mem s d := d ∈ s.val
 
-  bind {α β : Type} (s : C α) (k : α → C β) :=
-    Subtype.mk (distr_bind s.val (Subtype.val ∘ k)) (by {
-    rcases s with ⟨s, ⟨hne, hu, hcv, hcm⟩⟩; unfold distr_bind
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · rcases hne with ⟨μ, hμ⟩
-      let g t := Option.elim t Set.univ (Subtype.val ∘ k)
-      have hf : (μ.support.pi g).Nonempty := by {
-        apply (Set.pi_nonempty_iff (s := μ.support) (t := g)).2
-        intro x; match x with
-        | ⊥ => use ⊥; intro hb; simp [g, Option.elim]
-        | WithBot.some y =>
-            let u := k y
-            rcases hk : (k y) with ⟨t, ⟨⟨ν, hν⟩, _⟩⟩; use ν; intro hy
-            simp [g, Option.elim, hk, hν]
-      }
-      rcases hf with ⟨f, hf⟩; use (PMF.bind μ f); simp; use μ; use f
-      refine ⟨⟨hμ, ?_⟩, rfl⟩
-      intro x hx; unfold g at hf; exact Set.mem_pi.1 hf x hx
-    · sorry
-    · apply bind_closed hcv
-      · intro x; rcases hk : k x with @⟨t, ⟨hne, _, _, _⟩⟩; simp [hk, hne]
-      · intro x; rcases hk : k x with @⟨t, ⟨_, _, hc, _⟩⟩; simp [hk, hc]
-    · sorry
-  })
 
 def SmythOrd {α : Type} [LE α] (S T : Set α) :=
   ∀ y ∈ T, ∃ x ∈ S, x ≤ y
@@ -225,11 +188,9 @@ instance {α : Type} : Bot (C α) where
   bot := Subtype.mk Set.univ <| by
     constructor
     · simp
-    · constructor
-      · intro _ _ _ _ _ _; simp
-      · constructor
-        · apply isClosed_univ
-        · intro _ _ _ _ ; simp
+    · simp [hassum_1_convex]
+    · apply isClosed_univ
+    · intro _ _ _ _ ; simp
 
 instance {α : Type} : OrderBot (C α) where
   bot_le S := by {
