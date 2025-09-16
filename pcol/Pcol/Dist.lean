@@ -53,6 +53,15 @@ lemma prob_bot {α : Type} (d : Distr α) : d ⊥ = 1 - ∑' x : α, d x := by {
     · simp
 }
 
+lemma prob_not_bot {α : Type} (d : Distr α) : ∑' x : α, d x = 1 - d ⊥ := by
+  rw [prob_bot]; refine Eq.symm (ENNReal.sub_sub_cancel ENNReal.one_ne_top ?_)
+  rw [← PMF.tsum_coe d]
+  exact tsum_le_tsum_of_inj some (Option.some_injective _)
+    (fun _ _ ↦ bot_le)
+    (fun _ ↦ le_refl _)
+    ENNReal.summable
+    ENNReal.summable
+
 -- Inject a Distribution into α-dimensional Euclidean Space
 def distr_inj {α : Type} (μ : Distr α) : α → NNReal := ENNReal.toNNReal ∘ μ ∘ WithBot.some
 

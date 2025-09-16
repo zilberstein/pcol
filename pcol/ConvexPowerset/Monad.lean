@@ -131,8 +131,128 @@ lemma c_bind_closed {α β : Type} {s : C α} {k : α → C β} :
   · intro x; simp [(k x).property.nonempty]
   · intro x; simp [(k x).property.closed]
 
+-- For some reason, the Mathlib version is only for sums indexed by ℕ
+theorem tsum_sub' {ι : Type} {f : ι → ENNReal} {g : ι → ENNReal} (h₁ : ∑' i, g i ≠ ⊤) (h₂ : g ≤ f) :
+    ∑' i, (f i - g i) = ∑' i, f i - ∑' i, g i :=
+  have : ∀ i, f i - g i + g i = f i := fun i => tsub_add_cancel_of_le (h₂ i)
+  ENNReal.eq_sub_of_add_eq h₁ <| by simp only [← ENNReal.tsum_add, this]
+
+lemma bind_toReal {α β : Type} {μ : Distr α} {f : WithBot α → Distr β} {y : WithBot β} :
+    (μ.bind f y).toReal = ∑' x, (μ x).toReal * (f x y).toReal := by
+  rw [PMF.bind_apply]; refine (ENNReal.tsum_toReal_eq ?_).trans ?_
+  · intro _; refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
+    exact mul_le_one₀ (distr_upper_bound _ _) bot_le (distr_upper_bound _ _)
+  · refine tsum_congr fun x ↦ ?_; simp
+
 lemma c_bind_upcl {α β : Type} {s : C α} {k : α → C β} :
-    IsUpperSet (distr_bind s.val (Subtype.val ∘ k)) := sorry
+    IsUpperSet (distr_bind s.val (Subtype.val ∘ k)) := by
+  simp [distr_bind, Set.image]
+  intro ν₁ ν₂ hle
+  rintro ⟨μ, f, ⟨_, hμ, _, h, _, _⟩, heq⟩; subst heq
+  refine ⟨μ, ?_⟩
+  by_cases h0 : μ.bind f ⊥ = 0
+  · exact ⟨f, ⟨μ, hμ, f, h, rfl⟩, proper_dist_maximal h0 hle⟩
+  · -- Δ y is the about of missing probability mass for y, scaled by the amount of unassigned mass
+    let Δ (y : β) := (ν₂ y - μ.bind f y) / μ.bind f ⊥
+    let g x : Distr β :=
+      ⟨ fun y ↦ match y with
+        | some y => f x y + f x ⊥ * Δ y
+        | none => f x ⊥ * (1 - tsum Δ),
+      by
+        refine (Equiv.hasSum_iff (Equiv.optionEquivSumPUnit β : Option β ≃ β ⊕ Unit).symm).mp ?_
+        refine ENNReal.summable.hasSum_iff.mpr ?_
+        rw [tsum_sum ENNReal.summable ENNReal.summable]; simp
+        rw [tsum_add ENNReal.summable ENNReal.summable, ENNReal.tsum_mul_left]
+        unfold Δ
+        rw [prob_not_bot, add_assoc, ← mul_add]
+        rw [add_comm (tsum _)]
+        have hub : ∑' (y : β), (ν₂ ↑y - (μ.bind f) ↑y) / (μ.bind f) ⊥ ≤ 1 := by
+          rw [tsum_congr fun _ ↦ div_eq_mul_inv _ _, ENNReal.tsum_mul_right,
+              tsum_sub' _ hle]
+          · refine (ENNReal.mul_inv_le_iff h0 prob_not_top).mpr ?_
+            rw [prob_not_bot, prob_not_bot, one_mul]
+            exact tsub_tsub_tsub_le_tsub.trans tsub_le_self
+          · refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
+            rw [prob_not_bot]; exact tsub_le_self
+        have hnt := ne_top_of_le_ne_top ENNReal.one_ne_top hub
+        rw [ENNReal.sub_add_eq_add_sub hub hnt,
+            ENNReal.add_sub_cancel_right hnt]; simp
+        rw [ENNReal.sub_add_eq_add_sub (distr_upper_bound _ _) prob_not_top,
+            ENNReal.add_sub_cancel_right prob_not_top]
+      ⟩
+    refine ⟨g, ⟨μ, hμ, g, ?_, rfl⟩, ?_⟩
+    · intro x hx; cases x with
+      | bot => exact Set.mem_univ _
+      | coe x =>
+          refine (k x).property.upcl ?_ (h x hx)
+          intro y; simp [g, DFunLike.coe]
+    · ext y; rw [PMF.bind_apply]; simp [g, Δ, DFunLike.coe]
+      have bind_eq z : ∑' (i : WithBot α), μ.val i * (f i).val z = μ.bind f z := rfl
+      have bind_eq' z : ∑' (i : WithBot α), μ i * (f i) z = μ.bind f z := rfl
+      cases y
+      · simp [div_eq_mul_inv, mul_add]
+        rw [
+          tsum_congr fun _ ↦ (mul_assoc _ _ _).symm.trans (ENNReal.mul_sub ?_),
+          tsum_sub',
+          ENNReal.tsum_mul_right (a := _ ⁻¹),
+          ENNReal.tsum_mul_right, ENNReal.tsum_mul_right
+        ]
+        simp
+        rw [
+          bind_eq, mul_comm, mul_assoc, ←distr_coe,
+          ENNReal.inv_mul_cancel h0 prob_not_top, mul_one,
+          tsum_sub', prob_bot, tsub_tsub,
+          add_comm, ENNReal.sub_add_eq_add_sub,
+          ← tsum_congr fun _ ↦ distr_coe,
+          ← tsum_congr fun _ ↦ distr_coe,
+          ENNReal.add_sub_cancel_right,
+          ← prob_bot
+        ]; rfl
+        · rw [prob_not_bot]; simp
+        · exact tsum_le_tsum hle ENNReal.summable ENNReal.summable
+        · rw [← tsum_congr fun _ ↦ distr_coe, prob_not_bot]; simp
+        · rw [← tsum_congr fun _ ↦ distr_coe, prob_not_bot]; simp
+        · intro y; exact hle y
+        · refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
+          refine LE.le.trans ?_ (distr_upper_bound (μ.bind f) ⊥)
+          refine ENNReal.tsum_le_tsum fun x ↦ ?_
+          refine mul_le_of_le_one_right bot_le ?_
+          rw [ENNReal.tsum_mul_right, tsum_sub' _]
+          simp_rw [← distr_coe]
+          rw [prob_not_bot, prob_not_bot]
+          refine (mul_le_mul (tsub_tsub_tsub_le_tsub) (le_refl _) bot_le bot_le).trans ?_
+          rw [
+            ENNReal.sub_mul fun _ _ ↦ ENNReal.Finiteness.inv_ne_top h0,
+            ENNReal.mul_inv_cancel h0 prob_not_top
+          ]; simp
+          · intro y; exact hle y
+          · simp_rw [← distr_coe]; rw [prob_not_bot]; simp
+        · intro y; simp; rw [mul_assoc]
+          refine mul_le_mul (le_refl _) ?_ bot_le bot_le
+          simp_rw [← distr_coe]
+          rw [
+            ENNReal.tsum_mul_right,
+            tsum_sub' _ hle, prob_not_bot, prob_not_bot
+          ]
+          refine
+            (mul_le_mul (le_refl _)
+              (mul_le_mul (tsub_tsub_tsub_le_tsub) (le_refl _) bot_le bot_le)
+              bot_le bot_le).trans ?_
+          refine mul_le_of_le_one_right bot_le ?_
+          rw [ENNReal.sub_mul, ENNReal.mul_inv_cancel h0 prob_not_top]; simp
+          · intro _ _; exact ENNReal.Finiteness.inv_ne_top h0
+          · simp [prob_not_bot]
+        · intro _ _; exact ENNReal.mul_ne_top prob_not_top prob_not_top
+      · simp_rw [← distr_coe]
+        rw [
+          tsum_congr fun _ ↦ mul_add _ _ _,
+          tsum_add ENNReal.summable ENNReal.summable,
+          tsum_congr fun _ ↦ (mul_assoc _ _ _).symm,
+          ENNReal.tsum_mul_right,
+          bind_eq', bind_eq', ENNReal.mul_div_cancel h0 prob_not_top,
+          add_comm, ENNReal.sub_add_eq_add_sub (hle _) prob_not_top,
+          ENNReal.add_sub_cancel_right prob_not_top
+        ]
 
 instance : Monad C where
   pure a := ⟨ {PMF.pure ↑a}, c_pure_valid ⟩
