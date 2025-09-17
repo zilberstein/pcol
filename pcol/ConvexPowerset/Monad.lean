@@ -264,6 +264,8 @@ instance : Monad C where
       closed := c_bind_closed
       upcl := c_bind_upcl
     }
+
+
 namespace C
 
 lemma pure_bind {α β : Type} (x : α) (k : α → C β) : pure x >>= k = k x := by
@@ -445,7 +447,7 @@ lemma bind_bind_2 {α β γ : Type}  (s : C α)  (f : α → C β)  (g : β → 
       · exact Set.mem_univ ?_
       · exact hξ x hx _ hy
 
-lemma bind_assoc {α β γ : Type}  (s : C α)  (f : α → C β)  (g : β → C γ) :
+lemma bind_assoc {α β γ : Type} (s : C α)  (f : α → C β)  (g : β → C γ) :
     s >>= f >>= g = s >>= fun (x : α) => f x >>= g := by
   refine Subtype.ext ?_; rw [bind_bind_1, bind_bind_2]; ext d
   refine exists_congr fun μ ↦ and_congr_right fun hμ ↦ ?_
@@ -456,14 +458,38 @@ lemma bind_assoc {α β γ : Type}  (s : C α)  (f : α → C β)  (g : β → C
   · intro ⟨ξ, hξ, hd⟩; subst hd
     exact bind_assoc_convex hξ
 
-end C
+lemma bind_pure {α : Type} (s : C α) : s >>= pure = s := by
+  simp [Bind.bind, Pure.pure, distr_bind, Set.image]
+  refine Subtype.ext ?_; simp; ext μ; constructor
+  · rintro ⟨ν, f, ⟨_, hν, _, h, _, _⟩, heq⟩; subst heq
+    refine s.property.upcl (fun y ↦ ?_) hν
+    rw [PMF.bind_apply]
+    refine
+      LE.le.trans (b := ν.bind pure y)
+        (le_of_eq ?_)
+        (tsum_le_tsum ?_ ENNReal.summable ENNReal.summable)
+    · refine DFunLike.congr_fun ν.bind_pure.symm _
+    · intro x; by_cases hx : x ∈ ν.support
+      · refine mul_le_mul (le_refl _) ?_ bot_le bot_le
+        cases x
+        · have hpure : pure (α := WithBot α) = PMF.pure := rfl
+          rw [hpure, PMF.pure_apply_of_ne]
+          · exact bot_le
+          · exact Option.some_ne_none _
+        · have hf := h _ hx; simp [Option.elim] at hf; rw [hf]
+          exact le_of_eq rfl
+      · simp at hx; rw [hx]; simp
+  · intro hμ; refine ⟨μ, PMF.pure, ⟨μ, hμ, PMF.pure, ?_, rfl⟩, μ.bind_pure⟩
+    intro x hx; cases x
+    · exact Set.mem_univ ?_
+    · simp [Option.elim]
+
 
 instance : LawfulMonad C where
-  map_const := by
-    intro α β; sorry
+  map_const := by intro α β; simp [Functor.mapConst, Functor.map]
   pure_bind := C.pure_bind
   bind_assoc := C.bind_assoc
-  id_map := sorry
+  id_map := C.bind_pure
   seqLeft_eq := sorry
   seqRight_eq := sorry
   bind_pure_comp := sorry
