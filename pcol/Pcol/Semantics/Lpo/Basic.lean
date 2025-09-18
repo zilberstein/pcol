@@ -145,6 +145,18 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
 
   end Lpo
 
+@[ext]
+lemma lpo_ext {l : Type} [Bot l] {a b : Lpo l}
+    (hnodes : a.nodes = b.nodes)
+    (hrel : a.rel = b.rel)
+    (hlab : a.lab = b.lab)
+    (hform : a.form = b.form) : a = b := by
+  refine Subtype.ext ?_; ext
+  · simp [Lpo.nodes] at hnodes; rw [hnodes]
+  · unfold Lpo.rel at hrel; rw [hrel]
+  · unfold Lpo.lab at hlab; rw [hlab]
+  · unfold Lpo.form at hform; rw [hform]
+
 lemma lpo_eq_iff {l : Type} [Bot l] {a b : Lpo l} :
   a = b ↔
     a.nodes = b.nodes ∧

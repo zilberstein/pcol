@@ -1,15 +1,15 @@
 import Mathlib
 import Pcol.Semantics.Lpo.Basic
+import Pcol.Semantics.Lpo.Order
 
 namespace Lpo
 
-noncomputable def permute {l : Type} [Bot l] (a : Lpo l)
-  (e : Node ≃ Node) : Lpo l :=
+noncomputable def permute {l : Type} [Bot l] (a : Lpo l) (e : Equiv.Perm Node) : Lpo l :=
   Subtype.mk {
     nodes := e '' a.nodes
     rel x y := a.rel (e.symm x) (e.symm y)
     lab x := a.lab (e.symm x)
-    form x v := a.form (e.symm x) (e '' v)
+    form x v := a.form (e.symm x) (e.symm '' v)
   } (by {
     -- have hinv {a : Lpo l} {x} (hx : finv x ∈ a.nodes) : ∃ y ∈ a.nodes, f y = x :=
     --   ⟨f.surjInv hf.2 x, hx, Function.surjInv_eq hf.2 _⟩
@@ -37,57 +37,66 @@ noncomputable def permute {l : Type} [Bot l] (a : Lpo l)
 --        · simp [Form.vars]; intro y hy
   })
 
- def IsIsomorphic {l : Type} [Bot l] (a b : Lpo l) : Prop :=
+lemma permute_refl {l : Type} [Bot l] (a : Lpo l) : a.permute (Equiv.refl Node) = a := by
+  unfold permute; ext1 <;> simp [Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
+
+lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {e₁ e₂ : Equiv.Perm Node} :
+    (a.permute e₁).permute e₂ = a.permute (e₁.trans e₂) := by
+  unfold permute; ext1
+  · simp [Lpo.nodes, Set.image]
+  · simp [Lpo.rel]
+  · simp [Lpo.lab]
+  · ext x v; simp [Lpo.form, Set.image]
+
+lemma permute_injective {l : Type} [Bot l] (e : Equiv.Perm Node) :
+    Function.Injective (fun a : Lpo l ↦ a.permute e) := by
+  intros a b h;
+  apply congr_arg Subtype.val at h; simp [permute] at h
+  rcases h with ⟨hnodes, hrel, hlab, hform⟩
+  have hn x : x = e.symm (e x) := by simp
+  ext1
+  · exact hnodes
+  · ext x y; rw [hn x, hn y, congrFun₂ hrel]
+  · ext x; rw [hn x, congrFun hlab]
+  · ext x v
+    have hv : v = e.symm '' (e '' v) := by simp
+    rw [hn x, hv, congrFun₂ hform]
+
+lemma permute_symm {l : Type} [Bot l] {a b : Lpo l} {e : Equiv.Perm Node} :
+    a.permute e = b ↔ a = b.permute e.symm := by
+  constructor
+  · intro heq; rw [← heq, permute_trans, Equiv.self_trans_symm, permute_refl]
+  · intro heq; rw [heq, permute_trans, Equiv.symm_trans_self, permute_refl]
+
+def IsIsomorphic {l : Type} [Bot l] (a b : Lpo l) : Prop :=
     ∃ e, a.permute e = b
 
-lemma isoEquivalence {l : Type} [Bot l] : Equivalence (@IsIsomorphic l _) := by {
+lemma isoEquivalence {l : Type} [Bot l] : Equivalence (@IsIsomorphic l _) := by
   constructor
   -- Reflexivity
-  · intro a; refine ⟨Equiv.refl _, ?_⟩; unfold permute; apply lpo_eq_iff.2
-    -- have h (z : Node) : Function.surjInv Function.bijective_id.2 z = z := by {
-    --   apply Function.injective_id.eq_iff.1; rw [Function.surjInv_eq Function.bijective_id.2 z]; rfl
-    -- }
-    refine ⟨?_, ?_, ?_, ?_⟩
-    · simp [Lpo.nodes]
-    · simp [Lpo.rel] --; ext x y; refine ⟨fun ⟨_, _, h⟩ => h, fun h => ?_⟩
---      rcases a.property.rel_dom h with ⟨hx, hy⟩; exact ⟨hy, hx, h⟩
-    · simp [Lpo.lab] --; ext x; by_cases h : x ∈ a.nodes <;> simp [h]
---      exact Eq.symm (a.property.lab_dom x h)
-    · simp [Lpo.form] --; ext1 x ; sorry -- rw [h x]
+  · intro a; exact ⟨Equiv.refl _, permute_refl a⟩
   -- Symmetry
-  · intro a b ⟨e, hb⟩
-    refine ⟨e.symm, ?_⟩
---    · intro x; use f x; exact Function.leftInverse_surjInv hf x
-    · unfold Lpo.permute at *;
-      rcases lpo_eq_iff.1 hb with ⟨_, hrel, hlab, hfo⟩;
---      simp [Lpo.nodes, Lpo.rel, Lpo.form, Lpo.lab] at *
-      apply lpo_eq_iff.2; refine ⟨?_, ?_, ?_, ?_⟩
-      · simp [nodes]; sorry
-      · simp [Lpo.rel]; ext x y; constructor
-        · sorry
-          -- intro ⟨hx, hy, hb⟩; simp [Lpo.rel] at hrel; rw [← hrel] at hb
-          -- simp at hb; exact hb
-        · sorry
-          -- intro ha; simp [Lpo.rel] at hrel
-          -- have hxy := a.property.rel_dom ha
-          -- refine ⟨hxy.1, hxy.2, ?_⟩; rw [← hrel]; simp; exact ha
-      · sorry
-      · sorry
+  · intro a b ⟨e, hb⟩; exact ⟨e.symm, (permute_symm.mp hb).symm⟩
   -- Transitivity
-  · intro a b c ⟨e₁, hab⟩ ⟨e₂, hbc⟩
-    refine ⟨e₁.trans e₂, ?_⟩
-    apply lpo_eq_iff.2
-    rcases lpo_eq_iff.1 hab with ⟨hna, hra, hla, hfa⟩
-    rcases lpo_eq_iff.1 hbc with ⟨hnb, hrb, hlb, hfb⟩
-    unfold permute at *; simp [Lpo.nodes, Lpo.rel, Lpo.form, Lpo.lab] at *
-    refine ⟨?_, ?_, ?_⟩
-    · sorry
-    · sorry
-    · sorry
-}
+  · intro a b c ⟨e₁, hab⟩ ⟨e₂, hbc⟩; subst hab hbc
+    exact ⟨e₁.trans e₂, permute_trans.symm⟩
 
 instance instSetoid {l : Type} [Bot l] : Setoid (Lpo l) where
   r := IsIsomorphic
   iseqv := isoEquivalence
+
+lemma permute_le {l : Type} [Bot l] [LE l] {a b : Lpo l} {e : Equiv.Perm Node}
+    (h : a ≤ b) : a.permute e ≤ b.permute e := by
+  unfold permute; constructor
+  · simp [Lpo.nodes]; exact h.nodes
+  · simp [Lpo.rel, Lpo.nodes]; rintro _ ⟨x, hx, hx'⟩ y hy; subst hx'; simp at hy
+    refine ⟨e.symm y, h.downcl _ hx _ hy, ?_⟩; simp
+  · simp [Lpo.nodes, Lpo.rel]; intro x hx y hy
+    exact eq_iff_iff.mp (h.rel _ hx _ hy)
+  · simp [Lpo.lab]; intro x; exact h.lab _
+  · simp [Lpo.nodes, Lpo.form]; intro x hx; ext s
+    exact eq_iff_iff.mp (congrFun (h.form _ hx) _)
+  · simp [Lpo.nodes, Lpo.rel]; intro x hx
+    sorry
 
 end Lpo
