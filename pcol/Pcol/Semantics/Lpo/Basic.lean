@@ -31,7 +31,16 @@ instance {α : Type} {φ : Form α} [DecidablePred φ] :
   DecidablePred (Form.not φ : Set α → Prop) := by sorry
 instance {α : Type} : DecidablePred (Form.sat : Form α → Prop) := by sorry
 
+instance {α : Type} : LE (Form α) where
+  le φ ψ := ∀ v, φ v → ψ v
+instance {α : Type} {φ ψ : Form α} : Decidable (φ ≤ ψ) := by sorry
 
+instance {α : Type} : Preorder (Form α) where
+  le_refl φ v h := h
+  le_trans φ ψ ξ h₁ h₂ v hφ := h₂ v (h₁ v hφ)
+
+instance {α : Type} : PartialOrder (Form α) where
+  le_antisymm φ ψ h₁ h₂ := by ext v; exact ⟨h₁ v, h₂ v⟩
 
 def vars (p : Form Node) : Set Node :=
   { x | ∃ v, p v ≠ p (fun y => if x = y then ¬(v y) else v y) }
