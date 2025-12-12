@@ -3,6 +3,7 @@ import Pcol.Semantics.Lpo.FinApprox
 import Pcol.Semantics.Lpo.Order
 
 namespace Lpofin
+open Classical
 
 variable {l : Type} [PartialOrder l] [OrderBot l]
 
@@ -25,7 +26,7 @@ lemma stuck_antitone : @Antitone (Lpofin l) _ _ _ stuck := by
 
 -- A node is in the exntensible set if it is possible for it not be stuck
 noncomputable def extens (α : Lpofin l) : Finset Node :=
-  α.nodes.filter fun x ↦ ¬ α.form x ≤ α.stuck
+  α.nodes_finset.filter fun x ↦ ¬ α.form x ≤ α.stuck
 
 lemma extens_not_bot {α : Lpofin l} {x : Node} : x ∈ α.extens → α.lab x ≠ ⊥ := by
   intro h; simp [extens] at h; intro heq; apply h.2; intro v hform
@@ -33,7 +34,7 @@ lemma extens_not_bot {α : Lpofin l} {x : Node} : x ∈ α.extens → α.lab x �
   refine ⟨⟨x, ?_⟩, heq, hform⟩
   · simp [Lpofin.nodes]; exact hx
 
-lemma extens_subset_nodes {α : Lpofin l} : α.extens ⊆ α.nodes := by
+lemma extens_subset_nodes {α : Lpofin l} : α.extens ⊆ α.nodes_finset := by
   intro x hx; simp [extens] at hx; exact hx.1
   -- refine (α.val.property.form_dom x).mp ?_
   -- simp [LE.le] at hx; rcases hx with ⟨v, hf, _⟩
@@ -41,10 +42,10 @@ lemma extens_subset_nodes {α : Lpofin l} : α.extens ⊆ α.nodes := by
 
 lemma extens_monotone : @Monotone (Lpofin l) _ _ _ extens := by
   intro α β hle x; simp [extens]; intro hx hstuck
-  simp [Lpofin.nodes] at *;
-  refine ⟨hle.nodes hx, fun hc ↦ ?_⟩
+  have hx' := (Set.Finite.mem_toFinset _).mp hx
+  refine ⟨(Set.Finite.mem_toFinset _).mpr (hle.nodes hx'), fun hc ↦ ?_⟩
   refine hstuck (fun v hform ↦ stuck_antitone hle v (hc v ?_))
-  simp [Lpofin.form]; rw [← hle.form x hx]; exact hform
+  simp [Lpofin.form]; rw [← hle.form x hx']; exact hform
 
 def conj (α : Lpofin l) (S : Finset Node) : Form Node :=
   fun v ↦ ∀ x ∈ S, α.form x v
@@ -74,24 +75,20 @@ lemma branches_set_monotone : @Monotone (Lpofin l) _ _ _ branches_set := by
   · rcases hsat with ⟨v, hv⟩; use v; intro x hx
     refine (congrFun (hle.form x ?_) _).mp (hv x hx)
     have hx' := Finset.mem_of_mem_filter _ (hsub hx)
-    simp only [nodes, Set.Finite.mem_toFinset] at hx'
-    exact hx'
+    exact (Set.Finite.mem_toFinset _).mp hx'
   · intro v hform hstuck'; refine hstuck v ?_ ?_
     · intro x hx; refine (congr_fun (hle.form x ?_) v).mpr (hform x hx)
       have hx' := Finset.mem_of_mem_filter _ (hsub hx)
-      simp only [nodes, Set.Finite.mem_toFinset] at hx'
-      exact hx'
+      exact (Set.Finite.mem_toFinset _).mp hx'
     · exact stuck_antitone hle v hstuck'
   · intro T hST hT hc; refine hmax T hST ?_ ?_; sorry; sorry
   · ext1 v; refine forall_congr fun x ↦ ?_; ext; constructor
     · intro h hx; refine (congr_fun (hle.form x ?_) v).mpr (h hx)
       have hx' := Finset.mem_of_mem_filter _ (hsub hx)
-      simp only [nodes, Set.Finite.mem_toFinset] at hx'
-      exact hx'
+      exact (Set.Finite.mem_toFinset _).mp hx'
     · intro h hx; refine (congr_fun (hle.form x ?_) v).mp (h hx)
       have hx' := Finset.mem_of_mem_filter _ (hsub hx)
-      simp only [nodes, Set.Finite.mem_toFinset] at hx'
-      exact hx'
+      exact (Set.Finite.mem_toFinset _).mp hx'
 
 lemma branches_monotone : @Monotone (Lpofin l) _ _ _ branches := by
   unfold branches; intro α β hle; simp; exact branches_set_monotone hle
@@ -100,8 +97,8 @@ def CopyFn (α β : Lpofin l) : Type :=
   { f : ↑α.branches → Lpofin l //
     ∀ φ : ↑α.branches,
       f φ ≈ β ∧
-      Disjoint α.val.nodes (f φ).val.nodes ∧
-      ∀ ψ, φ ≠ ψ → Disjoint (f φ).val.nodes (f ψ).val.nodes
+      Disjoint α.nodes (f φ).nodes ∧
+      ∀ ψ, φ ≠ ψ → Disjoint (f φ).nodes (f ψ).nodes
   }
 instance {α β : Lpofin l} : FunLike (CopyFn α β) ↑α.branches (Lpofin l) where
   coe := Subtype.val
@@ -117,17 +114,17 @@ noncomputable def seq_base [SupSet l] (α β : Lpofin l) (f : CopyFn α β) : Lp
     α.rel x y ∨
     ∃ φ : ↑α.branches,
       (f φ).rel x y ∨
-      (φ ≤ α.form x ∧ y ∈ (f φ).val.nodes)
+      (φ ≤ α.form x ∧ y ∈ (f φ).nodes)
   lab x := if x ∈ α.nodes then α.lab x else ⨆ φ : ↑α.branches, (f φ).lab x
   form x := if x ∈ α.nodes then α.form x else fun v ↦ ∃ φ : ↑α.branches, (f φ).form x v
 }
 
 lemma branch_implies_node {α : Lpofin l} {x : Node} :
-    ∀ φ ∈ α.branches, φ ≤ α.form x → x ∈ α.val.nodes := by
-  intro φ hbr hle
-  rcases (Set.Finite.mem_toFinset _).mp hbr with ⟨S, ⟨hne, hsub, hsat, hstk, hmax⟩, rfl⟩
+    ∀ φ : ↑α.branches, φ ≤ α.form x → x ∈ α.val.nodes := by
+  intro φ hle
+  rcases (Set.Finite.mem_toFinset _).mp φ.2 with ⟨S, ⟨hne, hsub, hsat, hstk, hmax⟩, heq⟩
   refine (α.val.property.form_dom x).mp ?_
-  rcases hsat with ⟨v, hv⟩; use v; exact hle v hv
+  rcases hsat with ⟨v, hv⟩; use v; exact hle v ((congrFun heq _).mp hv)
 
 -- Move this somewhere else
 lemma form_root_true {α : Lpo l} {x : Node} (hx : x ∈ α.nodes) (hr : x ∈ α.rel.roots) :
@@ -141,10 +138,15 @@ lemma form_root_true {α : Lpo l} {x : Node} (hx : x ∈ α.nodes) (hr : x ∈ �
   obtain ⟨v', hsat⟩ := (α.property.form_dom x).mpr hx
   sorry
 
+lemma seq_nodes_finite [SupSet l] {α β : Lpofin l} {f : CopyFn α β} :
+    (seq_base α β f).nodes.Finite := by
+  refine Set.finite_union.mpr ⟨α.property, ?_⟩
+  refine Set.finite_iUnion ?_; intro φ; exact (f φ).property
+
 lemma seq_rel_valid [SupSet l] {α β : Lpofin l} {f : CopyFn α β} :
     (seq_base α β f).rel.IsCausalityRel (seq_base α β f).nodes := by
   have h₁ := α.val.property
-  have h₂ := β.val.property
+  have h₂ φ := (f φ).val.property
   rcases f with ⟨f, hf⟩
   have hd₁ φ := (hf φ).2.1
   have hd₂ φ ψ := (hf φ).2.2 ψ
@@ -165,14 +167,14 @@ lemma seq_rel_valid [SupSet l] {α β : Lpofin l} {f : CopyFn α β} :
       · exact contra (hd₂ φ ψ heq)
           ((f φ).val.property.rel_dom hxy).2
           ((f ψ).val.property.rel_dom hyz).1
-    · have hy := branch_implies_node ψ.val ψ.property hy'
+    · have hy := branch_implies_node ψ hy'
       exact contra (hd₁ φ) hy ((f φ).val.property.rel_dom hxy).2
     · exact contra (hd₁ φ) (h₁.rel_dom hyz).1 hy
     · by_cases heq : φ = ψ
       · subst heq; right; use φ; right; refine ⟨hx, ?_⟩
         exact ((f φ).val.property.rel_dom hyz).2
       · exact contra (hd₂ φ ψ heq) hy ((f ψ).val.property.rel_dom hyz).1
-    · have hy'' := branch_implies_node ψ.val ψ.property hy'
+    · have hy'' := branch_implies_node ψ hy'
       exact contra (hd₁ φ) hy'' hy
   -- Antisymmetry
   · rintro x y (hxy | ⟨φ, hxy | ⟨hx, hy⟩⟩) (hyx | ⟨ψ, hyx | ⟨hy', hx'⟩⟩)
@@ -186,47 +188,37 @@ lemma seq_rel_valid [SupSet l] {α β : Lpofin l} {f : CopyFn α β} :
           ((f φ).val.property.rel_dom hxy).2
           ((f ψ).val.property.rel_dom hyx).1
     · exact contra (hd₁ φ)
-        (branch_implies_node ψ.val ψ.property hy')
+        (branch_implies_node ψ hy')
         ((f φ).val.property.rel_dom hxy).2
     · exact contra (hd₁ φ) (h₁.rel_dom hyx).1 hy
-    · exact contra (hd₁ ψ) (branch_implies_node φ.val φ.property hx)
+    · exact contra (hd₁ ψ) (branch_implies_node φ hx)
         ((f ψ).val.property.rel_dom hyx).2
-    · exact contra (hd₁ ψ) (branch_implies_node φ.val φ.property hx) hx'
+    · exact contra (hd₁ ψ) (branch_implies_node φ hx) hx'
   -- Irreflexivity
   · rintro x (hxx | ⟨φ, hxx | ⟨hx, hx'⟩⟩)
     · exact h₁.rel.irrefl x hxx
     · exact (f φ).val.property.rel.irrefl x hxx
-    · exact contra (hd₁ φ) (branch_implies_node φ.val φ.property hx) hx'
+    · exact contra (hd₁ φ) (branch_implies_node φ hx) hx'
   -- Finitely Preceded
-  · sorry
+  · intro x; refine (seq_nodes_finite (α := α) (β := β) (f := ⟨f, hf⟩)).subset ?_
+    rintro y (hyx | ⟨φ, hyx | ⟨hy, hx⟩⟩)
+    · left; simp only [nodes, Set.Finite.coe_toFinset]; exact (h₁.rel_dom hyx).1
+    · right; simp only [nodes, ne_eq, Set.Finite.coe_toFinset, Set.mem_iUnion]
+      use φ; exact ((h₂ φ).rel_dom hyx).1
+    · left; simp only [nodes, Set.Finite.coe_toFinset]; exact branch_implies_node φ hy
   -- Finite Levels
-  · intro n; refine α.nodes.finite_toSet.subset ?_
-    intro x hx; simp [Set.image, Rel.lev] at hx
-    sorry -- This property actually isn't true. The definition of lev is wrong
+  · intro n; refine (seq_nodes_finite (α := α) (β := β) (f := ⟨f, hf⟩)).subset ?_
+    intro x ⟨hx, _⟩; exact hx
   -- Single-Rooted
-  · sorry
-    -- obtain ⟨x, hroot⟩ := h₁.rel.single_rooted; use x; ext y
-    -- have hx := (Set.ext_iff.mp hroot x).mpr (Set.mem_singleton _)
-    -- constructor
-    -- · intro ⟨hr, hn⟩; rw [← hroot]; constructor
-    --   · intro z hc; refine hr z ?_; left; exact hc
-    --   · simp only [seq_base, ne_eq, Subtype.exists, Set.mem_union, Finset.mem_coe,
-    --       Set.mem_iUnion] at hn
-    --     rcases hn with (hn | ⟨φ, hbr, hy⟩)
-    --     · simp only [nodes, Set.Finite.mem_toFinset] at hn; exact hn
-    --     · exfalso; refine hr x (Or.inr ⟨⟨φ, hbr⟩, Or.inr ⟨?_, ?_⟩⟩)
-    --       · intro c hv
-    --         unfold Lpofin.form; rw [form_root_true hx.2 hx.1]; exact True.intro
-    --       · simp only [nodes, Set.Finite.mem_toFinset] at hy; exact hy
-    -- · rintro rfl; constructor
-    --   · rintro z (hz | ⟨φ, hz | ⟨hz, hy⟩⟩)
-    --     · exact hx.1 z hz
-    --     · exact Set.disjoint_left.mp (hf φ).2.1 hx.2 ((f φ).val.property.rel_dom hz).2
-    --     · exact Set.disjoint_left.mp (hf φ).2.1 hx.2 hy
-    --   · left; simp only [nodes, Set.Finite.coe_toFinset]; exact hx.2
+  · obtain ⟨x, hx, hroot⟩ := h₁.rel.single_rooted; refine ⟨x, Or.inl hx, ?_⟩
+    rintro y (hy | hy) hneq
+    · left; exact hroot _ hy hneq
+    · apply Set.mem_iUnion.mp at hy; rcases hy with ⟨φ, hy⟩
+      right; use φ; right; refine ⟨?_, hy⟩
+      intro v _; sorry -- Need to figure out definition of vars
 
 noncomputable def seq [SupSet l] (α β : Lpofin l) (f : CopyFn α β) : Lpofin l := by
-  refine Subtype.mk (Subtype.mk (seq_base α β f) ?_) ?_
+  refine Subtype.mk (Subtype.mk (seq_base α β f) ?_) seq_nodes_finite
   · constructor
     -- Rel Domain
     · intro x y hrel; cases hrel with
@@ -241,7 +233,7 @@ noncomputable def seq [SupSet l] (α β : Lpofin l) (f : CopyFn α β) : Lpofin 
             · simp [Lpofin.nodes, Lpofin.rel] at *; exact ((f ⟨φ, _⟩).val.property.rel_dom hrel).2
           · refine ⟨Or.inl ?_, Or.inr (Set.mem_iUnion.mpr ⟨φ, ?_⟩)⟩
             · simp only [nodes, Set.Finite.coe_toFinset]
-              exact branch_implies_node φ.val φ.property hx
+              exact branch_implies_node φ hx
             · simp only [nodes, Set.Finite.coe_toFinset]; exact hy
     · intro x hx; apply (Set.mem_union _ _ _).mpr.mt at hx
       simp only [Finset.mem_coe, Set.mem_iUnion, Subtype.exists, not_or, not_exists] at hx
@@ -254,7 +246,7 @@ noncomputable def seq [SupSet l] (α β : Lpofin l) (f : CopyFn α β) : Lpofin 
           Set.Finite.mem_toFinset, (α.val.property.rel_dom hxy).1, ↓reduceIte] at hlab
         exact α.val.property.bot _ hlab _ hxy
       · sorry
-      · have hx' := branch_implies_node φ.val φ.property hx
+      · have hx' := branch_implies_node φ hx
         simp only [seq_base, nodes, Set.Finite.coe_toFinset, Subtype.exists,
           Set.Finite.mem_toFinset, hx', ↓reduceIte] at hlab
         rcases (Set.Finite.mem_toFinset _).mp φ.2 with ⟨S, ⟨_, _, ⟨v, hv⟩, hstk, _⟩, heq⟩
@@ -282,8 +274,6 @@ noncomputable def seq [SupSet l] (α β : Lpofin l) (f : CopyFn α β) : Lpofin 
           obtain ⟨v, hv⟩ := ((f ⟨φ, hφ⟩).val.property.form_dom x).mpr hx
           exact ⟨v, φ, hφ, hv⟩
     · sorry
-  · simp [Lpo.nodes, seq_base]; refine Set.finite_iUnion ?_
-    intro ⟨φ, hφ⟩; simp
 
 lemma seq_monotone [SupSet l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : CopyFn α' β'}
     (hle₁ : α ≤ α') (hle₂ : β ≤ β') (hext : CopyFn_extends hle₁ f g) :
