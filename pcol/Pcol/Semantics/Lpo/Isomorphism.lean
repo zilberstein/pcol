@@ -1,4 +1,3 @@
-import Mathlib
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
 
@@ -20,11 +19,18 @@ noncomputable def permute {l : Type} [Bot l] (a : Lpo l) (e : Equiv.Perm Node) :
       · intro _ _ _ hxy hyz; exact a.property.rel.trans hxy hyz
       · intro _ _ hxy hyx; exact Equiv.injective _ (a.property.rel.antisymm hxy hyx)
       · intro _ hx; exact a.property.rel.irrefl _ hx
-      · sorry --constructor; intro x; constructor; intro y hr
       · sorry
+        -- constructor; intro x; constructor; intro y h;
+        -- rcases a.property.rel.wf with ⟨hacc⟩
+        -- rcases hacc (e.symm y) with ⟨_, hacc⟩
+        -- constructor; intro y' hy; have hhh := hacc (e.symm y') hy
+      · intro n
+        rcases finite_iff_exists_equiv_fin.mp (a.property.rel.fin_lev n) with ⟨m, ⟨eq⟩⟩
+        refine finite_iff_exists_equiv_fin.mpr ⟨m, ⟨Equiv.trans ?_ eq⟩⟩
+        unfold Rel.lev; simp [Lpo.rel]; sorry
       · rcases a.property.rel.single_rooted with ⟨x, hx⟩
-        sorry -- use e.symm x; unfold Rel.roots; simp; sorry
-    · sorry -- intro _ hx _; exact a.property.bot _ hx _
+        refine ⟨e.symm x, ?_⟩; sorry
+    · intro _ hx _; exact a.property.bot _ hx _
     · sorry --intro x; constructor
       -- · intro ⟨_, h⟩; exact hinv ((a.property.form_dom _).1 ⟨_, h⟩)
       -- · intro ⟨y, hy, hxy⟩; rw [← hxy]
@@ -98,5 +104,16 @@ lemma permute_le {l : Type} [Bot l] [LE l] {a b : Lpo l} {e : Equiv.Perm Node}
     exact eq_iff_iff.mp (congrFun (h.form _ hx) _)
   · simp [Lpo.nodes, Lpo.rel]; intro x hx
     sorry
+
+-- lemma permute_chain {l : Type} [Bot l] [CompletePartialOrder l]
+--     {c : ℕ → Lpo l} {e : ℕ → Equiv.Perm Node}
+--     (hc : Monotone c)
+--     (he : ∀ n, ∀ x ∈ (c n).nodes, e n x = e (n + 1) x) :
+--     ∃ e' : Equiv.Perm Node, (iSup c).permute e' = iSup fun n ↦ (c n).permute (e n) := by
+--   let a := iSup c
+--   let f x := e (a.rel.lev x) x
+--   refine ⟨⟨f, ?_, ?_, ?_⟩, ?_⟩
+--   · sorry
+--   ·
 
 end Lpo

@@ -1,5 +1,3 @@
-import Mathlib
-
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.FinApprox
 import Pcol.Semantics.Lpo.Order
@@ -131,6 +129,18 @@ lemma branch_implies_node {α : Lpofin l} {x : Node} :
   refine (α.val.property.form_dom x).mp ?_
   rcases hsat with ⟨v, hv⟩; use v; exact hle v hv
 
+-- Move this somewhere else
+lemma form_root_true {α : Lpo l} {x : Node} (hx : x ∈ α.nodes) (hr : x ∈ α.rel.roots) :
+    α.form x = Form.true := by
+  ext v; refine ⟨fun _ ↦ True.intro, fun _ ↦ ?_⟩
+  have hvars : (α.form x).vars = ∅ := by
+    ext y; refine ⟨fun hc ↦ ?_, fun hc ↦ False.elim hc⟩
+    apply (α.property.form _ hx).1 at hc
+    exact hr y hc
+  simp [Form.vars] at hvars
+  obtain ⟨v', hsat⟩ := (α.property.form_dom x).mpr hx
+  sorry
+
 lemma seq_rel_valid [SupSet l] {α β : Lpofin l} {f : CopyFn α β} :
     (seq_base α β f).rel.IsCausalityRel (seq_base α β f).nodes := by
   have h₁ := α.val.property
@@ -187,14 +197,33 @@ lemma seq_rel_valid [SupSet l] {α β : Lpofin l} {f : CopyFn α β} :
     · exact h₁.rel.irrefl x hxx
     · exact (f φ).val.property.rel.irrefl x hxx
     · exact contra (hd₁ φ) (branch_implies_node φ.val φ.property hx) hx'
-  -- Well-Foundedness
+  -- Finitely Preceded
   · sorry
   -- Finite Levels
-  · sorry
+  · intro n; refine α.nodes.finite_toSet.subset ?_
+    intro x hx; simp [Set.image, Rel.lev] at hx
+    sorry -- This property actually isn't true. The definition of lev is wrong
   -- Single-Rooted
-  · obtain ⟨x, hroot⟩ := h₁.rel.single_rooted; use x; ext y; constructor
-    · intro ⟨h, h'⟩; sorry
-    · rintro rfl; sorry
+  · sorry
+    -- obtain ⟨x, hroot⟩ := h₁.rel.single_rooted; use x; ext y
+    -- have hx := (Set.ext_iff.mp hroot x).mpr (Set.mem_singleton _)
+    -- constructor
+    -- · intro ⟨hr, hn⟩; rw [← hroot]; constructor
+    --   · intro z hc; refine hr z ?_; left; exact hc
+    --   · simp only [seq_base, ne_eq, Subtype.exists, Set.mem_union, Finset.mem_coe,
+    --       Set.mem_iUnion] at hn
+    --     rcases hn with (hn | ⟨φ, hbr, hy⟩)
+    --     · simp only [nodes, Set.Finite.mem_toFinset] at hn; exact hn
+    --     · exfalso; refine hr x (Or.inr ⟨⟨φ, hbr⟩, Or.inr ⟨?_, ?_⟩⟩)
+    --       · intro c hv
+    --         unfold Lpofin.form; rw [form_root_true hx.2 hx.1]; exact True.intro
+    --       · simp only [nodes, Set.Finite.mem_toFinset] at hy; exact hy
+    -- · rintro rfl; constructor
+    --   · rintro z (hz | ⟨φ, hz | ⟨hz, hy⟩⟩)
+    --     · exact hx.1 z hz
+    --     · exact Set.disjoint_left.mp (hf φ).2.1 hx.2 ((f φ).val.property.rel_dom hz).2
+    --     · exact Set.disjoint_left.mp (hf φ).2.1 hx.2 hy
+    --   · left; simp only [nodes, Set.Finite.coe_toFinset]; exact hx.2
 
 noncomputable def seq [SupSet l] (α β : Lpofin l) (f : CopyFn α β) : Lpofin l := by
   refine Subtype.mk (Subtype.mk (seq_base α β f) ?_) ?_

@@ -1,4 +1,3 @@
-import Mathlib
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
 import Pcol.Semantics.Lpo.Isomorphism
@@ -21,6 +20,9 @@ def rel {l : Type} [Bot l] (a : Lpofin l) := a.val.rel
 def lab {l : Type} [Bot l] (a : Lpofin l) := a.val.lab
 def form {l : Type} [Bot l] (a : Lpofin l) := a.val.form
 
+lemma nodes_coe {l : Type} [Bot l] (a : Lpofin l) : ↑a.nodes = a.val.nodes := by
+  unfold Lpofin.nodes; unfold Lpo.nodes; exact Set.Finite.coe_toFinset _
+
  def IsIsomorphic {l : Type} [Bot l] (a b : Lpofin l) : Prop :=
   a.val.IsIsomorphic b.val
 
@@ -37,6 +39,9 @@ lemma isoEquivalence {l : Type} [Bot l] : Equivalence (@IsIsomorphic l _) := by 
 instance instSetoid {l : Type} [Bot l] : Setoid (Lpofin l) where
   r := IsIsomorphic
   iseqv := isoEquivalence
+
+noncomputable def permute {l : Type} [Bot l] (a : Lpofin l) (e : Equiv.Perm Node) : Lpofin l :=
+  ⟨ a.val.permute e, Set.Finite.image _ a.property ⟩
 
 end Lpofin
 
@@ -55,7 +60,7 @@ noncomputable def trunc {l : Type} [Bot l] (a : Lpo l) (n : ℕ) : Lpofin l :=
       rcases a.property.rel_dom hr with ⟨hxa, hya⟩
       exact ⟨⟨hxa, hx⟩, hya, hy⟩
     · intro x hx hlev; by_cases h : x ∈ a.nodes
-      · apply hx at h; linarith
+      · apply hx at h; exfalso; exact not_lt_of_gt hlev h
       · exact a.property.lab_dom x h
     · constructor
       · intro x y z ⟨hxy, hx, _⟩ ⟨hyz, _, hz⟩
@@ -94,11 +99,24 @@ lemma trunc_le {l : Type} [Preorder l] [OrderBot l] {a : Lpo l} {n : ℕ} :
   · intro _ _ hxl _ _ hyl _; exact ⟨hxl, hyl⟩
   · intro x; by_cases hx : a.rel.lev x < n <;>
       unfold Lpo.rel at hx <;> simp [hx, bot_le]
-  · intro _ _ _ _; linarith
+  · intro _ _ h₁ h₂; exfalso; exact not_le_of_gt h₂ h₁
   · sorry
 }
 
+lemma lev_isotone {l : Type} [Bot l] [LE l] {a b : Lpo l} {x : Node}
+    (h : a ≤ b) : a.rel.lev x = b.rel.lev x := by
+  sorry
+
 lemma trunc_mono {l : Type} [Bot l] [LE l] {a b : Lpo l} {n m : ℕ}
-  (hab : a ≤ b) (hnm : n ≤ m) : a.trunc n ≤ b.trunc m := by sorry
+    (hab : a ≤ b) (hnm : n ≤ m) : a.trunc n ≤ b.trunc m := by
+  constructor
+  · simp [trunc, Lpo.nodes]; intro x hx hlev
+    refine ⟨hab.nodes hx, ?_⟩
+    rw [← lev_isotone hab]; exact hlev.trans (Nat.cast_le.mpr hnm)
+  · intro x hx y hy; sorry
+  · sorry
+  · sorry
+  · sorry
+  · sorry
 
 end Lpo

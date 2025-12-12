@@ -1,4 +1,12 @@
-import Mathlib
+import Init.Prelude
+import Mathlib.Data.ENat.Defs
+import Mathlib.Data.ENat.Lattice
+import Mathlib.Data.Finite.Defs
+import Mathlib.Data.Nat.Basic
+import Mathlib.Data.Rel
+import Mathlib.Data.Set.Basic
+import Mathlib.Data.Set.Finite.Basic
+import Mathlib.Order.SetNotation
 
 def Node := ℕ
 instance : Inhabited Node where
@@ -6,11 +14,10 @@ instance : Inhabited Node where
 
 instance {x y : Node} : Decidable (x = y) := sorry
 
-
 def Form (α : Type) := Set α → Prop
 
 @[ext]
-lemma form_ext {α : Type} {φ ψ : Form α} (h : ∀ x, φ x = ψ x) : φ = ψ := by sorry
+lemma form_ext {α : Type} {φ ψ : Form α} (h : ∀ x, φ x = ψ x) : φ = ψ := funext h
 
 namespace Form
 
@@ -23,12 +30,23 @@ def literal {α : Type} (x : α) : Form α := fun v => x ∈ v
 def sat {α : Type} (p : Form α) : Prop := ∃ v, p v
 
 -- Need to work this part out
-instance {α : Type} : DecidablePred (Form.true : Set α → Prop) := by sorry
-instance {α : Type} : DecidablePred (Form.false : Set α → Prop) := by sorry
-instance {α : Type} {φ ψ : Form α} [DecidablePred φ] [DecidablePred ψ] :
-  DecidablePred (Form.and φ ψ : Set α → Prop) := by sorry
-instance {α : Type} {φ : Form α} [DecidablePred φ] :
-  DecidablePred (Form.not φ : Set α → Prop) := by sorry
+instance {α : Type} : DecidablePred (Form.true : Set α → Prop) :=
+  fun _ ↦ Decidable.isTrue True.intro
+instance {α : Type} : DecidablePred (Form.false : Set α → Prop) :=
+  fun _ ↦ Decidable.isFalse (fun c ↦ False.elim c)
+instance {α : Type} {φ ψ : Form α} [h₁ : DecidablePred φ] [h₂ : DecidablePred ψ] :
+    DecidablePred (Form.and φ ψ : Set α → Prop) := by
+  intro v; cases h₁ v with
+  | isTrue h =>
+    cases h₂ v with
+    | isTrue h' => exact isTrue ⟨h, h'⟩
+    | isFalse c => refine isFalse ?_; simp only [and, not_and]; intro _; exact c
+  | isFalse c => refine isFalse ?_; simp only [and, not_and]; intro h _; exact c h
+instance {α : Type} {φ : Form α} [h : DecidablePred φ] :
+    DecidablePred (Form.not φ : Set α → Prop) :=
+  fun v ↦ match h v with
+    | isTrue h' => isFalse fun c => c h'
+    | isFalse c => isTrue c
 instance {α : Type} : DecidablePred (Form.sat : Form α → Prop) := by sorry
 
 instance {α : Type} : LE (Form α) where
@@ -69,8 +87,11 @@ def IsUpClosed (ord : Rel Node Node) (X : Set Node) : Prop :=
 def up_closure (ord : Rel Node Node) (X : Set Node) : Set Node :=
   { x | ∃ y ∈ X, ord y x }
 
-noncomputable def lev {a : Type} (ord : Rel a a) (x : a) : ℕ :=
-  sSup { n : ℕ | ∃ l : List a, n = l.length - 1 ∧ is_succ_chain ord l ∧ l.getLast? = Option.some x }
+noncomputable def lev {a : Type} (ord : Rel a a) (x : a) : ENat :=
+  sSup { n : ENat | ∃ l : List a, n = l.length - 1 ∧ is_succ_chain ord l ∧ l.getLast? = Option.some x }
+
+def FinitelyPreceded {α : Type} (ord : Rel α α) : Prop :=
+  ∀ x : α, { y | ord y x }.Finite
 
 structure IsCausalityRel {α : Type} (ord : Rel α α) (s : Set α) : Prop where
   -- ord is a strict partial order
@@ -78,11 +99,11 @@ structure IsCausalityRel {α : Type} (ord : Rel α α) (s : Set α) : Prop where
   antisymm : AntiSymmetric ord
   irrefl : Irreflexive ord
   -- ord is finitely preceeded
-  wf : WellFounded ord
+  fin_prec : FinitelyPreceded ord
   -- each level is finite
-  fin_lev: ∀ n : ℕ, (ord.lev ⁻¹' {n}).Finite
+  fin_lev: ∀ n : ℕ, { x | x ∈ s ∧ ord.lev x = n}.Finite
   -- ord is single-rooted
-  single_rooted : ∃ x, ord.roots ∩ s = {x}
+  single_rooted : ∃ x ∈ s, ∀ y ∈ s, x ≠ y → ord x y
 
 end Rel
 
@@ -103,7 +124,7 @@ structure is_valid_lpo {l : Type} [Bot l] (a : Lpo_base l) : Prop where
   -- Formulae
   form_dom : ∀ x, (a.form x).sat ↔ x ∈ a.nodes
   form : ∀ x ∈ a.nodes, (∀ y ∈ (a.form x).vars, a.rel y x) ∧
-          ∀ z, a.rel x z → ∀ v, a.form z v → a.form x v
+          ∀ z, a.rel x z → a.form z ≤ a.form x
 
 
 def Lpo (l : Type) [Bot l] := { α : Lpo_base l // is_valid_lpo α }
@@ -115,7 +136,7 @@ def rel {l : Type} [Bot l] (a : Lpo l) : Rel Node Node := a.val.rel
 def lab {l : Type} [Bot l] (a : Lpo l) : Node → l := a.val.lab
 def form {l : Type} [Bot l] (a : Lpo l) : Node → Form Node := a.val.form
 
-def bots {l : Type} [Bot l] (a : Lpo l) : Set ↑a.nodes := { x | a.lab x = ⊥}
+def bots {l : Type} [Bot l] (a : Lpo l) : Set Node := { x | x ∈ a.nodes ∧ a.lab x = ⊥}
 
 lemma not_in_dom_not_rel {l : Type} [Bot l] (a : Lpo l) (x y : Node)
   (h : x ∉ a.nodes ∨ y ∉ a.nodes) : ¬(a.rel x y) := by {
@@ -138,10 +159,9 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
       · intro _ _ hxy _; contradiction
       · intro _ _ hc; contradiction
       · intro _ hc; contradiction
-      · constructor; intro x; constructor; intro _ hc; contradiction
-      · intro n; simp [Rel.lev, Set.preimage] ; sorry
-        --refine Set.finite_singleton ?_
-      · use x; simp [Rel.roots]
+      · intro y; simp only [Set.setOf_false, Set.finite_empty]
+      · intro _; exact (Set.finite_singleton x).subset fun y ⟨hy, _⟩ ↦ hy
+      · refine ⟨x, Set.mem_singleton _, ?_⟩; rintro y rfl hc; exact hc rfl
     · intro y; constructor
       · rintro ⟨v, h⟩; by_cases heq : x = y
         · exact Eq.symm heq
@@ -174,6 +194,5 @@ lemma lpo_eq_iff {l : Type} [Bot l] {a b : Lpo l} :
     a.form = b.form := by {
   constructor
   · intro heq; rw [heq]; use rfl
-  · intro ⟨heq, hrel, hlab, hform⟩
-    cases a; cases b; sorry
+  · intro ⟨heq, hrel, hlab, hform⟩; exact lpo_ext heq hrel hlab hform
 }

@@ -1,4 +1,5 @@
-import Mathlib
+import Mathlib.Order.CompletePartialOrder
+
 import Pcol.Semantics.Lpo.Basic
 
 structure LE_Lpo {l : Type} [LE l] [Bot l] (a b : Lpo l) : Prop where
@@ -90,7 +91,7 @@ noncomputable instance {l : Type} [SupSet l] [Bot l] : SupSet (Lpo l) where
   }
 
 theorem lpo_sup_of_directed {l : Type} [SupSet l] [LE l] [Bot l] {d : Set (Lpo l)}
-  (h : DirectedOn (· ≤ ·)  d) :
+  (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty):
   ∃ hv, sSup d = ⟨lpo_base_sup d, hv⟩ := by {
   have hv : is_valid_lpo (lpo_base_sup d) := by {
     unfold lpo_base_sup; constructor <;> try simp
@@ -117,9 +118,30 @@ theorem lpo_sup_of_directed {l : Type} [SupSet l] [LE l] [Bot l] {d : Set (Lpo l
         rw [hbc.rel _ hyx.1 _ hyx.2] at hbr
         exact c.property.rel.antisymm har hbr
       · intro x ⟨a, _, hr⟩; exact a.property.rel.irrefl _ hr
+      · intro x; by_cases hx : ∃ a ∈ d, x ∈ a.nodes
+        · rcases hx with ⟨a, ha, hx⟩; refine (congrArg _ ?_).mp (a.property.rel.fin_prec x)
+          ext y; constructor
+          · intro hyx; exact ⟨a, ha, hyx⟩
+          · intro ⟨b, hb, hyx⟩; obtain ⟨c, hc, hac, hbc⟩ := h _ ha _ hb
+            obtain ⟨hby, hbx⟩ := b.property.rel_dom hyx
+            rw [hbc.rel _ hby _ hbx] at hyx
+            refine (hac.rel _ ?_ _ hx).mpr hyx
+            exact hac.downcl _ hx _ hyx
+        · refine (congrArg _ ?_).mp Set.finite_empty; ext y; constructor
+          · rintro ⟨⟩
+          · intro ⟨a, ha, hyx⟩; exfalso; refine hx ⟨a, ha, ?_⟩
+            exact (a.property.rel_dom hyx).2
       · sorry
-      · sorry
-      · sorry
+      · rcases hne with ⟨a, ha⟩; rcases a.property.rel.single_rooted with ⟨x, hx, hroot⟩; use x
+        simp only [Set.mem_iUnion, exists_prop, ne_eq, forall_exists_index, and_imp]
+        refine ⟨⟨a, ha, hx⟩, ?_⟩
+        intro y b hb hy hneq; obtain ⟨c, hc, hac, hbc⟩ := h _ ha _ hb
+        obtain ⟨z, hz, hroot'⟩ := c.property.rel.single_rooted; by_cases heq : z = x
+        · subst heq; exact ⟨c, hc, hroot' y (hbc.nodes hy) hneq⟩
+        · exfalso; have hzx := hroot' x (hac.nodes hx) heq
+          refine heq (c.property.rel.antisymm hzx ?_)
+          have hza := hac.downcl _ hx _ hzx
+          exact (hac.rel _ hx _ hza).mp (hroot _ hza (Ne.symm heq))
     · sorry
     · sorry
     · intro x a hx; sorry
@@ -132,7 +154,7 @@ theorem lpo_sup_of_directed {l : Type} [SupSet l] [LE l] [Bot l] {d : Set (Lpo l
 -- exclude empty sets
 theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo l)}
   (hd : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) : IsLUB d (sSup d) := by {
-  rcases lpo_sup_of_directed hd with ⟨hv, heq⟩; rw [heq]
+  rcases lpo_sup_of_directed hd hne with ⟨hv, heq⟩; rw [heq]
   unfold lpo_base_sup; constructor <;> try simp
   · unfold upperBounds; intro a ha; constructor <;> try simp
     · unfold Lpo.nodes; intro x hx; simp; use a

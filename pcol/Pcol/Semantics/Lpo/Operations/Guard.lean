@@ -1,5 +1,3 @@
-import Mathlib
-
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.FinApprox
 import Pcol.Semantics.Lpo.Order
@@ -67,50 +65,40 @@ lemma guard_rel_valid {x : Node} {b : l} {α : Lpo l} {β : Lpo l}
   · rintro y (hy | hy | ⟨rfl, _ | _⟩) <;> try contradiction
     · exact α.property.rel.irrefl _ hy
     · exact β.property.rel.irrefl _ hy
-  -- Well-Foundedness
-  · simp only [guard_base, rel, Set.mem_union]; constructor; intro y
-    induction α.property.rel.wf.apply y with
-    | intro z _ ih₁ =>
-      induction β.property.rel.wf.apply z with
-      | intro w _ ih₂ =>
-        constructor; rintro u (hz | hz | ⟨rfl, _⟩)
-        · exact ih₁ _ hz
-        · apply ih₂ _ hz (fun y _ ↦ α.property.rel.wf.apply y)
-          intro _ hc; exfalso
-          exact Set.disjoint_left.mp h (α.property.rel_dom hc).2 (β.property.rel_dom hz).1
-        · constructor; rintro z (hz | hz | ⟨rfl, _ | _⟩) <;> exfalso <;> try contradiction
-          · exact hx₁ (α.property.rel_dom hz).2
-          · exact hx₂ (β.property.rel_dom hz).2
+  -- Finitely Preceded
+  · sorry
   -- Finite Levels
-  · intro n; rw [guard_lev]; simp only [Set.preimage, Set.mem_singleton_iff]
-    by_cases hn : n = 0
-    · subst hn; refine (Set.finite_singleton x).subset ?_
-      simp only [ite_eq_left_iff, Set.subset_singleton_iff, Set.mem_setOf_eq]; intro y hy
-      by_cases hx : x = y
-      · exact hx.symm
-      · apply hy at hx; by_cases hy : y ∈ α.nodes <;>
-          simp only [hy, ↓reduceIte, AddLeftCancelMonoid.add_eq_zero, one_ne_zero, and_false] at hx
-    · refine (Set.Finite.union (α.property.rel.fin_lev (n - 1)) (β.property.rel.fin_lev (n - 1))).subset ?_
-      intro y; simp only [Set.mem_setOf_eq, Set.mem_union, Set.mem_preimage, Set.mem_singleton_iff]
-      intro hy; by_cases hx : x = y <;> simp only [hx, ↓reduceIte] at hy
-      · exfalso; exact hn hy.symm
-      · by_cases hy' : y ∈ α.nodes <;> simp only [hy', ↓reduceIte] at hy
-        · left; rw [← hy, add_tsub_cancel_right]; rfl
-        · right; rw [← hy, add_tsub_cancel_right]; rfl
+  · sorry
+    -- intro n; rw [guard_lev]; simp only [Set.preimage, Set.mem_singleton_iff]
+    -- by_cases hn : n = 0
+    -- · subst hn; refine (Set.finite_singleton x).subset ?_
+    --   simp only [ite_eq_left_iff, Set.subset_singleton_iff, Set.mem_setOf_eq]; intro y hy
+    --   by_cases hx : x = y
+    --   · exact hx.symm
+    --   · apply hy at hx; by_cases hy : y ∈ α.nodes <;>
+    --       simp only [hy, ↓reduceIte, AddLeftCancelMonoid.add_eq_zero, one_ne_zero, and_false] at hx
+    -- · refine (Set.Finite.union (α.property.rel.fin_lev (n - 1)) (β.property.rel.fin_lev (n - 1))).subset ?_
+    --   intro y; simp only [Set.mem_setOf_eq, Set.mem_union, Set.mem_preimage, Set.mem_singleton_iff]
+    --   intro hy; by_cases hx : x = y <;> simp only [hx, ↓reduceIte] at hy
+    --   · exfalso; exact hn hy.symm
+    --   · by_cases hy' : y ∈ α.nodes <;> simp only [hy', ↓reduceIte] at hy
+    --     · left; rw [← hy, add_tsub_cancel_right]; rfl
+    --     · right; rw [← hy, add_tsub_cancel_right]; rfl
   -- Single-Rooted
-  · use x; simp only [Rel.roots, guard_base, Set.mem_union, not_or, not_and]
-    ext y; constructor
-    · simp only [Set.mem_inter_iff, Set.mem_setOf_eq, Set.mem_singleton_iff, and_imp]
-      intro hr hy; rcases Set.eq_or_mem_of_mem_insert hy with (rfl | hy | hy)
-      · rfl
-      · exfalso; exact ((hr x).2.2 rfl).1 hy
-      · exfalso; exact ((hr x).2.2 rfl).2 hy
-    · simp only [Set.mem_singleton_iff, Set.mem_inter_iff, Set.mem_setOf_eq]
-      rintro rfl; refine ⟨fun z ↦ ⟨?_, ?_, ?_⟩, ?_⟩
-      · intro hc; exact hx₁ (α.property.rel_dom hc).2
-      · intro hc; exact hx₂ (β.property.rel_dom hc).2
-      · rintro rfl; exact ⟨hx₁, hx₂⟩
-      · exact Set.mem_insert _ _
+  · sorry
+    -- use x; simp only [Rel.roots, guard_base, Set.mem_union, not_or, not_and]
+    -- ext y; constructor
+    -- · simp only [Set.mem_inter_iff, Set.mem_setOf_eq, Set.mem_singleton_iff, and_imp]
+    --   intro hr hy; rcases Set.eq_or_mem_of_mem_insert hy with (rfl | hy | hy)
+    --   · rfl
+    --   · exfalso; exact ((hr x).2.2 rfl).1 hy
+    --   · exfalso; exact ((hr x).2.2 rfl).2 hy
+    -- · simp only [Set.mem_singleton_iff, Set.mem_inter_iff, Set.mem_setOf_eq]
+    --   rintro rfl; refine ⟨fun z ↦ ⟨?_, ?_, ?_⟩, ?_⟩
+    --   · intro hc; exact hx₁ (α.property.rel_dom hc).2
+    --   · intro hc; exact hx₂ (β.property.rel_dom hc).2
+    --   · rintro rfl; exact ⟨hx₁, hx₂⟩
+    --   · exact Set.mem_insert _ _
 
 noncomputable def guard (x : Node) (b : l) (α : Lpo l) (β : Lpo l)
     (hx₁ : x ∉ α.nodes) (hx₂ : x ∉ β.nodes) (h : Disjoint α.nodes β.nodes)
