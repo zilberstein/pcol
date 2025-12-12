@@ -25,7 +25,15 @@ lemma guard_lev {x : Node} {b : l} {α β : Lpo l} :
     fun y ↦ if x = y then 0 else if y ∈ α.nodes then α.rel.lev y + 1 else β.rel.lev y + 1 := by
   ext y; simp only [Rel.lev, guard_base, Set.mem_union]
   by_cases hx : x = y
-  · simp only [hx, ↓reduceIte]; subst hx; sorry
+  · simp only [hx, ↓reduceIte]; subst hx
+    refine Eq.trans (congrArg sSup ?_) sSup_empty; ext n; constructor
+    · intro ⟨l, hlen, hsucc, hx⟩
+      have hnil : l = [] := by
+        cases l with
+        | nil => rfl
+        | cons z zs => sorry
+      subst hnil; simp only [List.getLast?_nil, reduceCtorEq] at hx
+    · sorry
   · sorry
 
 lemma guard_rel_valid {x : Node} {b : l} {α : Lpo l} {β : Lpo l}
@@ -66,39 +74,61 @@ lemma guard_rel_valid {x : Node} {b : l} {α : Lpo l} {β : Lpo l}
     · exact α.property.rel.irrefl _ hy
     · exact β.property.rel.irrefl _ hy
   -- Finitely Preceded
-  · sorry
+  · intro y; by_cases hy : y ∈ (guard_base x b α β).nodes
+    · rcases hy with rfl | hy | hy
+      · refine Set.finite_empty.subset ?_
+        rintro z (hzx | hzx | ⟨rfl, hx | hx⟩) <;> exfalso
+        · exact hx₁ (α.property.rel_dom hzx).2
+        · exact hx₂ (β.property.rel_dom hzx).2
+        · exact hx₁ hx
+        · exact hx₂ hx
+      · refine ((α.property.rel.fin_prec y).insert x).subset ?_
+        rintro z (hzy | hzy | ⟨rfl, _⟩)
+        · exact (Set.mem_insert_of_mem _) hzy
+        · exfalso; exact Set.disjoint_left.mp h hy (β.property.rel_dom hzy).2
+        · exact Set.mem_insert _ _
+      · refine ((β.property.rel.fin_prec y).insert x).subset ?_
+        rintro z (hzy | hzy | ⟨rfl, _⟩)
+        · exfalso; exact Set.disjoint_left.mp h (α.property.rel_dom hzy).2 hy
+        · exact (Set.mem_insert_of_mem _) hzy
+        · exact Set.mem_insert _ _
+    · refine Set.finite_empty.subset ?_
+      rintro z (hzy | hzy | ⟨rfl, hy'⟩) <;> exfalso <;> apply hy
+      · right; left; exact (α.property.rel_dom hzy).2
+      · right; right; exact (β.property.rel_dom hzy).2
+      · right; exact hy'
   -- Finite Levels
-  · sorry
-    -- intro n; rw [guard_lev]; simp only [Set.preimage, Set.mem_singleton_iff]
-    -- by_cases hn : n = 0
-    -- · subst hn; refine (Set.finite_singleton x).subset ?_
-    --   simp only [ite_eq_left_iff, Set.subset_singleton_iff, Set.mem_setOf_eq]; intro y hy
-    --   by_cases hx : x = y
-    --   · exact hx.symm
-    --   · apply hy at hx; by_cases hy : y ∈ α.nodes <;>
-    --       simp only [hy, ↓reduceIte, AddLeftCancelMonoid.add_eq_zero, one_ne_zero, and_false] at hx
-    -- · refine (Set.Finite.union (α.property.rel.fin_lev (n - 1)) (β.property.rel.fin_lev (n - 1))).subset ?_
-    --   intro y; simp only [Set.mem_setOf_eq, Set.mem_union, Set.mem_preimage, Set.mem_singleton_iff]
-    --   intro hy; by_cases hx : x = y <;> simp only [hx, ↓reduceIte] at hy
-    --   · exfalso; exact hn hy.symm
-    --   · by_cases hy' : y ∈ α.nodes <;> simp only [hy', ↓reduceIte] at hy
-    --     · left; rw [← hy, add_tsub_cancel_right]; rfl
-    --     · right; rw [← hy, add_tsub_cancel_right]; rfl
+  · intro n; rw [guard_lev]; cases n with
+    | zero =>
+      refine (Set.finite_singleton x).subset ?_
+      rintro y ⟨rfl | hy | hy, hlev⟩
+      · exact Set.mem_singleton _
+      · have hx' : x ≠ y := by rintro rfl; exact hx₁ hy
+        simp only [hx', ↓reduceIte, hy, Nat.cast_zero, add_eq_zero, one_ne_zero, and_false] at hlev
+      · have hx' : x ≠ y := by rintro rfl; exact hx₂ hy
+        have hy' := Set.disjoint_right.mp h hy
+        simp only [hx', ↓reduceIte, hy', Nat.cast_zero, add_eq_zero, one_ne_zero, and_false] at hlev
+    | succ n =>
+      refine
+          ((Set.finite_union.mpr
+            ⟨α.property.rel.fin_lev n, β.property.rel.fin_lev n⟩).insert x).subset ?_
+      rintro y ⟨rfl | hy | hy, hlev⟩
+      · exact Set.mem_insert _ _
+      · refine Set.mem_insert_of_mem _ (Or.inl ⟨hy, ?_⟩)
+        have hx : x ≠ y := by rintro rfl; exact hx₁ hy
+        simp only [hx, ↓reduceIte, hy, Nat.cast_add, Nat.cast_one] at hlev
+        exact WithTop.add_right_cancel ENat.one_ne_top hlev
+      · refine Set.mem_insert_of_mem _ (Or.inr ⟨hy, ?_⟩)
+        have hx : x ≠ y := by rintro rfl; exact hx₂ hy
+        have hy' := Set.disjoint_right.mp h hy
+        simp only [hx, ↓reduceIte, hy', Nat.cast_add, Nat.cast_one] at hlev
+        exact WithTop.add_right_cancel ENat.one_ne_top hlev
   -- Single-Rooted
-  · sorry
-    -- use x; simp only [Rel.roots, guard_base, Set.mem_union, not_or, not_and]
-    -- ext y; constructor
-    -- · simp only [Set.mem_inter_iff, Set.mem_setOf_eq, Set.mem_singleton_iff, and_imp]
-    --   intro hr hy; rcases Set.eq_or_mem_of_mem_insert hy with (rfl | hy | hy)
-    --   · rfl
-    --   · exfalso; exact ((hr x).2.2 rfl).1 hy
-    --   · exfalso; exact ((hr x).2.2 rfl).2 hy
-    -- · simp only [Set.mem_singleton_iff, Set.mem_inter_iff, Set.mem_setOf_eq]
-    --   rintro rfl; refine ⟨fun z ↦ ⟨?_, ?_, ?_⟩, ?_⟩
-    --   · intro hc; exact hx₁ (α.property.rel_dom hc).2
-    --   · intro hc; exact hx₂ (β.property.rel_dom hc).2
-    --   · rintro rfl; exact ⟨hx₁, hx₂⟩
-    --   · exact Set.mem_insert _ _
+  · refine ⟨x, Or.inl rfl, ?_⟩
+    rintro y (rfl | hy | hy) hneq
+    · exfalso; exact hneq rfl
+    · right; right; exact ⟨rfl, Or.inl hy⟩
+    · right; right; exact ⟨rfl, Or.inr hy⟩
 
 noncomputable def guard (x : Node) (b : l) (α : Lpo l) (β : Lpo l)
     (hx₁ : x ∉ α.nodes) (hx₂ : x ∉ β.nodes) (h : Disjoint α.nodes β.nodes)
