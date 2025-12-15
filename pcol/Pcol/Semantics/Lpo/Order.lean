@@ -201,3 +201,73 @@ theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo
       intro x b hb hx; sorry
     · sorry
 }
+
+lemma le_same_root {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) :
+    ∃ x ∈ α.nodes,
+      (∀ y ∈ α.nodes, x ≠ y → α.rel x y) ∧
+      ∀ z ∈ β.nodes, x ≠ z → β.rel x z := by
+  obtain ⟨x, hx, hroot⟩ := α.property.rel.single_rooted
+  refine ⟨x, hx, hroot, fun z hz hneq ↦ ?_⟩
+  obtain ⟨y, hy, hroot'⟩ := β.property.rel.single_rooted
+  by_cases hxy : x = y
+  · subst hxy; exact hroot' _ hz hneq
+  · exfalso
+    have hyx := hroot' _ (hle.nodes hx) (Ne.symm hxy)
+    refine hxy (β.property.rel.antisymm ?_ hyx)
+    have hy' := hle.downcl x hx y hyx
+    exact (hle.rel _ hx _ hy').mp (hroot _ hy' hxy)
+
+-- lemma le_nodes' {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node}
+--     (hx : x ∈ β.nodes) {s : Set Node} (hs : β.rel.is_down_closed s)
+--     (hs' : s ⊆ α.nodes) (hsx : ∀ y ∈ s, β.rel y x) :
+--     x ∈ s ∨ ∃ y ∈ s, α.lab y = ⊥ ∧ β.rel y x := by
+--   have hf : s.Finite := by sorry
+--   revert x; refine hf.induction_on s ?_ ?_
+
+lemma le_nodes {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
+    x ∈ β.nodes → x ∈ α.nodes ∨ ∃ y ∈ α.bots, β.rel y x := by
+  intro hx
+  obtain ⟨root, hr, hroot₁, hroot₂⟩ := le_same_root hle
+  obtain ⟨n, hn⟩ := Lpo.fin_lev hx
+  revert x; induction n using Nat.strong_induction_on with
+  | h n ih =>
+      intro x hx hlev; cases n with
+      | zero =>
+        left; refine (congrArg _ ?_).mp hr; by_contra hc
+        have hh := hroot₂ _ hx hc; sorry
+      | succ n =>
+        simp [Rel.lev] at hlev; sorry
+
+lemma le_form {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
+    α.form x ≤ β.form x := by
+  by_cases hx : x ∈ α.nodes
+  · exact le_of_eq (hle.form x hx)
+  · refine le_of_eq_of_le (b := Form.false) ?_ ?_
+    · ext v; constructor
+      · intro c; refine (α.property.form_dom x).not.mpr hx ?_; exact ⟨v, c⟩
+      · intro c; exfalso; exact c
+    · intro v c; exfalso; exact c
+
+
+  -- | zero => intro x hx hlev; left; sorry
+  -- | succ n ih => intro x hx hlev
+
+
+
+  -- generalize hs : { y | β.rel y x } = s
+  -- have hf : s.Finite := (congrArg _ hs).mp (β.property.rel.fin_prec x)
+  -- revert x; refine Set.Finite.induction_on s hf ?_ ?_
+  -- · intro hrel; left; refine (congrArg _ ?_).mp hr; by_contra hc
+  --   exact le_of_eq heq (hroot₂ _ hx hc)
+  -- · intro y t hy hsub ht ih hins
+
+
+
+
+  -- generalize hs : { y | β.rel y x } ∩ α.nodes = s
+  -- have hf : s.Finite := sorry -- (congrArg _ hs).mp (β.property.rel.fin_prec x)
+  -- have hs' : ∀ z ∈ s, β.rel z x := le_of_eq hs.symm
+  -- revert hs; refine Set.Finite.induction_on_subset s hf ?_ ?_
+  -- · intro hrel; left; refine (congrArg _ ?_).mp hr; by_contra hc
+  --   exact le_of_eq heq (hroot₂ _ hx hc)
+  -- · intro y t hy hsub ht ih hins

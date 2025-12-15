@@ -1,10 +1,12 @@
 import Init.Prelude
+import Mathlib.Data.ENat.Basic
 import Mathlib.Data.ENat.Defs
 import Mathlib.Data.ENat.Lattice
 import Mathlib.Data.Finite.Defs
 import Mathlib.Data.Nat.Basic
 import Mathlib.Data.Rel
 import Mathlib.Data.Set.Basic
+import Mathlib.Data.Set.Card
 import Mathlib.Data.Set.Finite.Basic
 import Mathlib.Order.SetNotation
 
@@ -12,7 +14,7 @@ def Node := ℕ
 instance : Inhabited Node where
   default := (0 : ℕ)
 
-instance {x y : Node} : Decidable (x = y) := sorry
+instance : DecidableEq Node := instDecidableEqNat
 
 def Form (α : Type) := Set α → Prop
 
@@ -21,47 +23,65 @@ lemma form_ext {α : Type} {φ ψ : Form α} (h : ∀ x, φ x = ψ x) : φ = ψ 
 
 namespace Form
 
-def true {α : Type} : Form α := fun _ => True
-def false {α : Type} : Form α := fun _ => False
-def and {α : Type} (p : Form α) (q : Form α) : Form α := fun v => p v ∧ q v
-def not {α : Type} (p : Form α) : Form α := fun v => ¬(p v)
-def literal {α : Type} (x : α) : Form α := fun v => x ∈ v
+variable {α : Type}
 
-def sat {α : Type} (p : Form α) : Prop := ∃ v, p v
+def true : Form α := fun _ => True
+def false: Form α := fun _ => False
+def and (p : Form α) (q : Form α) : Form α := fun v => p v ∧ q v
+def not (p : Form α) : Form α := fun v => ¬(p v)
+def literal (x : α) : Form α := fun v => x ∈ v
 
--- Need to work this part out
-instance {α : Type} : DecidablePred (Form.true : Set α → Prop) :=
-  fun _ ↦ Decidable.isTrue True.intro
-instance {α : Type} : DecidablePred (Form.false : Set α → Prop) :=
-  fun _ ↦ Decidable.isFalse (fun c ↦ False.elim c)
-instance {α : Type} {φ ψ : Form α} [h₁ : DecidablePred φ] [h₂ : DecidablePred ψ] :
-    DecidablePred (Form.and φ ψ : Set α → Prop) := by
-  intro v; cases h₁ v with
-  | isTrue h =>
-    cases h₂ v with
-    | isTrue h' => exact isTrue ⟨h, h'⟩
-    | isFalse c => refine isFalse ?_; simp only [and, not_and]; intro _; exact c
-  | isFalse c => refine isFalse ?_; simp only [and, not_and]; intro h _; exact c h
-instance {α : Type} {φ : Form α} [h : DecidablePred φ] :
-    DecidablePred (Form.not φ : Set α → Prop) :=
-  fun v ↦ match h v with
-    | isTrue h' => isFalse fun c => c h'
-    | isFalse c => isTrue c
-instance {α : Type} : DecidablePred (Form.sat : Form α → Prop) := by sorry
+def sOr {β : Type} (s : Set β) (p : β → Form α) : Form α :=
+  fun v ↦ ∃ x ∈ s, p x v
+def sAnd {β : Type} (s : Set β) (p : β → Form α) : Form α :=
+  fun v ↦ ∀ x ∈ s, p x v
 
-instance {α : Type} : LE (Form α) where
+def sat (p : Form α) : Prop := ∃ v, p v
+
+instance : LE (Form α) where
   le φ ψ := ∀ v, φ v → ψ v
-instance {α : Type} {φ ψ : Form α} : Decidable (φ ≤ ψ) := by sorry
 
-instance {α : Type} : Preorder (Form α) where
+instance : Preorder (Form α) where
   le_refl φ v h := h
   le_trans φ ψ ξ h₁ h₂ v hφ := h₂ v (h₁ v hφ)
 
-instance {α : Type} : PartialOrder (Form α) where
+instance : PartialOrder (Form α) where
   le_antisymm φ ψ h₁ h₂ := by ext v; exact ⟨h₁ v, h₂ v⟩
 
+lemma mt {p q : Form α} (h : p ≤ q) : q.not ≤ p.not := by
+  intro v hqn hp; exact hqn (h v hp)
+
+def free [DecidableEq α] (p : Form α) (x : α) : Prop :=
+  ∀ v, p v ↔ p (fun y => if x = y then ¬(v y) else v y)
+
 def vars (p : Form Node) : Set Node :=
-  { x | ∃ v, p v ≠ p (fun y => if x = y then ¬(v y) else v y) }
+  { x | ¬ p.free x }
+
+lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
+    (hs : ∀ x ∈ s, p.free x) (hf : s.Finite) :
+    ∀ v₁ v₂, (∀ x ∉ s, x ∈ v₁ ↔ x ∈ v₂) → (p v₁ ↔ p v₂) := by
+  revert hs; refine hf.induction_on s ?_ ?_
+  · intro _ v₁ v₂ h
+    have heq : v₁ = v₂ := by ext x; exact h _ id
+    subst heq; rfl
+  · intro x t hx ht ih hins v₁ v₂ h
+    by_cases hv : x ∈ v₁ ↔ x ∈ v₂
+    · refine ih ?_ _ _ ?_
+      · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
+      · intro y hy; by_cases hxy : x = y
+        · subst hxy; exact hv
+        · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
+    · refine (hins _ (Set.mem_insert _ _) v₁).trans ?_
+      refine ih ?_ _ _ ?_
+      · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
+      · intro y hy; by_cases hxy : x = y <;> simp only [Membership.mem, hxy, Set.Mem, ↓reduceIte]
+        · subst hxy; exact not_iff.mp hv
+        · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
+
+lemma sat_on_vars {p : Form Node} {v₁ v₂ : Set Node} :
+    (∀ x ∈ p.vars, x ∈ v₁ ↔ x ∈ v₂) → (p v₁ ↔ p v₂) := by
+  let s := { x | ¬ (x ∈ v₁ ↔ x ∈ v₂) }
+  sorry
 
 end Form
 
@@ -169,10 +189,24 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
           simp [Form.false] at h
       · intro heq; use ∅
         rw [ite_cond_eq_true _ _ (eq_true (Eq.symm heq))]; simp [Form.true]
-    · intro y; simp [Form.true, Form.vars]
+    · intro y; simp only [Form.vars, Form.free, Form.true, implies_true, not_true_eq_false,
+        Set.setOf_false, Set.mem_empty_iff_false, not_false_eq_true]
   })
 
-  end Lpo
+lemma lev_le_prec {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
+    a.rel.lev x ≤ { y | a.rel y x }.encard := sorry
+
+lemma fin_lev {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
+    ∃ n : ℕ, a.rel.lev x = n := by
+  have h : a.rel.lev x ≠ ⊤ := by
+    refine ne_of_lt (lt_of_le_of_lt (lev_le_prec hx) ?_)
+    refine lt_of_eq_of_lt (Set.Finite.encard_eq_coe_toFinset_card ?_) ?_
+    · exact a.property.rel.fin_prec x
+    · exact ENat.coe_lt_top _
+  rcases ENat.ne_top_iff_exists.mp h with ⟨n, hn⟩
+  exact ⟨n, hn.symm⟩
+
+end Lpo
 
 @[ext]
 lemma lpo_ext {l : Type} [Bot l] {a b : Lpo l}
