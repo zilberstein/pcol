@@ -224,19 +224,52 @@ lemma le_same_root {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) :
 --   have hf : s.Finite := by sorry
 --   revert x; refine hf.induction_on s ?_ ?_
 
+lemma succ_chain_of_rel {l : Type} [Bot l] {α : Lpo l} {x y : Node}
+    (hx : x ∈ α.nodes) (hy : y ∈ α.nodes) (hr : α.rel x y) :
+    ∃ n, ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.first = x ∧ c.last = y := by
+  generalize h : α.rel.lev y - α.rel.lev x = n
+
+lemma lev_zero {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
+    (hlev : α.rel.lev x = 0) {y : Node} (hy : y ∈ α.nodes) (hneq : x ≠ y) :
+    α.rel x y := by
+  obtain ⟨z, hz, hroot⟩ := α.property.rel.single_rooted
+  by_cases heq : x = z
+  · subst heq; exact hroot _ hy hneq
+  · obtain ⟨n, c, hc, hf, hl⟩ := succ_chain_of_rel hz hx (hroot _ hx (Ne.symm heq))
+    have hn := c.first_neq_last fun h ↦ heq (hl.symm.trans (h.symm.trans hf))
+    have hzero := sSup_eq_bot.mp hlev n ⟨n, rfl, c, hc, hl⟩
+    simp only [bot_eq_zero', Nat.cast_eq_zero] at hzero; subst hzero
+    contradiction
+
 lemma le_nodes {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
     x ∈ β.nodes → x ∈ α.nodes ∨ ∃ y ∈ α.bots, β.rel y x := by
   intro hx
   obtain ⟨root, hr, hroot₁, hroot₂⟩ := le_same_root hle
-  obtain ⟨n, hn⟩ := Lpo.fin_lev hx
-  revert x; induction n using Nat.strong_induction_on with
-  | h n ih =>
-      intro x hx hlev; cases n with
-      | zero =>
-        left; refine (congrArg _ ?_).mp hr; by_contra hc
-        have hh := hroot₂ _ hx hc; sorry
-      | succ n =>
-        simp [Rel.lev] at hlev; sorry
+  by_cases heq : root = x
+  · subst heq; left; exact hr
+  · obtain ⟨n, c, hc, hf, hl⟩ := succ_chain_of_rel (hle.nodes hr) hx (hroot₂ _ hx heq)
+    clear heq
+    revert x c; induction n with
+    | zero =>
+      rintro _ hx c hc rfl rfl; left; exact hr
+    | succ n ih =>
+      rintro x hx c hc rfl rfl
+      let c' : FinChain n Node := fun k ↦ c (Fin.castSucc k)
+      have hsucc := hc n; simp only [Fin.natCast_eq_last, Fin.val_last] at hsucc
+      have hl : c'.last ∈ β.nodes := (β.property.rel_dom hsucc.1).1
+      have hc' : β.rel.is_succ_chain c' := fun k ↦ hc k.castSucc
+      rcases ih hl c' hc' rfl rfl with hα | ⟨y, hy, hyx⟩
+      · by_cases hmem : c.last ∈ α.nodes
+        · left; exact hmem
+        · right
+          have h : c.last ∈ β.rel.up_closure α.bots := by
+            have hmem' : c.last ∉ α.rel.succ c'.last :=
+              fun cn ↦ hmem (α.property.rel_dom cn.1).2
+            refine Set.not_not_mem.mp ?_
+            refine not_and.mp (((Set.ext_iff.mp (hle.succ _ hα) c.last).trans (Set.mem_diff _)).not.mp hmem') ?_
+            exact hsucc
+          exact h
+      · right; exact ⟨y, hy, β.property.rel.trans hyx hsucc.1⟩
 
 lemma le_form {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
     α.form x ≤ β.form x := by
@@ -247,27 +280,3 @@ lemma le_form {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : N
       · intro c; refine (α.property.form_dom x).not.mpr hx ?_; exact ⟨v, c⟩
       · intro c; exfalso; exact c
     · intro v c; exfalso; exact c
-
-
-  -- | zero => intro x hx hlev; left; sorry
-  -- | succ n ih => intro x hx hlev
-
-
-
-  -- generalize hs : { y | β.rel y x } = s
-  -- have hf : s.Finite := (congrArg _ hs).mp (β.property.rel.fin_prec x)
-  -- revert x; refine Set.Finite.induction_on s hf ?_ ?_
-  -- · intro hrel; left; refine (congrArg _ ?_).mp hr; by_contra hc
-  --   exact le_of_eq heq (hroot₂ _ hx hc)
-  -- · intro y t hy hsub ht ih hins
-
-
-
-
-  -- generalize hs : { y | β.rel y x } ∩ α.nodes = s
-  -- have hf : s.Finite := sorry -- (congrArg _ hs).mp (β.property.rel.fin_prec x)
-  -- have hs' : ∀ z ∈ s, β.rel z x := le_of_eq hs.symm
-  -- revert hs; refine Set.Finite.induction_on_subset s hf ?_ ?_
-  -- · intro hrel; left; refine (congrArg _ ?_).mp hr; by_contra hc
-  --   exact le_of_eq heq (hroot₂ _ hx hc)
-  -- · intro y t hy hsub ht ih hins

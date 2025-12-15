@@ -9,6 +9,7 @@ import Mathlib.Data.Set.Basic
 import Mathlib.Data.Set.Card
 import Mathlib.Data.Set.Finite.Basic
 import Mathlib.Order.SetNotation
+import Mathlib.Tactic.Linarith
 
 def Node := ℕ
 instance : Inhabited Node where
@@ -85,6 +86,25 @@ lemma sat_on_vars {p : Form Node} {v₁ v₂ : Set Node} :
 
 end Form
 
+def FinChain (n : ℕ) (α : Type) := Fin (n + 1) → α
+
+namespace FinChain
+
+def first {n : ℕ} {α : Type} (c : FinChain n α) : α :=
+  c ⟨0, by linarith⟩
+
+def last {n : ℕ} {α : Type} (c : FinChain n α) : α :=
+  c (Fin.last n)
+
+def snd_to_last {n : ℕ} {α : Type} (c : FinChain (n + 1) α) : α :=
+  c ⟨n, by linarith⟩
+
+lemma first_neq_last {n : ℕ} {α : Type} (c : FinChain n α) (hne : c.first ≠ c.last) : n > 0 := by
+  have h := fun c ↦ hne (congrArg _ (Fin.val_inj.mp c))
+  refine Ne.bot_lt (Ne.symm h)
+
+end FinChain
+
 namespace Rel
 
 def succ {a : Type} (ord : Rel a a) (x : a) : Set a :=
@@ -92,11 +112,11 @@ def succ {a : Type} (ord : Rel a a) (x : a) : Set a :=
 
 def roots {a : Type} (ord : Rel a a) : Set a := { x : a | ∀ y, ¬(ord y x) }
 
-def is_succ_chain {α : Type} (ord : Rel α α) (l : List α) : Prop :=
-  match l with
-  | [] => False
-  | List.cons x xs =>
-    (xs.foldr (fun (x : α) (acc : α × Prop) => (x, acc.2 ∧ x ∈ ord.succ acc.1)) (x, True)).2
+def is_succ_chain {α : Type} {n : ℕ} (ord : Rel α α) (c : FinChain n α) : Prop :=
+  ∀ k : Fin n, by
+    refine ord.succ (c ⟨k, ?_⟩) (c ⟨k + 1, ?_⟩)
+    · refine lt_of_lt_of_le k.isLt ?_; simp
+    · refine lt_of_lt_of_le (add_lt_add_of_lt_of_le k.isLt (le_refl _)) (le_refl _)
 
 def is_down_closed (ord : Rel Node Node) (X : Set Node) : Prop :=
   ∀ x ∈ X, ∀ y, ord y x → y ∈ X
@@ -108,7 +128,9 @@ def up_closure (ord : Rel Node Node) (X : Set Node) : Set Node :=
   { x | ∃ y ∈ X, ord y x }
 
 noncomputable def lev {a : Type} (ord : Rel a a) (x : a) : ENat :=
-  sSup { n : ENat | ∃ l : List a, n = l.length - 1 ∧ is_succ_chain ord l ∧ l.getLast? = Option.some x }
+  sSup { m : ENat | ∃ n : ℕ, ↑n = m ∧
+                    ∃ c : FinChain n a, ord.is_succ_chain c ∧
+                    c.last = x }
 
 def FinitelyPreceded {α : Type} (ord : Rel α α) : Prop :=
   ∀ x : α, { y | ord y x }.Finite
