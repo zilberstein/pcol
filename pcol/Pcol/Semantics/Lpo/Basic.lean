@@ -107,14 +107,11 @@ end FinChain
 
 namespace Rel
 
-def succ {a : Type} (ord : Rel a a) (x : a) : Set a :=
-  fun y => ord x y ∧ ∀ z, ¬(ord x z ∧ ord z y)
-
 def roots {a : Type} (ord : Rel a a) : Set a := { x : a | ∀ y, ¬(ord y x) }
 
 def is_succ_chain {α : Type} {n : ℕ} (ord : Rel α α) (c : FinChain n α) : Prop :=
   ∀ k : Fin n, by
-    refine ord.succ (c ⟨k, ?_⟩) (c ⟨k + 1, ?_⟩)
+    refine ord (c ⟨k, ?_⟩) (c ⟨k + 1, ?_⟩)
     · refine lt_of_lt_of_le k.isLt ?_; simp
     · refine lt_of_lt_of_le (add_lt_add_of_lt_of_le k.isLt (le_refl _)) (le_refl _)
 

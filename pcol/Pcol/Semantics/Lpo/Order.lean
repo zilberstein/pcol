@@ -8,29 +8,21 @@ structure LE_Lpo {l : Type} [LE l] [Bot l] (a b : Lpo l) : Prop where
   rel : ∀ x ∈ a.nodes, ∀ y ∈ a.nodes, a.rel x y = b.rel x y
   lab : ∀ x, a.lab x ≤ b.lab x
   form : ∀ x ∈ a.nodes, a.form x = b.form x
-  succ : ∀ x ∈ a.nodes, a.rel.succ x = b.rel.succ x \ b.rel.up_closure a.bots
+  succ : ∀ x ∈ b.nodes, x ∈ a.nodes ∨ ∃ z ∈ a.bots, b.rel z x
 
 instance {l : Type} [LE l] [Bot l] : LE (Lpo l) where
   le a b := LE_Lpo a b
 
-lemma up_closure_same_empty {l : Type} [Bot l] {a : Lpo l} :
-  a.rel.up_closure a.bots = ∅ := by { sorry }
---     match a with
---     | ⟨a', ⟨_, hbot, _⟩⟩ =>
---       unfold up_closure; ext x; constructor
---       · rintro ⟨y, hybot, hrel⟩
---         have h := hbot y hybot
---         rw [castNode_idem] at hrel
---         sorry
---         --This proof sets a bit tricky, and I think it depends on Well-foundedness of rel
---       · intro hc; contradiction
--- }
+lemma le_rel {l : Type} [LE l] [Bot l] {a b : Lpo l} (h : a ≤ b)
+    {x y : Node} : a.rel x y → b.rel x y := by
+  intro hxy; obtain ⟨hx, hy⟩ := a.property.rel_dom hxy
+  exact (h.rel _ hx _ hy).mp hxy
 
-instance {l : Type} [Preorder l] [Bot l] : Preorder (Lpo l) where
+instance {l : Type} [PartialOrder l] [OrderBot l] : Preorder (Lpo l) where
   le_refl a := by {
     constructor <;> try simp
-    · intro x hx y hr; exact (a.property.rel_dom hr).1
-    · intro x hx; rw [up_closure_same_empty]; simp
+    · intro _ _ _ hr; exact (a.property.rel_dom hr).1
+    · intro _ hx; left; exact hx
     }
   le_trans a b c := by {
     intro hab hbc;
@@ -45,10 +37,18 @@ instance {l : Type} [Preorder l] [Bot l] : Preorder (Lpo l) where
     · intro x; refine le_trans (hab.lab _) ?_; exact hbc.lab _
     · intro x hx; refine Eq.trans (hab.form _ hx) ?_
       exact hbc.form _ (hab.nodes hx)
-    · intro x hx; sorry -- Need some lemmas about succ
+    · intro x hx
+      rcases hbc.succ _ hx with hb | ⟨z, hz, hzx⟩
+      · rcases hab.succ _ hb with ha | ⟨z, hz, hzx⟩
+        · left; exact ha
+        · right; exact ⟨z, hz, le_rel hbc hzx⟩
+      · right; rcases hab.succ _ hz.1 with ha | ⟨w, hw, hwz⟩
+        · refine ⟨z, ⟨ha, ?_⟩, hzx⟩
+          exact bot_unique (le_of_le_of_eq (hab.lab z) hz.2)
+        · exact ⟨w, hw, c.property.rel.trans (le_rel hbc hwz) hzx⟩
   }
 
-instance {l : Type} [PartialOrder l] [Bot l] : PartialOrder (Lpo l) where
+instance {l : Type} [PartialOrder l] [OrderBot l] : PartialOrder (Lpo l) where
   le_antisymm a b := by {
     intro hab hba
     have heq := le_antisymm hab.nodes hba.nodes
@@ -70,7 +70,13 @@ instance {l : Type} [PartialOrder l] [Bot l] : PartialOrder (Lpo l) where
         rw [heq] at hxa; rw [Lpo.lab, b.property.lab_dom _ hxa]
     · ext1 x; by_cases hx : x ∈ a.nodes
       · exact hab.form x hx
-      · sorry -- This is easy, but I don't feel like doing it right now
+      · have ha := not_exists.mp ((a.property.form_dom x).not.mpr hx)
+        have hx' : x ∉ b.nodes := by
+          intro c; exact hx ((congrArg₂ (· ∈ ·) rfl heq).mpr c)
+        have hb := not_exists.mp ((b.property.form_dom x).not.mpr hx')
+        ext v; constructor
+        · intro c; exfalso; exact ha v c
+        · intro c; exfalso; exact hb v c
   }
 
 def lpo_base_sup {l : Type} [SupSet l] [Bot l] (s : Set (Lpo l)) : Lpo_base l := {
@@ -217,59 +223,22 @@ lemma le_same_root {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) :
     have hy' := hle.downcl x hx y hyx
     exact (hle.rel _ hx _ hy').mp (hroot _ hy' hxy)
 
--- lemma le_nodes' {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node}
---     (hx : x ∈ β.nodes) {s : Set Node} (hs : β.rel.is_down_closed s)
---     (hs' : s ⊆ α.nodes) (hsx : ∀ y ∈ s, β.rel y x) :
---     x ∈ s ∨ ∃ y ∈ s, α.lab y = ⊥ ∧ β.rel y x := by
---   have hf : s.Finite := by sorry
---   revert x; refine hf.induction_on s ?_ ?_
-
-lemma succ_chain_of_rel {l : Type} [Bot l] {α : Lpo l} {x y : Node}
-    (hx : x ∈ α.nodes) (hy : y ∈ α.nodes) (hr : α.rel x y) :
-    ∃ n, ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.first = x ∧ c.last = y := by
-  generalize h : α.rel.lev y - α.rel.lev x = n
-
 lemma lev_zero {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
     (hlev : α.rel.lev x = 0) {y : Node} (hy : y ∈ α.nodes) (hneq : x ≠ y) :
     α.rel x y := by
   obtain ⟨z, hz, hroot⟩ := α.property.rel.single_rooted
   by_cases heq : x = z
   · subst heq; exact hroot _ hy hneq
-  · obtain ⟨n, c, hc, hf, hl⟩ := succ_chain_of_rel hz hx (hroot _ hx (Ne.symm heq))
-    have hn := c.first_neq_last fun h ↦ heq (hl.symm.trans (h.symm.trans hf))
-    have hzero := sSup_eq_bot.mp hlev n ⟨n, rfl, c, hc, hl⟩
-    simp only [bot_eq_zero', Nat.cast_eq_zero] at hzero; subst hzero
-    contradiction
-
-lemma le_nodes {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
-    x ∈ β.nodes → x ∈ α.nodes ∨ ∃ y ∈ α.bots, β.rel y x := by
-  intro hx
-  obtain ⟨root, hr, hroot₁, hroot₂⟩ := le_same_root hle
-  by_cases heq : root = x
-  · subst heq; left; exact hr
-  · obtain ⟨n, c, hc, hf, hl⟩ := succ_chain_of_rel (hle.nodes hr) hx (hroot₂ _ hx heq)
-    clear heq
-    revert x c; induction n with
-    | zero =>
-      rintro _ hx c hc rfl rfl; left; exact hr
-    | succ n ih =>
-      rintro x hx c hc rfl rfl
-      let c' : FinChain n Node := fun k ↦ c (Fin.castSucc k)
-      have hsucc := hc n; simp only [Fin.natCast_eq_last, Fin.val_last] at hsucc
-      have hl : c'.last ∈ β.nodes := (β.property.rel_dom hsucc.1).1
-      have hc' : β.rel.is_succ_chain c' := fun k ↦ hc k.castSucc
-      rcases ih hl c' hc' rfl rfl with hα | ⟨y, hy, hyx⟩
-      · by_cases hmem : c.last ∈ α.nodes
-        · left; exact hmem
-        · right
-          have h : c.last ∈ β.rel.up_closure α.bots := by
-            have hmem' : c.last ∉ α.rel.succ c'.last :=
-              fun cn ↦ hmem (α.property.rel_dom cn.1).2
-            refine Set.not_not_mem.mp ?_
-            refine not_and.mp (((Set.ext_iff.mp (hle.succ _ hα) c.last).trans (Set.mem_diff _)).not.mp hmem') ?_
-            exact hsucc
-          exact h
-      · right; exact ⟨y, hy, β.property.rel.trans hyx hsucc.1⟩
+  · exfalso
+    have hzx := hroot _ hx (Ne.symm heq)
+    let c : FinChain 1 Node := fun k ↦ if k = 0 then z else x
+    have hc : α.rel.is_succ_chain c := by
+      intro k; have hk := Fin.eq_zero k; subst hk
+      simp only [Nat.reduceAdd, Fin.isValue, Fin.val_eq_zero, Fin.zero_eta, ↓reduceIte, zero_add,
+        Fin.mk_one, one_ne_zero, c]; exact hzx
+    have hl : c.last = x := by simp [c, FinChain.last]
+    have hzero := sSup_eq_bot.mp hlev 1 ⟨1, rfl, c, hc, hl⟩
+    exact one_ne_zero hzero
 
 lemma le_form {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
     α.form x ≤ β.form x := by
