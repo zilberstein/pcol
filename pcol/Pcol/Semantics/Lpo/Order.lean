@@ -2,7 +2,9 @@ import Mathlib.Order.CompletePartialOrder
 
 import Pcol.Semantics.Lpo.Basic
 
-structure LE_Lpo {l : Type} [LE l] [Bot l] (a b : Lpo l) : Prop where
+variable {l : Type} [LE l] [Bot l]
+
+structure LE_Lpo (a b : Lpo l) : Prop where
   nodes : a.nodes ⊆ b.nodes
   downcl : b.rel.is_down_closed a.nodes
   rel : ∀ x ∈ a.nodes, ∀ y ∈ a.nodes, a.rel x y = b.rel x y
@@ -10,15 +12,42 @@ structure LE_Lpo {l : Type} [LE l] [Bot l] (a b : Lpo l) : Prop where
   form : ∀ x ∈ a.nodes, a.form x = b.form x
   succ : ∀ x ∈ b.nodes, x ∈ a.nodes ∨ ∃ z ∈ a.bots, b.rel z x
 
-instance {l : Type} [LE l] [Bot l] : LE (Lpo l) where
+instance : LE (Lpo l) where
   le a b := LE_Lpo a b
 
-lemma le_rel {l : Type} [LE l] [Bot l] {a b : Lpo l} (h : a ≤ b)
+lemma le_rel {a b : Lpo l} (h : a ≤ b)
     {x y : Node} : a.rel x y → b.rel x y := by
   intro hxy; obtain ⟨hx, hy⟩ := a.property.rel_dom hxy
   exact (h.rel _ hx _ hy).mp hxy
 
-instance {l : Type} [PartialOrder l] [OrderBot l] : Preorder (Lpo l) where
+lemma le_same_root {α β : Lpo l} (hle : α ≤ β) :
+    ∃ x ∈ α.nodes,
+      (∀ y ∈ α.nodes, x ≠ y → α.rel x y) ∧
+      ∀ z ∈ β.nodes, x ≠ z → β.rel x z := by
+  obtain ⟨x, hx, hroot⟩ := α.property.rel.single_rooted
+  refine ⟨x, hx, hroot, fun z hz hneq ↦ ?_⟩
+  obtain ⟨y, hy, hroot'⟩ := β.property.rel.single_rooted
+  by_cases hxy : x = y
+  · subst hxy; exact hroot' _ hz hneq
+  · exfalso
+    have hyx := hroot' _ (hle.nodes hx) (Ne.symm hxy)
+    refine hxy (β.property.rel.antisymm ?_ hyx)
+    have hy' := hle.downcl x hx y hyx
+    exact (hle.rel _ hx _ hy').mp (hroot _ hy' hxy)
+
+lemma le_form {α β : Lpo l} (hle : α ≤ β) {x : Node} :
+    α.form x ≤ β.form x := by
+  by_cases hx : x ∈ α.nodes
+  · exact le_of_eq (hle.form x hx)
+  · refine le_of_eq_of_le (b := Form.false) ?_ ?_
+    · ext v; constructor
+      · intro c; refine (α.property.form_dom x).not.mpr hx ?_; exact ⟨v, c⟩
+      · intro c; exfalso; exact c
+    · intro v c; exfalso; exact c
+
+variable {l : Type} [PartialOrder l] [OrderBot l]
+
+instance : Preorder (Lpo l) where
   le_refl a := by {
     constructor <;> try simp
     · intro _ _ _ hr; exact (a.property.rel_dom hr).1
@@ -48,7 +77,7 @@ instance {l : Type} [PartialOrder l] [OrderBot l] : Preorder (Lpo l) where
         · exact ⟨w, hw, c.property.rel.trans (le_rel hbc hwz) hzx⟩
   }
 
-instance {l : Type} [PartialOrder l] [OrderBot l] : PartialOrder (Lpo l) where
+instance : PartialOrder (Lpo l) where
   le_antisymm a b := by {
     intro hab hba
     have heq := le_antisymm hab.nodes hba.nodes
@@ -79,7 +108,9 @@ instance {l : Type} [PartialOrder l] [OrderBot l] : PartialOrder (Lpo l) where
         · intro c; exfalso; exact hb v c
   }
 
-def lpo_base_sup {l : Type} [SupSet l] [Bot l] (s : Set (Lpo l)) : Lpo_base l := {
+variable {l : Type} [CompletePartialOrder l] [OrderBot l]
+
+def lpo_base_sup (s : Set (Lpo l)) : Lpo_base l := {
   nodes := ⋃ a ∈ s, a.nodes
   rel x y := ∃ a ∈ s, a.rel x y
   lab x := sSup { l | ∃ a ∈ s, l = a.lab x }
@@ -89,22 +120,111 @@ def lpo_base_sup {l : Type} [SupSet l] [Bot l] (s : Set (Lpo l)) : Lpo_base l :=
 instance {l : Type} [Bot l] : Inhabited (Lpo l) where
   default := Lpo.singleton default ⊥
 
-noncomputable instance {l : Type} [SupSet l] [Bot l] : SupSet (Lpo l) where
+noncomputable instance : SupSet (Lpo l) where
   sSup s : Lpo l := by {
     by_cases h : is_valid_lpo (lpo_base_sup s)
     · exact ⟨lpo_base_sup s, h⟩
     · exact default
   }
 
-theorem lpo_sup_of_directed {l : Type} [SupSet l] [LE l] [Bot l] {d : Set (Lpo l)}
-  (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty):
+lemma lpo_directed_same_root {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) :
+    ∃ x, ∀ α ∈ d, x ∈ α.nodes ∧ ∀ y ∈ α.nodes, x ≠ y → α.rel x y := by
+  obtain ⟨α, hα⟩ := hne
+  obtain ⟨x, hx, hroot⟩ := α.property.rel.single_rooted
+  use x; intro β hβ
+  obtain ⟨γ, hγ, hαγ, hβγ⟩ := hd _ hα _ hβ
+  obtain ⟨y, hy, hyα, hyγ⟩ := le_same_root hαγ
+  obtain ⟨z, hz, hzβ, hzγ⟩ := le_same_root hβγ
+  have hxy : x = y := by
+    by_contra hc; refine hc (α.property.rel.antisymm ?_ ?_)
+    · exact hroot _ hy hc
+    · exact hyα _ hx (Ne.symm hc)
+  subst hxy
+  have hxz : x = z := by
+    by_contra hc; refine hc (γ.property.rel.antisymm ?_ ?_)
+    · exact hyγ _ (hβγ.nodes hz) hc
+    · exact hzγ _ (hαγ.nodes hx) (Ne.symm hc)
+  subst hxz; exact ⟨hz, hzβ⟩
+
+-- Is this not in Mathlib?
+lemma directed_finite_upper_bound {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty)
+    {s : Set (Lpo l)} (hsub : s ⊆ d) (hfin : s.Finite) :
+    ∃ α ∈ d, ∀ β ∈ s, β ≤ α := by
+  refine hfin.induction_on_subset s ?_ ?_
+  · obtain ⟨α, hα⟩ := hne
+    refine ⟨α, hα, ?_⟩; intro β hc; exfalso; exact hc
+  · intro α t hα hst hnt ⟨β, hβ, hub⟩
+    obtain ⟨γ, hγ, hαγ, hβγ⟩ := h _ (hsub hα) _ hβ
+    refine ⟨γ, hγ, ?_⟩; intro γ' hγ'
+    rcases Set.mem_insert_iff.mp hγ' with rfl | ht
+    · exact hαγ
+    · exact (hub _ ht).trans hβγ
+
+lemma lpo_directed_lev_eq {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty)
+    (x : Node) : ∃ n : ℕ, ∀ α ∈ d, x ∈ α.nodes → α.rel.lev x = n := sorry
+
+-- Lemma C.6 of CONCUR '25
+lemma lpo_directed_fin_lev {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) (n : ℕ) :
+    ∃ X, X.Finite ∧ X ⊆ ⋃ α ∈ d, α.nodes ∧ ∀ α ∈ d, { x ∈ α.nodes | α.rel.lev x = n } ⊆ X := by
+  induction n using Nat.strong_induction_on with
+  | h n ih =>
+    cases n with
+    | zero =>
+      obtain ⟨x, hroot⟩ := lpo_directed_same_root h hne
+      refine ⟨{x}, Set.finite_singleton _, ?_, ?_⟩
+      · rintro x rfl; obtain ⟨α, hα⟩ := hne
+        simp only [Set.mem_iUnion, exists_prop]
+        refine ⟨α, hα, (hroot _ hα).1⟩
+      · intro α hα y ⟨hy, hlev⟩
+        obtain ⟨hx, hroot₁⟩ := hroot α hα
+        have hroot₂ := lev_zero hy hlev
+        refine Set.mem_singleton_iff.mpr ?_
+        by_contra hc; refine hc (α.property.rel.antisymm ?_ ?_)
+        · exact hroot₂ _ hx hc
+        · exact hroot₁ _ hy (Ne.symm hc)
+    | succ n =>
+      choose f hf using ih
+      let X := ⋃ k : Fin (n + 1), f k.val k.isLt
+      have hfin : X.Finite := Set.finite_iUnion (fun k ↦ (hf k.val k.isLt).1)
+      have h' : ∀ x ∈ X, ∃ α ∈ d, x ∈ α.nodes ∧ (α.lab x ≠ ⊥ ∨ ∀ β ∈ d, β.lab x = ⊥) := by
+        unfold X; intro x ⟨s, hs, hx⟩; by_cases hlab : ∃ β ∈ d, β.lab x ≠ ⊥
+        · obtain ⟨β, hβ, hlab⟩ := hlab; refine ⟨β, hβ, ?_, Or.inl hlab⟩
+          exact Set.not_not_mem.mp ((β.property.lab_dom x).mt hlab)
+        · simp only [ne_eq, not_exists, not_and, not_not] at hlab
+          rcases Set.mem_range.mp hs with ⟨k, rfl⟩
+          have h := (hf k.val k.isLt).2.1 hx
+          simp only [Set.mem_iUnion, exists_prop] at h
+          rcases h with ⟨α ,hα, hx⟩
+          exact ⟨α , hα, hx, Or.inr hlab⟩
+      choose g hg using h'
+      let A : Set (Lpo l):= (fun x ↦ g x.val x.property) '' (Set.univ : Set ↑X)
+      have hfin' : A.Finite := (Set.finite_univ_iff.mpr hfin).image _
+      have hsub : A ⊆ d := by
+        intro α hα; simp [A] at hα
+        rcases hα with ⟨x, hx, rfl⟩; exact (hg x hx).1
+      obtain ⟨α, hα, hub⟩ := directed_finite_upper_bound h hne hsub hfin'
+      refine ⟨{ x ∈ α.nodes | α.rel.lev x = n + 1 }, ?_, ?_, ?_⟩
+      · exact α.property.rel.fin_lev _
+      · intro x ⟨hx, _⟩; simp only [Set.mem_iUnion, exists_prop]
+        exact ⟨α, hα, hx⟩
+      · intro β hβ x ⟨hx, hlev⟩; constructor
+        · sorry
+        · sorry
+
+theorem lpo_sup_of_directed {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) :
   ∃ hv, sSup d = ⟨lpo_base_sup d, hv⟩ := by {
   have hv : is_valid_lpo (lpo_base_sup d) := by {
     unfold lpo_base_sup; constructor <;> try simp
     · intro x y a ha hrel
       rcases a.property.rel_dom hrel with ⟨hx, hy⟩
       exact ⟨⟨a, ha, hx⟩, ⟨a, ha, hy⟩⟩
-    · intro x hx; sorry
+    · intro x hx; refine bot_unique (DirectedOn.sSup_le ?_ ?_)
+      · rintro _ ⟨a, ha, rfl⟩ _ ⟨b, hb, rfl⟩
+        refine ⟨⊥, ⟨a, ha, ?_⟩, ?_, ?_⟩
+        · exact (a.property.lab_dom _ (hx _ ha)).symm
+        · exact le_of_eq (a.property.lab_dom _ (hx _ ha))
+        · exact le_of_eq (b.property.lab_dom _ (hx _ hb))
+      · rintro _ ⟨a, ha, rfl⟩; exact le_of_eq (a.property.lab_dom _ (hx _ ha))
     · constructor
       · rintro x y z ⟨a, ha, har⟩ ⟨b, hb, hbr⟩
         rcases h a ha b hb with ⟨c, hc, hac, hbc⟩
@@ -137,7 +257,12 @@ theorem lpo_sup_of_directed {l : Type} [SupSet l] [LE l] [Bot l] {d : Set (Lpo l
           · rintro ⟨⟩
           · intro ⟨a, ha, hyx⟩; exfalso; refine hx ⟨a, ha, ?_⟩
             exact (a.property.rel_dom hyx).2
-      · sorry
+      · intro n; obtain ⟨X, hfin, _, hub⟩ := lpo_directed_fin_lev h hne n
+        refine hfin.subset ?_; intro x ⟨hx, hlev⟩
+        simp only [Set.mem_iUnion, exists_prop] at hx
+        rcases hx with ⟨α, hα, hx⟩; refine hub α hα ⟨hx, ?_ ⟩
+        obtain ⟨k, hk⟩ := lpo_directed_lev_eq h hne x
+        sorry
       · rcases hne with ⟨a, ha⟩; rcases a.property.rel.single_rooted with ⟨x, hx, hroot⟩; use x
         simp only [Set.mem_iUnion, exists_prop, ne_eq, forall_exists_index, and_imp]
         refine ⟨⟨a, ha, hx⟩, ?_⟩
@@ -158,7 +283,7 @@ theorem lpo_sup_of_directed {l : Type} [SupSet l] [LE l] [Bot l] {d : Set (Lpo l
 
 -- Lpo is not a CompletePartialOrder, since the Lean definition of directed set does not
 -- exclude empty sets
-theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo l)}
+theorem lpo_sup_is_lub {d : Set (Lpo l)}
   (hd : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) : IsLUB d (sSup d) := by {
   rcases lpo_sup_of_directed hd hne with ⟨hv, heq⟩; rw [heq]
   unfold lpo_base_sup; constructor <;> try simp
@@ -173,8 +298,8 @@ theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo
       simp [Lpo.rel]; intro b hb hr
       rcases hd _ ha _ hb with ⟨c, hc, hac, hbc⟩
       rcases b.property.rel_dom hr with ⟨hxb, hyb⟩
-      -- easy, but I'll do it later
-      sorry
+      refine (hac.rel _ hx _ hy).mpr ?_
+      exact (hbc.rel _ hxb _ hyb).mp hr
     · simp [Lpo.lab]; intro x; refine DirectedOn.le_sSup ?_ ⟨a, ha, rfl⟩
       rintro ℓ₁ ⟨b, hb, hℓ₁⟩ ℓ₂ ⟨c, hc, hℓ₂⟩; simp; subst ℓ₁ ℓ₂
       rcases hd _ hb _ hc with ⟨e, he, hbe, hce⟩
@@ -182,9 +307,14 @@ theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo
     · intro x hx; simp [Lpo.form]; ext v; refine ⟨fun hf => ⟨a, ha, hf⟩, ?_⟩
       intro ⟨b, hb, hf⟩
       rcases hd _ ha _ hb with ⟨c, hc, hac, hbc⟩
-      -- need to do the rewriting with coercions, annoying
-      sorry
-    · simp [Lpo.rel]; intro h ha; sorry
+      refine (congrFun (hac.form _ hx) _).mpr ?_
+      exact le_form hbc v hf
+    · simp only [Lpo.nodes, Set.mem_iUnion, exists_prop, Lpo.rel, forall_exists_index, and_imp]
+      intro x b hb hxb
+      obtain ⟨c, hc, hac, hbc⟩ := hd _ ha _ hb
+      rcases hac.succ x (hbc.nodes hxb) with hxa | ⟨z, hz, hzx⟩
+      · left; exact hxa
+      · right; exact ⟨z, hz, c, hc, hzx⟩
   · simp [lowerBounds, upperBounds]; intro a ha; constructor
     · simp [Lpo.nodes]; intro b hb; exact (ha hb).nodes
     · simp [Rel.is_down_closed, Lpo.nodes]; intro x b hb hx y hyx; refine ⟨b, hb, ?_⟩
@@ -203,49 +333,12 @@ theorem lpo_sup_is_lub {l : Type} [Bot l] [CompletePartialOrder l] {d : Set (Lpo
         rcases hd _ hb _ hc with ⟨e, he, hbe, hce⟩
         exact ⟨e.lab x, ⟨e, he, rfl⟩, hbe.lab x, hce.lab x⟩
       · intro ℓ ⟨b, hb, hℓ⟩; subst hℓ; exact (ha hb).lab x
-    · simp [Lpo.nodes, Lpo.form]
-      intro x b hb hx; sorry
-    · sorry
+    · simp only [Lpo.nodes, Set.mem_iUnion, exists_prop, Lpo.form, forall_exists_index, and_imp]
+      intro x b hb hx; ext v; constructor
+      · intro ⟨c, hc, hf⟩; exact le_form (ha hc) v hf
+      · intro hf; refine ⟨b, hb, ?_⟩; exact (congrFun ((ha hb).form _ hx) _).mpr hf
+    · simp only [Lpo.nodes, Set.mem_iUnion, exists_prop, Lpo.bots, Lpo.lab, Set.mem_setOf_eq]
+      intro x hx; refine Classical.or_iff_not_imp_left.mpr ?_
+      simp only [not_exists, not_and]
+      intro h; sorry
 }
-
-lemma le_same_root {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) :
-    ∃ x ∈ α.nodes,
-      (∀ y ∈ α.nodes, x ≠ y → α.rel x y) ∧
-      ∀ z ∈ β.nodes, x ≠ z → β.rel x z := by
-  obtain ⟨x, hx, hroot⟩ := α.property.rel.single_rooted
-  refine ⟨x, hx, hroot, fun z hz hneq ↦ ?_⟩
-  obtain ⟨y, hy, hroot'⟩ := β.property.rel.single_rooted
-  by_cases hxy : x = y
-  · subst hxy; exact hroot' _ hz hneq
-  · exfalso
-    have hyx := hroot' _ (hle.nodes hx) (Ne.symm hxy)
-    refine hxy (β.property.rel.antisymm ?_ hyx)
-    have hy' := hle.downcl x hx y hyx
-    exact (hle.rel _ hx _ hy').mp (hroot _ hy' hxy)
-
-lemma lev_zero {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
-    (hlev : α.rel.lev x = 0) {y : Node} (hy : y ∈ α.nodes) (hneq : x ≠ y) :
-    α.rel x y := by
-  obtain ⟨z, hz, hroot⟩ := α.property.rel.single_rooted
-  by_cases heq : x = z
-  · subst heq; exact hroot _ hy hneq
-  · exfalso
-    have hzx := hroot _ hx (Ne.symm heq)
-    let c : FinChain 1 Node := fun k ↦ if k = 0 then z else x
-    have hc : α.rel.is_succ_chain c := by
-      intro k; have hk := Fin.eq_zero k; subst hk
-      simp only [Nat.reduceAdd, Fin.isValue, Fin.val_eq_zero, Fin.zero_eta, ↓reduceIte, zero_add,
-        Fin.mk_one, one_ne_zero, c]; exact hzx
-    have hl : c.last = x := by simp [c, FinChain.last]
-    have hzero := sSup_eq_bot.mp hlev 1 ⟨1, rfl, c, hc, hl⟩
-    exact one_ne_zero hzero
-
-lemma le_form {l : Type} [Bot l] [LE l] {α β : Lpo l} (hle : α ≤ β) {x : Node} :
-    α.form x ≤ β.form x := by
-  by_cases hx : x ∈ α.nodes
-  · exact le_of_eq (hle.form x hx)
-  · refine le_of_eq_of_le (b := Form.false) ?_ ?_
-    · ext v; constructor
-      · intro c; refine (α.property.form_dom x).not.mpr hx ?_; exact ⟨v, c⟩
-      · intro c; exfalso; exact c
-    · intro v c; exfalso; exact c
