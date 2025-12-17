@@ -212,19 +212,6 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
         Set.setOf_false, Set.mem_empty_iff_false, not_false_eq_true]
   })
 
--- lemma lev_le_prec {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
---     a.rel.lev x ≤ { y | a.rel y x }.encard := sorry
-
--- lemma fin_lev {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
---     ∃ n : ℕ, a.rel.lev x = n := by
---   have h : a.rel.lev x ≠ ⊤ := by
---     refine ne_of_lt (lt_of_le_of_lt (lev_le_prec hx) ?_)
---     refine lt_of_eq_of_lt (Set.Finite.encard_eq_coe_toFinset_card ?_) ?_
---     · exact a.property.rel.fin_prec x
---     · exact ENat.coe_lt_top _
---   rcases ENat.ne_top_iff_exists.mp h with ⟨n, hn⟩
---   exact ⟨n, hn.symm⟩
-
 end Lpo
 
 @[ext]
