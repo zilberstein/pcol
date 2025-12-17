@@ -350,3 +350,70 @@ lemma lev_mono {l : Type} [Bot l] {α : Lpo l} {x y : Node} (h : α.rel x y) :
           linarith
         subst this; refine (congrArg₂ _ ?_ rfl).mpr h; rfl
     · simp only [FinChain.last, Fin.val_last, lt_self_iff_false, ↓reduceDIte, c']
+
+lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
+   (hx : x ∈ α.nodes) (hlt : n < α.rel.lev x) : ∃ y, α.rel.lev y = n ∧ α.rel y x := by
+  obtain ⟨m, hlev⟩ := lev_finite hx
+  obtain ⟨c, hc, rfl⟩ := lev_finite_exists_finchain hlev
+  have hnm : n < m := ENat.coe_lt_coe.mp (lt_of_lt_of_eq hlt hlev)
+  refine ⟨c ⟨n, ?_⟩, ?_, ?_⟩
+  · exact hnm.trans (Nat.lt_succ_self _)
+  · refine le_antisymm ?_ ?_
+    -- Proof by contradiction: show that if the nth element of the chain has level greater than
+    -- n, then the level of x must be greater than m
+    · by_contra h; apply not_le.mp at h
+      let n' : Fin (m + 1) := ⟨n, by linarith⟩
+      have hn := (α.property.rel_dom (hc ⟨n, hnm⟩)).1
+      obtain ⟨n', hn'⟩ := lev_finite hn
+      have hnn : n < n' := ENat.coe_lt_coe.mp (lt_of_lt_of_eq h hn')
+      have hnle : ¬ (n' + m - n ≤ m) := by
+        refine not_le_of_lt ?_; rw [add_comm]
+        refine lt_of_lt_of_eq ?_ (Nat.add_sub_assoc ?_ _).symm
+        · exact Nat.lt_add_of_pos_right (tsub_pos_iff_lt.mpr hnn)
+        · exact le_of_lt hnn
+      apply hnle; refine ENat.coe_le_coe.mp ?_; simp only [ENat.coe_sub, Nat.cast_add]
+      nth_rw 2 [← hlev]; refine le_sSup ?_; simp only [Set.mem_setOf_eq]
+      obtain ⟨cn, hcn, hl'⟩ := lev_finite_exists_finchain hn'
+      let c' : FinChain (n' + m - n) Node := fun k ↦
+        if h : k.val < n' then
+          cn ⟨k.val, sorry⟩
+        else
+          c ⟨k.val - n' + n, by sorry ⟩
+          --   refine lt_trans (Nat.add_lt_add (Nat.sub_lt_sub_right ?_ k.isLt) hnn) ?_
+          --   · exact not_lt.mp h
+          --   · rw [Nat.sub_add_cancel]
+          --     · nth_rw 2 [add_comm]
+          --       refine (Nat.add_lt_add_right (Nat.sub_lt_sub_right ?_ (Nat.add_lt_add_left hnn _)) _).trans ?_
+          --       rw [Nat.sub_add_cancel]
+
+          -- ⟩
+          --   refine lt_trans ?_ ?_ (b := ((n' + m - n + 1) + n) - n')
+          --   · refine Nat.sub_lt_sub_right ?_ ?_
+          --     · refine Nat.le_add_right_of_le (not_lt.mp h)
+          -- ⟩
+      refine ⟨n' + m - n, rfl, c', ?_, ?_⟩
+      · intro k'; by_cases hk : k'.val < n'
+        · simp [c', hk]; by_cases hk' : k'.val + 1 < n' <;> simp only [hk', ↓reduceIte, c']
+          · exact hcn ⟨k', hk⟩
+          · have : k'.val + 1 = n' := by grind
+            refine (congrArg₂ _ rfl ?_).mp (hcn ⟨k', hk⟩)
+            · simp only [c']; refine (Eq.trans ?_ hl').trans ?_
+              · refine congrArg _ ?_; ext; simp only [Fin.val_last]; exact this
+              · refine congrArg _ ?_; ext; simp only; rw [this]
+                simp only [tsub_self, zero_add]
+        · have : ¬ (k' + 1 < n') := by linarith
+          simp [c', hk, this]
+          refine (congrArg₂ _ rfl ?_).mp  (hc ⟨k'.val - n' + n, ?_⟩)
+          · refine congrArg _ ?_; ext; simp only [c']
+            sorry
+          · sorry
+      · have :  ¬ (n' + m - n < n') := by sorry
+        simp only [FinChain.last, dite_eq_ite, Fin.val_last, this, ↓reduceIte, c']
+        refine congrArg _ ?_; ext; simp only [Fin.val_last]
+        sorry
+    · refine le_sSup ?_; simp only [Set.mem_setOf_eq, Nat.cast_inj, exists_eq_left']
+      refine ⟨fun k ↦ c ⟨k.val, k.isLt.trans ?_⟩, ?_, rfl⟩
+      · linarith
+      · intro k; exact hc ⟨k, k.isLt.trans hnm⟩
+  · refine succ_chain_mono c hc (Fin.val_fin_lt.mp ?_); simp only [Fin.val_last]
+    exact ENat.coe_lt_coe.mp (lt_of_lt_of_eq hlt hlev)
