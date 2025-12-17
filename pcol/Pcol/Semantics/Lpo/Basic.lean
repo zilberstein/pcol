@@ -127,7 +127,7 @@ def up_closure (ord : Rel Node Node) (X : Set Node) : Set Node :=
   { x | ∃ y ∈ X, ord y x }
 
 noncomputable def lev {a : Type} (ord : Rel a a) (x : a) : ENat :=
-  ⨆ n ∈ { n : ℕ | ∃ c : FinChain n a, ord.is_succ_chain c ∧ c.last = x }, ↑n
+  sSup { n | ∃ k : ℕ, n = ↑k ∧ ∃ c : FinChain k a, ord.is_succ_chain c ∧ c.last = x }
 
 def FinitelyPreceded {α : Type} (ord : Rel α α) : Prop :=
   ∀ x : α, { y | ord y x }.Finite
@@ -212,18 +212,18 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
         Set.setOf_false, Set.mem_empty_iff_false, not_false_eq_true]
   })
 
-lemma lev_le_prec {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
-    a.rel.lev x ≤ { y | a.rel y x }.encard := sorry
+-- lemma lev_le_prec {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
+--     a.rel.lev x ≤ { y | a.rel y x }.encard := sorry
 
-lemma fin_lev {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
-    ∃ n : ℕ, a.rel.lev x = n := by
-  have h : a.rel.lev x ≠ ⊤ := by
-    refine ne_of_lt (lt_of_le_of_lt (lev_le_prec hx) ?_)
-    refine lt_of_eq_of_lt (Set.Finite.encard_eq_coe_toFinset_card ?_) ?_
-    · exact a.property.rel.fin_prec x
-    · exact ENat.coe_lt_top _
-  rcases ENat.ne_top_iff_exists.mp h with ⟨n, hn⟩
-  exact ⟨n, hn.symm⟩
+-- lemma fin_lev {l : Type} [Bot l] {a : Lpo l} {x : Node} (hx : x ∈ a.nodes) :
+--     ∃ n : ℕ, a.rel.lev x = n := by
+--   have h : a.rel.lev x ≠ ⊤ := by
+--     refine ne_of_lt (lt_of_le_of_lt (lev_le_prec hx) ?_)
+--     refine lt_of_eq_of_lt (Set.Finite.encard_eq_coe_toFinset_card ?_) ?_
+--     · exact a.property.rel.fin_prec x
+--     · exact ENat.coe_lt_top _
+--   rcases ENat.ne_top_iff_exists.mp h with ⟨n, hn⟩
+--   exact ⟨n, hn.symm⟩
 
 end Lpo
 
@@ -264,7 +264,7 @@ lemma lev_zero {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
       simp only [Nat.reduceAdd, Fin.isValue, Fin.val_eq_zero, Fin.zero_eta, ↓reduceIte, zero_add,
         Fin.mk_one, one_ne_zero, c]; exact hzx
     have hl : c.last = x := by simp [c, FinChain.last]
-    have hzero := iSup_eq_bot.mp (iSup_eq_bot.mp hlev 1) ⟨c, hc, hl⟩
+    have hzero := sSup_eq_bot.mp hlev 1 ⟨1, rfl, c, hc, hl⟩
     exact one_ne_zero hzero
 
 lemma succ_chain_mono {l : Type} [Bot l] {α : Lpo l} {n : ℕ} (c : FinChain n Node)
@@ -292,38 +292,74 @@ lemma succ_chain_mono {l : Type} [Bot l] {α : Lpo l} {n : ℕ} (c : FinChain n 
         rw [hk]; linarith
       · simp only [i']; rw [Nat.sub_add_eq, hk, add_tsub_cancel_right]
 
+lemma succ_chain_inj {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {c : FinChain n Node}
+    (hc : α.rel.is_succ_chain c) : Function.Injective c := by
+  intro i j heq; by_contra hcn
+  refine α.property.rel.irrefl (c i) ?_
+  rcases ne_iff_lt_or_gt.mp hcn with hlt | hlt
+  all_goals {
+    have hrel := succ_chain_mono c hc hlt
+    rw [← heq] at hrel; exact hrel
+  }
+
 lemma lev_finite {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes) :
     ∃ n : ℕ, α.rel.lev x = n := by
   refine (fun hnt ↦ let ⟨n, h⟩ := ENat.ne_top_iff_exists.mp hnt; ⟨n, h.symm⟩) ?_
   obtain ⟨n, hfin⟩ := (α.property.rel.fin_prec x).exists_encard_eq_coe
   refine ne_top_of_le_ne_top (ENat.coe_ne_top n) ?_
-  refine iSup₂_le ?_; rintro k ⟨c, hc, rfl⟩;
-  have hcard : { x | ∃ k', k' < k ∧ x = c k'}.encard = ↑k := sorry
+  refine sSup_le ?_; rintro _ ⟨k, rfl, c, hc, rfl⟩;
+  have hcard : { x | ∃ k', k' < k ∧ x = c k'}.encard = ↑k := by
+    refine Eq.trans (Set.encard_congr (Equiv.trans ?_ (Equiv.Set.univ _).symm))
+      ((Set.encard_univ _).trans (ENat.card_eq_coe_fintype_card.trans (congrArg _ (Fintype.card_fin k))))
+    rw [Set.coe_setOf]
+    have h x (hx : ∃ k' < k, x = c ↑k') : ∃ (y : Fin k), c y = x := by
+      obtain ⟨k', hk', rfl⟩ := hx; exact ⟨⟨k', hk'⟩, rfl⟩
+    choose f hf using h
+    refine ⟨fun x ↦ f x.val x.property,
+            fun k' ↦ ⟨c k', k', k'.isLt, rfl⟩, ?_, ?_⟩
+    · rintro ⟨y, hy⟩; have h := hf y hy
+      simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq]
+      simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq] at h
+      exact h
+    · intro k'; simp only [Fin.coe_eq_castSucc]
+      have h := succ_chain_inj hc (hf (c k') ⟨k'.val, k'.isLt, rfl⟩)
+      simp only [Fin.coe_eq_castSucc, Fin.castSucc_inj] at h; exact h
   rw [← hfin, ← hcard]
   refine Set.encard_mono ?_; rintro x ⟨k', hk, rfl⟩
   refine succ_chain_mono c hc (Fin.mk_lt_mk.mpr ?_)
   refine lt_of_eq_of_lt (Nat.mod_succ_eq_iff_lt.mpr ?_) hk
   linarith
 
+lemma lev_finite_exists_finchain {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
+    (hlev : α.rel.lev x = n) :
+    ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.last = x := by
+  simp only [Rel.lev, Set.mem_setOf_eq] at hlev
+  have _ :
+      Nonempty
+        ↑{n : ENat | ∃ k : ℕ, n = ↑k ∧ ∃ c : FinChain k Node, α.rel.is_succ_chain c ∧ c.last = x} :=
+    ⟨0, 0, rfl, fun _ ↦ x, finZeroElim, rfl⟩
+  have hsup := ENat.sSup_mem_of_nonempty_of_lt_top (lt_of_eq_of_lt hlev (ENat.coe_lt_top _))
+  rw [hlev] at hsup ; simp only [Set.mem_setOf_eq, Nat.cast_inj, exists_eq_left'] at hsup
+  exact hsup
+
 lemma lev_mono {l : Type} [Bot l] {α : Lpo l} {x y : Node} (h : α.rel x y) :
     α.rel.lev x < α.rel.lev y := by
-  obtain ⟨hx, hy⟩ := α.property.rel_dom h
+  have hx := (α.property.rel_dom h).1
   obtain ⟨n, hlev⟩ := lev_finite hx
-  sorry
-  -- simp only [Rel.lev, Set.mem_setOf_eq] at hlev
-  -- have hne : Nonempty (∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.last = x) := sorry
-  -- obtain ⟨k, hk⟩ := ENat.exists_eq_iSup_of_lt_top (lt_of_eq_of_lt hlev (ENat.coe_lt_top _))
-  -- have hne : Nonempty (k ∈ {n | ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.last = x}) := sorry
-  -- rw [@iSup_const _ _ _ _ hne] at hk
-  -- obtain ⟨k', hk'⟩ := ENat.exists_eq_iSup_of_lt_top (lt_of_eq_of_lt hk.symm (ENat.coe_lt_top _))
-  -- have hhh : Nonempty (k' ∈ {n | ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.last = x}) := sorry
-  -- rw [@iSup_const _ _ _ _ hhh] at hk'
-  -- obtain ⟨k'', hk''⟩ := ENat.exists_eq_iSup_of_lt_top (lt_of_eq_of_lt hk'.symm (ENat.coe_lt_top _))
-
-  -- revert x; induction n with
-  -- | zero =>
-  --   intro x hxy hx hlev; rw [hlev]
-  --   refine bot_lt_iSup.mpr ⟨1, bot_lt_iSup.mpr ?_⟩
-  --   simp only [bot_eq_zero', Nat.cast_one, zero_lt_one, Set.mem_setOf_eq, exists_prop, and_true]
-  --   refine ⟨fun k ↦ if k.val = 0 then x else y, ?_, ?_⟩
-  --   · intro k
+  obtain ⟨c, hc, hl⟩ := lev_finite_exists_finchain hlev
+  let c' : FinChain (n + 1) Node := fun k ↦
+    if hk : k.val < n + 1 then c ⟨k.val, hk⟩ else y
+  rw [hlev]; refine lt_of_lt_of_le (b := ↑(n + 1)) ?_ ?_
+  · refine ENat.coe_lt_coe.mpr ?_; linarith
+  · refine le_sSup ?_
+    simp only [Nat.cast_add, Nat.cast_one, Set.mem_setOf_eq]
+    refine ⟨n + 1, rfl, c', ?_, ?_⟩
+    · intro k; by_cases hk : k.val < n <;>
+      simp only [Fin.is_lt, ↓reduceDIte, Fin.eta, add_lt_add_iff_right, hk, c']
+      · exact hc ⟨k.val, hk⟩
+      · subst hl; rcases k with ⟨k, hlt⟩
+        have : k = n := by
+          refine le_antisymm ?_ (not_lt.mp hk)
+          linarith
+        subst this; refine (congrArg₂ _ ?_ rfl).mpr h; rfl
+    · simp only [FinChain.last, Fin.val_last, lt_self_iff_false, ↓reduceDIte, c']

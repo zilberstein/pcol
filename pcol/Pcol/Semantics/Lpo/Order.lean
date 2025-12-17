@@ -160,8 +160,30 @@ lemma directed_finite_upper_bound {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·) 
     · exact hαγ
     · exact (hub _ ht).trans hβγ
 
-lemma lpo_directed_lev_eq {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty)
-    (x : Node) : ∃ n : ℕ, ∀ α ∈ d, x ∈ α.nodes → α.rel.lev x = n := sorry
+lemma lpo_directed_lev_eq {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d)
+    (x : Node) : ∃ n : ℕ, ∀ α ∈ d, x ∈ α.nodes → α.rel.lev x = n := by
+  by_cases h : ∃ α ∈ d, x ∈ α.nodes
+  · obtain ⟨α, hα, hx⟩ := h
+    obtain ⟨n, hn⟩ := lev_finite hx
+    use n; intro β hβ hx'; rw [← hn];
+    refine congrArg sSup ?_; ext _; simp only [Set.mem_setOf_eq]
+    refine exists_congr (fun k ↦ and_congr_right ?_); rintro rfl
+    refine exists_congr (fun c ↦ and_congr ?_ (Iff.refl _))
+    -- Prove the iff in one direction so that we can use h twice
+    have h {α β : Lpo l} (hα : α ∈ d) (hβ : β ∈ d)
+        (hc : β.rel.is_succ_chain c) : α.rel.is_succ_chain c := by
+      obtain ⟨γ, hγ, hαγ, hβγ⟩ := hd _ hα _ hβ
+      intro i; have hγi := le_rel hβγ (hc i)
+      obtain ⟨hi, hi₁⟩ := γ.property.rel_dom hγi
+      have hi₁' : c (i + 1) ∈ α.nodes := by sorry
+        -- by_cases hlast : i = Fin.last
+        -- ·
+      simp only [Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ] at hi₁'
+      refine (hαγ.rel _ ?_ _ hi₁').mpr hγi
+      exact hαγ.downcl _ hi₁' _ hγi
+    exact ⟨h hα hβ, h hβ hα⟩
+  · simp only [not_exists, not_and] at h; use 0
+    intro α hα hx; exfalso; exact h _ hα hx
 
 -- Lemma C.6 of CONCUR '25
 lemma lpo_directed_fin_lev {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) (n : ℕ) :
@@ -207,9 +229,13 @@ lemma lpo_directed_fin_lev {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hn
       · exact α.property.rel.fin_lev _
       · intro x ⟨hx, _⟩; simp only [Set.mem_iUnion, exists_prop]
         exact ⟨α, hα, hx⟩
-      · intro β hβ x ⟨hx, hlev⟩; constructor
-        · sorry
-        · sorry
+      · intro β hβ x ⟨hx, hlev⟩;
+        have hx' : x ∈ α.nodes := by
+          sorry
+        refine ⟨hx', ?_⟩
+        obtain ⟨k, hk⟩ := lpo_directed_lev_eq h x
+        refine (hk _ hα hx').trans ((hk _ hβ hx).symm.trans (hlev.trans ?_))
+        simp only [Nat.cast_add, Nat.cast_one]
 
 theorem lpo_sup_of_directed {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) :
   ∃ hv, sSup d = ⟨lpo_base_sup d, hv⟩ := by {
@@ -261,7 +287,8 @@ theorem lpo_sup_of_directed {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (h
         refine hfin.subset ?_; intro x ⟨hx, hlev⟩
         simp only [Set.mem_iUnion, exists_prop] at hx
         rcases hx with ⟨α, hα, hx⟩; refine hub α hα ⟨hx, ?_ ⟩
-        obtain ⟨k, hk⟩ := lpo_directed_lev_eq h hne x
+        obtain ⟨k, hk⟩ := lpo_directed_lev_eq h x
+        refine (hk _ hα hx).trans (Eq.trans ?_ hlev)
         sorry
       · rcases hne with ⟨a, ha⟩; rcases a.property.rel.single_rooted with ⟨x, hx, hroot⟩; use x
         simp only [Set.mem_iUnion, exists_prop, ne_eq, forall_exists_index, and_imp]
