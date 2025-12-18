@@ -168,20 +168,29 @@ lemma lpo_directed_lev_eq {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d)
     use n; intro β hβ hx'; rw [← hn];
     refine congrArg sSup ?_; ext _; simp only [Set.mem_setOf_eq]
     refine exists_congr (fun k ↦ and_congr_right ?_); rintro rfl
-    refine exists_congr (fun c ↦ and_congr ?_ (Iff.refl _))
+    refine exists_congr (fun c ↦ and_congr_left ?_); rintro rfl
     -- Prove the iff in one direction so that we can use h twice
     have h {α β : Lpo l} (hα : α ∈ d) (hβ : β ∈ d)
-        (hc : β.rel.is_succ_chain c) : α.rel.is_succ_chain c := by
+        (hl : c.last ∈ α.nodes) (hc : β.rel.is_succ_chain c) :
+        α.rel.is_succ_chain c := by
       obtain ⟨γ, hγ, hαγ, hβγ⟩ := hd _ hα _ hβ
       intro i; have hγi := le_rel hβγ (hc i)
       obtain ⟨hi, hi₁⟩ := γ.property.rel_dom hγi
-      have hi₁' : c (i + 1) ∈ α.nodes := by sorry
-        -- by_cases hlast : i = Fin.last
-        -- ·
+      have hi₁' : c (i + 1) ∈ α.nodes := by
+        by_cases h : i.val + 1 = k
+        · refine (congrArg₂ (· ∈ ·) ?_ rfl).mpr hl
+          refine congrArg c ?_; ext
+          simp only [Fin.val_last, Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ, Fin.val_succ]
+          exact h
+        · refine hαγ.downcl _ hl _ (succ_chain_mono c ?_ ?_)
+          · intro k'; exact le_rel hβγ (hc k')
+          · refine Fin.lt_def.mpr ?_;
+            simp only [Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ, Fin.val_succ, Fin.val_last]
+            refine (Ne.lt_of_le h (Nat.succ_le_of_lt i.isLt))
       simp only [Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ] at hi₁'
       refine (hαγ.rel _ ?_ _ hi₁').mpr hγi
       exact hαγ.downcl _ hi₁' _ hγi
-    exact ⟨h hα hβ, h hβ hα⟩
+    exact ⟨h hα hβ hx, h hβ hα hx'⟩
   · simp only [not_exists, not_and] at h; use 0
     intro α hα hx; exfalso; exact h _ hα hx
 
@@ -231,11 +240,59 @@ lemma lpo_directed_fin_lev {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hn
         exact ⟨α, hα, hx⟩
       · intro β hβ x ⟨hx, hlev⟩;
         have hx' : x ∈ α.nodes := by
-          sorry
+          obtain ⟨γ, hγ, hαγ, hβγ⟩ := h _ hα _ hβ
+          rcases hαγ.succ _ (hβγ.nodes hx) with hx' | ⟨y, ⟨hy, hbot⟩, hyx⟩
+          · exact hx'
+          · exfalso
+            have hyl : γ.rel.lev y < n + 1 := by
+              refine lt_of_lt_of_eq (lev_mono hyx) ?_
+              obtain ⟨k, hk⟩ := lpo_directed_lev_eq h x
+              refine (hk _ hγ (γ.property.rel_dom hyx).2).trans ?_
+              exact (hk _ hβ hx).symm.trans hlev
+            obtain ⟨m, hm⟩ := ENat.ne_top_iff_exists.mp (ne_of_lt (hyl.trans (ENat.coe_lt_top _)))
+            have hmn : m < n + 1 := by
+              refine ENat.coe_lt_coe.mp ?_; simp [hm, hyl]
+            have hy' : y ∈ X := by
+              simp only [Set.mem_iUnion, X]; refine ⟨⟨m, hmn⟩, ?_⟩
+              exact (hf m hmn).2.2 γ hγ ⟨(γ.property.rel_dom hyx).1, hm.symm⟩
+            rcases hg _ hy' with ⟨_, hyg, hlab | hlab⟩
+            · refine hlab (le_antisymm ?_ bot_le)
+              rw [← hbot]; refine (hub _ ?_).lab y
+              simp only [Set.image_univ, Set.mem_range, A]
+              use ⟨y, hy'⟩
+            · exact γ.property.bot y (hlab _ hγ) _ hyx
         refine ⟨hx', ?_⟩
         obtain ⟨k, hk⟩ := lpo_directed_lev_eq h x
         refine (hk _ hα hx').trans ((hk _ hβ hx).symm.trans (hlev.trans ?_))
         simp only [Nat.cast_add, Nat.cast_one]
+
+lemma is_succ_chain_directed {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d) {n : ℕ}
+    {α : Lpo l} {c : FinChain n Node}
+    (hα : α ∈ d) (hc : Rel.is_succ_chain (fun x y ↦ ∃ α ∈ d, α.rel x y) c) (hl : c.last ∈ α.nodes) :
+    α.rel.is_succ_chain c := by
+  -- Key Lemma
+  have h (j : Fin n) (hmem : c j.succ ∈ α.nodes) :
+      α.rel
+        (c ⟨j.val, Nat.lt_add_right _ j.isLt⟩)
+        (c ⟨j.val + 1, Nat.add_lt_add_right j.isLt _⟩) := by
+    obtain ⟨β, hβ, hrel⟩ := hc j
+    obtain ⟨γ, hγ, hαγ, hβγ⟩ := hd _ hα _ hβ
+    have hrel' := le_rel hβγ hrel
+    refine (hαγ.rel _ ?_ _ hmem).mpr hrel'
+    exact hαγ.downcl _ hmem _ hrel'
+  intro k; generalize hi : n - (k.val + 1) = i; revert k; induction i with
+  | zero =>
+    intro k hk; refine h k ?_
+    refine (congrArg₂ Membership.mem rfl (congrArg _ ?_)).mp hl
+    ext; simp only [Fin.val_last, Fin.val_succ]
+    refine le_antisymm ?_ ?_
+    · exact Nat.le_of_sub_eq_zero hk
+    · exact Nat.succ_le_of_lt k.isLt
+  | succ i ih =>
+    intro k hk; refine h _ ?_
+    refine (α.property.rel_dom (ih ⟨k.val + 1, ?_⟩ ?_)).1
+    · refine Nat.lt_of_sub_pos (Nat.lt_of_succ_le ?_); linarith
+    · simp only; rw [Nat.sub_add_eq, hk, add_tsub_cancel_right]
 
 theorem lpo_sup_of_directed {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (hne : d.Nonempty) :
   ∃ hv, sSup d = ⟨lpo_base_sup d, hv⟩ := by {
@@ -289,7 +346,14 @@ theorem lpo_sup_of_directed {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·)  d) (h
         rcases hx with ⟨α, hα, hx⟩; refine hub α hα ⟨hx, ?_ ⟩
         obtain ⟨k, hk⟩ := lpo_directed_lev_eq h x
         refine (hk _ hα hx).trans (Eq.trans ?_ hlev)
-        sorry
+        refine le_antisymm (le_sSup ?_) (sSup_le ?_)
+        · simp only [Set.mem_setOf_eq, Nat.cast_inj, exists_eq_left']
+          obtain ⟨c, hc, hl⟩ := lev_finite_exists_finchain (hk _ hα hx)
+          exact ⟨c, fun k' ↦ ⟨α, hα, hc k'⟩, hl⟩
+        · rintro _ ⟨m, rfl, c, hc, hl⟩
+          have hc' := is_succ_chain_directed h hα hc ((congrArg₂ Membership.mem rfl hl).mpr hx)
+          rw [← hk _ hα hx]; refine le_sSup ?_
+          exact ⟨m, rfl, c, hc', hl⟩
       · rcases hne with ⟨a, ha⟩; rcases a.property.rel.single_rooted with ⟨x, hx, hroot⟩; use x
         simp only [Set.mem_iUnion, exists_prop, ne_eq, forall_exists_index, and_imp]
         refine ⟨⟨a, ha, hx⟩, ?_⟩
