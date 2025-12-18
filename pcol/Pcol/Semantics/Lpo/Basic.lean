@@ -351,6 +351,8 @@ lemma lev_mono {l : Type} [Bot l] {α : Lpo l} {x y : Node} (h : α.rel x y) :
         subst this; refine (congrArg₂ _ ?_ rfl).mpr h; rfl
     · simp only [FinChain.last, Fin.val_last, lt_self_iff_false, ↓reduceDIte, c']
 
+-- I actually don't think this lemma is needed
+-- The proof is almost done, except for some annoying arithmetic with Nats
 lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
    (hx : x ∈ α.nodes) (hlt : n < α.rel.lev x) : ∃ y, α.rel.lev y = n ∧ α.rel y x := by
   obtain ⟨m, hlev⟩ := lev_finite hx
@@ -376,7 +378,7 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
       obtain ⟨cn, hcn, hl'⟩ := lev_finite_exists_finchain hn'
       let c' : FinChain (n' + m - n) Node := fun k ↦
         if h : k.val < n' then
-          cn ⟨k.val, sorry⟩
+          cn ⟨k.val, by linarith⟩
         else
           c ⟨k.val - n' + n, by sorry ⟩
           --   refine lt_trans (Nat.add_lt_add (Nat.sub_lt_sub_right ?_ k.isLt) hnn) ?_
@@ -408,7 +410,7 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
             sorry
           · sorry
       · have :  ¬ (n' + m - n < n') := by sorry
-        simp only [FinChain.last, dite_eq_ite, Fin.val_last, this, ↓reduceIte, c']
+        simp [FinChain.last, dite_eq_ite, Fin.val_last, this, ↓reduceIte, c']
         refine congrArg _ ?_; ext; simp only [Fin.val_last]
         sorry
     · refine le_sSup ?_; simp only [Set.mem_setOf_eq, Nat.cast_inj, exists_eq_left']
