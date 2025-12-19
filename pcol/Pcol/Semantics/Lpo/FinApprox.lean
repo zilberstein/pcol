@@ -133,28 +133,25 @@ lemma trunc_equiv {l : Type} [Bot l] {a b : Lpo l} {n : ℕ}
 }
 
 lemma trunc_le {l : Type} [Preorder l] [OrderBot l] {a : Lpo l} {n : ℕ} :
-  a.trunc n ≤ a := by {
-  constructor <;> simp [Lpo.trunc, Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
-  · intro x hx y hyx; simp at *
-    --Need a lemma that if lev x ≤ n and y < x, then lev y ≤ n
-    exact ⟨(a.property.rel_dom hyx).1, sorry⟩
+  a.trunc n ≤ a := by
+  constructor <;> simp [Lpo.trunc, Lpo.trunc_base, Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
+  · intro x hx y hyx; simp only [Set.mem_setOf_eq] at *
+    refine ⟨(a.property.rel_dom hyx).1, ?_⟩
+    exact (le_of_lt (lev_mono hyx)).trans hx.2
   · intro _ _ hxl _ _ hyl _; exact ⟨hxl, hyl⟩
   · intro x; by_cases hx : a.rel.lev x < n <;>
       unfold Lpo.rel at hx <;> simp [hx, bot_le]
   · intro _ _ h₁ h₂; exfalso; exact not_le_of_gt h₂ h₁
-  · sorry
-}
-
-lemma lev_isotone {l : Type} [Bot l] [LE l] {a b : Lpo l} {x : Node}
-    (h : a ≤ b) : a.rel.lev x = b.rel.lev x := by
-  sorry
+  · intro x hx; by_cases hlev : a.rel.lev x ≤ n
+    · left; exact ⟨hx, hlev⟩
+    · right; sorry
 
 lemma trunc_mono {l : Type} [Bot l] [LE l] {a b : Lpo l} {n m : ℕ}
     (hab : a ≤ b) (hnm : n ≤ m) : a.trunc n ≤ b.trunc m := by
-  constructor
-  · simp [trunc, Lpo.nodes]; intro x hx hlev
+  constructor <;> simp only [Lpo.trunc, Lpo.trunc_base, Lpo.nodes]
+  · intro x ⟨hx, hlev⟩
     refine ⟨hab.nodes hx, ?_⟩
-    rw [← lev_isotone hab]; exact hlev.trans (Nat.cast_le.mpr hnm)
+    rw [← lev_isotone hab hx]; exact hlev.trans (Nat.cast_le.mpr hnm)
   · intro x hx y hy; sorry
   · sorry
   · sorry
@@ -181,7 +178,7 @@ lemma trunc_of_bounded {l : Type} [Bot l] {α : Lpo l} {n : ℕ}
     (hb : ∀ x ∈ α.nodes, α.rel.lev x < n) : (α.trunc n).val = α := by
   have hb' {x} (hx : x ∈ α.nodes) : α.rel.lev x ≤ n := le_of_lt (hb _ hx)
   ext x y <;>
-    simp only [trunc, nodes, rel, lab, form] <;>
+    simp only [trunc,trunc_base, nodes, rel, lab, form] <;>
     try (refine and_iff_left_iff_imp.mpr ?_)
   · exact hb'
   · intro hxy; obtain ⟨hx, hy⟩ := α.property.rel_dom hxy
@@ -246,7 +243,7 @@ theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {
         refine ⟨α.trunc (n + 1), ⟨trunc_le, (α.trunc (n + 1)).property⟩, ?_⟩
         have hn : α.rel.lev x < ↑(n + 1) :=
           lt_of_eq_of_lt hlev (ENat.coe_lt_coe.mpr (Nat.lt_succ_self _))
-        simp only [trunc, lab, hn, ↓reduceIte]
+        simp only [trunc, trunc_base, lab, hn, ↓reduceIte]
       · refine le_of_eq_of_le (α.property.lab_dom _ hx) bot_le
     · refine hd.sSup_le ?_
       rintro _ ⟨β, ⟨hle, _⟩, rfl⟩; exact hle.lab x
@@ -255,7 +252,7 @@ theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {
       have hx : x ∈ α.nodes := (α.property.form_dom x).mp ⟨y, hform⟩
       obtain ⟨n, hlev⟩ := lev_finite hx
       refine ⟨α.trunc n, ⟨trunc_le, (α.trunc n).property⟩, ?_⟩
-      simp only [trunc, form, le_of_eq hlev, ↓reduceIte]; exact hform
+      simp only [trunc, trunc_base, form, le_of_eq hlev, ↓reduceIte]; exact hform
     · intro ⟨β, ⟨hle, _⟩, hform⟩; exact le_form hle _ hform
 
 end Lpo

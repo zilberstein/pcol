@@ -160,37 +160,32 @@ lemma directed_finite_upper_bound {d : Set (Lpo l)} (h : DirectedOn (· ≤ ·) 
     · exact hαγ
     · exact (hub _ ht).trans hβγ
 
+lemma lev_isotone {l : Type} [Bot l] [LE l] {a b : Lpo l} {x : Node}
+    (hle : a ≤ b) (hx : x ∈ a.nodes) : a.rel.lev x = b.rel.lev x := by
+    refine congrArg sSup ?_; ext _; simp only [Set.mem_setOf_eq]
+    refine exists_congr (fun n ↦ and_congr_right ?_); rintro rfl
+    refine exists_congr (fun c ↦ and_congr_left ?_); rintro rfl
+    constructor
+    · intro hc k; exact le_rel hle (hc k)
+    · intro hc k; refine (hle.rel _ ?_ _ ?_).mpr (hc k)
+      · refine hle.downcl _ hx _ ?_; refine succ_chain_mono _ hc ?_
+        exact Fin.lt_def.mpr k.isLt
+      · by_cases heq : k.succ = Fin.last n
+        · refine (congrArg₂ Membership.mem rfl (congrArg _ heq)).mpr hx
+        · refine hle.downcl _ hx _ ?_; refine succ_chain_mono _ hc ?_
+          refine Fin.lt_def.mpr ?_; simp only [Fin.val_last]
+          refine lt_of_le_of_ne (Nat.succ_le_of_lt k.isLt) ?_
+          exact (Fin.val_eq_val _ _).mp.mt heq
+
 lemma lpo_directed_lev_eq {d : Set (Lpo l)} (hd : DirectedOn (· ≤ ·)  d)
     (x : Node) : ∃ n : ℕ, ∀ α ∈ d, x ∈ α.nodes → α.rel.lev x = n := by
   by_cases h : ∃ α ∈ d, x ∈ α.nodes
   · obtain ⟨α, hα, hx⟩ := h
     obtain ⟨n, hn⟩ := lev_finite hx
-    use n; intro β hβ hx'; rw [← hn];
-    refine congrArg sSup ?_; ext _; simp only [Set.mem_setOf_eq]
-    refine exists_congr (fun k ↦ and_congr_right ?_); rintro rfl
-    refine exists_congr (fun c ↦ and_congr_left ?_); rintro rfl
-    -- Prove the iff in one direction so that we can use h twice
-    have h {α β : Lpo l} (hα : α ∈ d) (hβ : β ∈ d)
-        (hl : c.last ∈ α.nodes) (hc : β.rel.is_succ_chain c) :
-        α.rel.is_succ_chain c := by
-      obtain ⟨γ, hγ, hαγ, hβγ⟩ := hd _ hα _ hβ
-      intro i; have hγi := le_rel hβγ (hc i)
-      obtain ⟨hi, hi₁⟩ := γ.property.rel_dom hγi
-      have hi₁' : c (i + 1) ∈ α.nodes := by
-        by_cases h : i.val + 1 = k
-        · refine (congrArg₂ (· ∈ ·) ?_ rfl).mpr hl
-          refine congrArg c ?_; ext
-          simp only [Fin.val_last, Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ, Fin.val_succ]
-          exact h
-        · refine hαγ.downcl _ hl _ (succ_chain_mono c ?_ ?_)
-          · intro k'; exact le_rel hβγ (hc k')
-          · refine Fin.lt_def.mpr ?_;
-            simp only [Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ, Fin.val_succ, Fin.val_last]
-            refine (Ne.lt_of_le h (Nat.succ_le_of_lt i.isLt))
-      simp only [Fin.coe_eq_castSucc, Fin.coeSucc_eq_succ] at hi₁'
-      refine (hαγ.rel _ ?_ _ hi₁').mpr hγi
-      exact hαγ.downcl _ hi₁' _ hγi
-    exact ⟨h hα hβ hx, h hβ hα hx'⟩
+    use n; intro β hβ hx'; rw [← hn]
+    obtain ⟨γ, hγ, hαγ, hβγ⟩ := hd _ hα _ hβ
+    refine (lev_isotone hβγ hx').trans ?_
+    exact (lev_isotone hαγ hx).symm
   · simp only [not_exists, not_and] at h; use 0
     intro α hα hx; exfalso; exact h _ hα hx
 
