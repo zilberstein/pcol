@@ -128,8 +128,35 @@ noncomputable def trunc {l : Type} [Bot l] (a : Lpo l) (n : ℕ) : Lpofin l :=
 lemma trunc_equiv {l : Type} [Bot l] {a b : Lpo l} {n : ℕ}
   (heq : a ≈ b) : trunc a n ≈ trunc b n := by {
   obtain ⟨e, h⟩ := heq; refine ⟨e, ?_⟩
-  sorry
-  --refine ⟨e, ?_⟩
+  obtain ⟨hnode, hrel, hlab, hform⟩ := lpo_eq_iff.mp h
+  clear h
+  simp only [nodes, permute, rel, lab, form, trunc, trunc_base] at *
+  have hlev : ∀ x, a.val.rel.lev (e.symm x) = b.val.rel.lev x := by
+    intro x; refine congrArg sSup ?_; ext _; simp only [Set.mem_setOf_eq]
+    refine exists_congr fun k ↦ and_congr_right ?_; rintro rfl
+    constructor
+    · intro ⟨c, hc, hl⟩
+      refine ⟨fun i ↦ e (c i), ?_, ?_⟩
+      · intro i; rw [← hrel]; simp only [Equiv.symm_apply_apply, hc i]
+      · simp only [FinChain.last] at *; rw [hl]; exact Equiv.apply_symm_apply _ _
+    · rintro ⟨c, hc, rfl⟩
+      refine ⟨fun i ↦ e.symm (c i), ?_, ?_⟩
+      · intro i; exact (congrFun₂ hrel _ _).mpr (hc i)
+      · simp only [FinChain.last]
+
+  ext x y
+  · simp only [nodes, Set.mem_image_equiv, Set.mem_setOf_eq]
+    refine and_congr ?_ ?_
+    · rw [← hnode]; exact Set.mem_image_equiv.symm
+    · rw [hlev]
+  · simp only [rel]; refine and_congr ?_ ?_
+    · rw [← hrel]
+    · refine and_congr ?_ ?_ <;> rw [hlev]
+  · simp only [lab]; rw [hlev, ← hlab]
+  · simp only [form]; rw [hlev]
+    by_cases h : b.val.rel.lev x ≤ n <;> simp only [h, ↓reduceIte]
+    · rw [← hform]
+    · exact Iff.refl _
 }
 
 lemma trunc_le {l : Type} [Preorder l] [OrderBot l] (a : Lpo l) (n : ℕ) :
