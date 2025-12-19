@@ -127,12 +127,12 @@ noncomputable def trunc {l : Type} [Bot l] (a : Lpo l) (n : ℕ) : Lpofin l :=
 
 lemma trunc_equiv {l : Type} [Bot l] {a b : Lpo l} {n : ℕ}
   (heq : a ≈ b) : trunc a n ≈ trunc b n := by {
-  rcases heq with ⟨e, h⟩
+  obtain ⟨e, h⟩ := heq; refine ⟨e, ?_⟩
   sorry
   --refine ⟨e, ?_⟩
 }
 
-lemma trunc_le {l : Type} [Preorder l] [OrderBot l] {a : Lpo l} {n : ℕ} :
+lemma trunc_le {l : Type} [Preorder l] [OrderBot l] (a : Lpo l) (n : ℕ) :
   a.trunc n ≤ a := by
   constructor <;> simp [Lpo.trunc, Lpo.trunc_base, Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
   · intro x hx y hyx; simp only [Set.mem_setOf_eq] at *
@@ -144,19 +144,67 @@ lemma trunc_le {l : Type} [Preorder l] [OrderBot l] {a : Lpo l} {n : ℕ} :
   · intro _ _ h₁ h₂; exfalso; exact not_le_of_gt h₂ h₁
   · intro x hx; by_cases hlev : a.rel.lev x ≤ n
     · left; exact ⟨hx, hlev⟩
-    · right; sorry
+    · right
+      obtain ⟨z, hz, hzx⟩ := exists_node_lt_lev hx (lt_of_not_le hlev)
+      simp only [bots, nodes, Set.mem_setOf_eq, lab, ite_eq_right_iff]
+      refine ⟨z, ⟨⟨?_, ?_⟩, ?_⟩, hzx⟩
+      · exact (a.property.rel_dom hzx).1
+      · exact le_of_eq hz
+      · intro hc; exfalso; refine ne_of_lt hc hz
 
-lemma trunc_mono {l : Type} [Bot l] [LE l] {a b : Lpo l} {n m : ℕ}
+lemma trunc_mono {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {n m : ℕ}
     (hab : a ≤ b) (hnm : n ≤ m) : a.trunc n ≤ b.trunc m := by
-  constructor <;> simp only [Lpo.trunc, Lpo.trunc_base, Lpo.nodes]
+  constructor <;>
+  simp only [Lpo.trunc, Lpo.trunc_base, Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
   · intro x ⟨hx, hlev⟩
     refine ⟨hab.nodes hx, ?_⟩
-    rw [← lev_isotone hab hx]; exact hlev.trans (Nat.cast_le.mpr hnm)
-  · intro x hx y hy; sorry
-  · sorry
-  · sorry
-  · sorry
-  · sorry
+    exact le_of_eq_of_le (lev_isotone hab hx).symm (hlev.trans (Nat.cast_le.mpr hnm))
+  · intro x ⟨hx, hlx⟩ y ⟨hyx, hly, hh⟩
+    have hy := hab.downcl _ hx _ hyx
+    refine ⟨hy, ?_⟩
+    refine le_trans (le_of_lt (lev_mono ?_)) hlx
+    exact (hab.rel _ hy _ hx).mpr hyx
+  · intro x ⟨hx, hlx⟩ y ⟨hy, hly⟩
+    refine congrArg₂ And ?_ (congrArg₂ And ?_ ?_)
+    · exact hab.rel _ hx _ hy
+    · simp only [hlx, eq_iff_iff, true_iff]
+      refine le_of_eq_of_le (lev_isotone hab hx).symm ?_
+      exact hlx.trans (ENat.coe_le_coe.mpr hnm)
+    · simp only [hly, eq_iff_iff, true_iff]
+      refine le_of_eq_of_le (lev_isotone hab hy).symm ?_
+      exact hly.trans (ENat.coe_le_coe.mpr hnm)
+  · intro x; by_cases hx : x ∈ a.nodes
+    · by_cases h : a.val.rel.lev x < n <;>
+       simp only [h, ↓reduceIte]
+      · have hb : b.val.rel.lev x < m := by
+          refine lt_of_eq_of_lt (lev_isotone hab hx).symm ?_
+          exact lt_of_lt_of_le h (ENat.coe_le_coe.mpr hnm)
+        simp only [hb, ↓reduceIte, ge_iff_le]
+        exact hab.lab x
+      · exact bot_le
+    · rw [a.property.lab_dom _ hx]; simp only [ite_self, bot_le]
+  · intro x ⟨hx, hlev⟩
+    have hlev' : b.val.rel.lev x ≤ m := by
+      refine le_of_eq_of_le (lev_isotone hab hx).symm ?_
+      exact hlev.trans (ENat.coe_le_coe.mpr hnm)
+    simp only [hlev, ↓reduceIte, hlev']
+    exact hab.form _ hx
+  · intro x ⟨hx, hlev⟩
+    rcases hab.succ x hx with hx | ⟨z, hz, hzx⟩
+    · rcases (trunc_le a n).succ x hx with hx' | ⟨w, hw, hwx⟩
+      · left; exact hx'
+      · right; refine ⟨w, hw, ?_⟩
+        refine ⟨le_rel hab hwx, ?_, hlev⟩
+        have hw' : w ∈ b.nodes :=
+          hab.nodes ((trunc_le a n).nodes hw.1)
+        exact (le_of_lt (lev_mono (le_rel hab hwx))).trans hlev
+    · right; rcases (trunc_le a n).succ z hz.1 with hz' | ⟨w, hw, hwz⟩
+      · refine ⟨z, ⟨hz', ?_⟩, hzx, ?_, hlev⟩
+        · exact eq_bot_iff.mpr (le_of_le_of_eq ((trunc_le a n).lab z) hz.2)
+        · exact (le_of_lt (lev_mono hzx)).trans hlev
+      · have hwx := b.property.rel.trans (le_rel hab hwz) hzx
+        refine ⟨w, hw, hwx, ?_, hlev⟩
+        exact (le_of_lt (lev_mono hwx)).trans hlev
 
 lemma lpofin_level_bounded {l : Type} [Bot l] (α : Lpofin l) :
     exists n : ℕ, ∀ x ∈ α.nodes, α.rel.lev x ≤ n := by
@@ -205,7 +253,7 @@ lemma finapprox_directed {l : Type} [CompletePartialOrder l] [OrderBot l] (α : 
     · intro x hx; refine (hm _ hx).trans ?_
       exact ENat.coe_le_coe.mpr (le_max_right _ _)
   -- Choose the upper bound the be α truncated to the n+1 level
-  refine ⟨(α.trunc (n + 1)).val, ⟨trunc_le, ?_⟩, ?_, ?_⟩
+  refine ⟨(α.trunc (n + 1)).val, ⟨trunc_le _ _, ?_⟩, ?_, ?_⟩
   · exact (α.trunc (n+1)).property
   · refine le_of_eq_of_le (trunc_of_bounded ?_).symm (trunc_mono hle (le_refl _))
     intro x hx; refine lt_of_le_of_lt (hn _ hx) (ENat.coe_lt_coe.mpr (Nat.lt_succ_self _))
@@ -215,24 +263,24 @@ lemma finapprox_directed {l : Type} [CompletePartialOrder l] [OrderBot l] (α : 
 theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {α : Lpo l} :
     α = sSup { β | β ≤ α ∧ β.nodes.Finite } := by
   have hne : {β | β ≤ α ∧ β.nodes.Finite}.Nonempty :=
-    ⟨α.trunc 0, trunc_le, (α.trunc 0 ).property⟩
+    ⟨α.trunc 0, trunc_le _ _, (α.trunc 0 ).property⟩
   obtain ⟨_, heq⟩ := lpo_sup_of_directed (finapprox_directed α) hne
   refine Eq.trans ?_ heq.symm; unfold lpo_base_sup; ext x y
   · simp only [nodes, Set.mem_setOf_eq, Set.mem_iUnion, exists_prop]
     constructor
     · intro hx; obtain ⟨n, hlev⟩ := lev_finite hx
-      refine ⟨α.trunc n, ⟨trunc_le, (α.trunc n).property⟩, ?_⟩
+      refine ⟨α.trunc n, ⟨trunc_le _ _, (α.trunc n).property⟩, ?_⟩
       simp only [nodes, trunc, Set.mem_setOf_eq]
       exact ⟨hx, le_of_eq hlev⟩
     · intro ⟨β, ⟨hle, _⟩, hx⟩; exact hle.nodes hx
   · simp only [rel, Set.mem_setOf_eq]; constructor
     · intro hxy; obtain ⟨n, hlev⟩ := lev_finite (α.property.rel_dom hxy).2
-      refine ⟨α.trunc n, ⟨trunc_le, (α.trunc n).property⟩, ?_⟩
+      refine ⟨α.trunc n, ⟨trunc_le _ _, (α.trunc n).property⟩, ?_⟩
       have hy : y ∈ (α.trunc n).nodes := by
         simp only [nodes, Lpofin.nodes, trunc, Set.mem_setOf_eq]
         exact ⟨(α.property.rel_dom hxy).2, le_of_eq hlev⟩
-      refine (trunc_le.rel _ ?_ _ hy).mpr hxy
-      exact trunc_le.downcl _ hy _ hxy
+      refine ((trunc_le _ _).rel _ ?_ _ hy).mpr hxy
+      exact (trunc_le _ _).downcl _ hy _ hxy
     · intro ⟨β, ⟨hle, _⟩, hxy⟩; exact le_rel hle hxy
   · simp only [lab, Set.mem_setOf_eq]
     have hd := lpo_lab_directed (finapprox_directed α) x
@@ -240,7 +288,7 @@ theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {
     · by_cases hx : x ∈ α.nodes
       · refine hd.le_sSup (Set.mem_setOf_eq.mpr ?_)
         obtain ⟨n, hlev⟩ := lev_finite hx
-        refine ⟨α.trunc (n + 1), ⟨trunc_le, (α.trunc (n + 1)).property⟩, ?_⟩
+        refine ⟨α.trunc (n + 1), ⟨trunc_le _ _, (α.trunc (n + 1)).property⟩, ?_⟩
         have hn : α.rel.lev x < ↑(n + 1) :=
           lt_of_eq_of_lt hlev (ENat.coe_lt_coe.mpr (Nat.lt_succ_self _))
         simp only [trunc, trunc_base, lab, hn, ↓reduceIte]
@@ -251,7 +299,7 @@ theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {
     · intro hform
       have hx : x ∈ α.nodes := (α.property.form_dom x).mp ⟨y, hform⟩
       obtain ⟨n, hlev⟩ := lev_finite hx
-      refine ⟨α.trunc n, ⟨trunc_le, (α.trunc n).property⟩, ?_⟩
+      refine ⟨α.trunc n, ⟨trunc_le _ _, (α.trunc n).property⟩, ?_⟩
       simp only [trunc, trunc_base, form, le_of_eq hlev, ↓reduceIte]; exact hform
     · intro ⟨β, ⟨hle, _⟩, hform⟩; exact le_form hle _ hform
 
