@@ -31,6 +31,7 @@ variable {α : Type}
 def true : Form α := fun _ => True
 def false: Form α := fun _ => False
 def and (p : Form α) (q : Form α) : Form α := fun v => p v ∧ q v
+def or (p : Form α) (q : Form α) : Form α := fun v => p v ∨ q v
 def not (p : Form α) : Form α := fun v => ¬(p v)
 def literal (x : α) : Form α := fun v => x ∈ v
 
@@ -80,6 +81,13 @@ lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
       · intro y hy; by_cases hxy : x = y <;> simp only [Membership.mem, hxy, Set.Mem, ↓reduceIte]
         · subst hxy; exact not_iff.mp hv
         · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
+
+lemma sat_if_vars_nonempty {p : Form Node} (h : p.vars.Nonempty) : p.sat := by
+  simp only [vars, free, not_forall] at h
+  obtain ⟨x, v, hform⟩ := h
+  by_cases h : p v
+  · exact ⟨v, h⟩
+  · exact ⟨_, (not_iff.mp hform).mp h⟩
 
 end Form
 
@@ -232,6 +240,17 @@ lemma lpo_eq_iff {l : Type} [Bot l] {a b : Lpo l} :
   · intro ⟨heq, hrel, hlab, hform⟩; exact lpo_ext heq hrel hlab hform
 }
 
+lemma form_eq_false {l : Type} [Bot l] {α : Lpo l} {x : Node} :
+    x ∉ α.nodes ↔ α.form x = Form.false := by
+  constructor
+  · intro hx; ext v; refine ⟨?_, False.elim⟩
+    intro hform; have h := (α.property.form_dom _).mp.mt hx
+    simp only [Form.sat, not_exists] at h
+    exact h _ hform
+  · intro hform; refine (α.property.form_dom x).mpr.mt ?_
+    unfold Lpo.form at hform; rw [hform]
+    simp only [Form.sat, Form.false, exists_const, not_false_eq_true]
+
 lemma lev_zero {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
     (hlev : α.rel.lev x = 0) (y : Node) (hy : y ∈ α.nodes) (hneq : x ≠ y) :
     α.rel x y := by
@@ -283,6 +302,20 @@ lemma succ_chain_inj {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {c : FinChain n N
     have hrel := succ_chain_mono c hc hlt
     rw [← heq] at hrel; exact hrel
   }
+
+lemma lev_root {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
+    (hroot : ∀ y ∈ α.nodes, x ≠ y → α.rel x y) :
+    α.rel.lev x = 0 := by
+  refine eq_bot_iff.mpr (sSup_le ?_)
+  rintro _ ⟨k, rfl, c, hc, rfl⟩; simp only [bot_eq_zero', nonpos_iff_eq_zero, Nat.cast_eq_zero]
+  by_contra h
+  apply bot_lt_iff_ne_bot.mpr at h
+  have hne : ⟨0, by linarith⟩ < Fin.last k := Fin.lt_def.mpr h
+  have hle := succ_chain_mono c hc hne
+  have h0 := (α.property.rel_dom hle).1
+  have hne' := (succ_chain_inj hc).ne (ne_of_lt hne)
+  refine hne' (α.property.rel.antisymm hle ?_)
+  exact hroot _ h0 (Ne.symm hne')
 
 lemma lev_finite {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes) :
     ∃ n : ℕ, α.rel.lev x = n := by
