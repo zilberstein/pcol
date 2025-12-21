@@ -1,5 +1,6 @@
 import Init.Prelude
-import Mathlib
+import Mathlib.Order.CompletePartialOrder
+
 import Pcol.Dist
 
 open ENNReal

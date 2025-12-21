@@ -1,4 +1,3 @@
-import Mathlib
 import Pcol.ConvexPowerset
 import Pcol.Dist
 
@@ -30,7 +29,7 @@ lemma c_bind_nonempty {α β : Type} {s : C α} {k : α → C β} :
   intro x hx; unfold g at hf; exact Set.mem_pi.1 hf x hx
 
 -- Lemma B.1 from. POPL '25
-lemma countably_convex {ι α : Type} {s : C α} {ξ : PMF ι} {f : ι → Distr α}
+lemma countably_convex' {ι α : Type} {s : C α} {ξ : PMF ι} {f : ι → Distr α}
     (h : ∀ i ∈ ξ.support, f i ∈ s) : PMF.bind ξ f ∈ s := by sorry
 
 namespace Distr
@@ -163,22 +162,22 @@ lemma c_bind_upcl {α β : Type} {s : C α} {k : α → C β} :
         refine ENNReal.summable.hasSum_iff.mpr ?_
         rw [tsum_sum ENNReal.summable ENNReal.summable]; simp
         rw [tsum_add ENNReal.summable ENNReal.summable, ENNReal.tsum_mul_left]
-        unfold Δ
-        rw [prob_not_bot, add_assoc, ← mul_add]
-        rw [add_comm (tsum _)]
-        have hub : ∑' (y : β), (ν₂ ↑y - (μ.bind f) ↑y) / (μ.bind f) ⊥ ≤ 1 := by
-          rw [tsum_congr fun _ ↦ div_eq_mul_inv _ _, ENNReal.tsum_mul_right,
-              tsum_sub' _ hle]
-          · refine (ENNReal.mul_inv_le_iff h0 prob_not_top).mpr ?_
-            rw [prob_not_bot, prob_not_bot, one_mul]
-            exact tsub_tsub_tsub_le_tsub.trans tsub_le_self
-          · refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
-            rw [prob_not_bot]; exact tsub_le_self
-        have hnt := ne_top_of_le_ne_top ENNReal.one_ne_top hub
-        rw [ENNReal.sub_add_eq_add_sub hub hnt,
-            ENNReal.add_sub_cancel_right hnt]; simp
-        rw [ENNReal.sub_add_eq_add_sub (distr_upper_bound _ _) prob_not_top,
-            ENNReal.add_sub_cancel_right prob_not_top]
+        unfold Δ ; sorry
+        -- rw [prob_not_bot, add_assoc, ← mul_add]
+        -- rw [add_comm (tsum _)]
+        -- have hub : ∑' (y : β), (ν₂ ↑y - (μ.bind f) ↑y) / (μ.bind f) ⊥ ≤ 1 := by
+        --   rw [tsum_congr fun _ ↦ div_eq_mul_inv _ _, ENNReal.tsum_mul_right,
+        --       tsum_sub' _ hle]
+        --   · refine (ENNReal.mul_inv_le_iff h0 prob_not_top).mpr ?_
+        --     rw [prob_not_bot, prob_not_bot, one_mul]
+        --     exact tsub_tsub_tsub_le_tsub.trans tsub_le_self
+        --   · refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
+        --     rw [prob_not_bot]; exact tsub_le_self
+        -- have hnt := ne_top_of_le_ne_top ENNReal.one_ne_top hub
+        -- rw [ENNReal.sub_add_eq_add_sub hub hnt,
+        --     ENNReal.add_sub_cancel_right hnt]; simp
+        -- rw [ENNReal.sub_add_eq_add_sub (distr_upper_bound _ _) prob_not_top,
+        --     ENNReal.add_sub_cancel_right prob_not_top]
       ⟩
     refine ⟨g, ⟨μ, hμ, g, ?_, rfl⟩, ?_⟩
     · intro x hx; cases x with
@@ -330,7 +329,7 @@ lemma bind_assoc_convex {α β γ : Type} {μ : Distr α} {ν : WithBot α → D
   refine ⟨fun y ↦ PMF.bind (ξ' y) fun x ↦ ξ x y, ?_, ?_⟩
   · intro y; simp; intro x hx hy
     have hy' : y ∈ (μ.bind ν).support := by simp; exact ⟨x, hx, hy⟩
-    refine countably_convex ?_
+    refine countably_convex' ?_
     intro x'; rw [hξ' y hy']; unfold f; unfold p; intro hp
     refine h x' ?_ y ?_
     · intro hxx; apply hp; simp [DFunLike.coe]; left; left; exact hxx
