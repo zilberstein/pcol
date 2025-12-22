@@ -3,135 +3,17 @@ import Mathlib.Data.Finset.Lattice.Basic
 import Pcol.ConvexPowerset
 import Pcol.ConvexPowerset.Monad
 
+import Pcol.Logic.Invariant
+import Pcol.Logic.MinProb
 import Pcol.Semantics.Lpo.Linearization
 import Pcol.Semantics.Lpo.Operations.Par
 
 open Classical
 
--- Some preliminary stuff that really belongs elsewhere
-
-def Var := Nat
-instance : DecidableEq Var := instDecidableEqNat
-
-def Val := Nat
-def Mem (v : Finset Var) := ↑v → Val
-
-@[ext]
-theorem mem_ext {u : Finset Var} {σ τ : Mem u} (h : ∀ x, σ x = τ x) : σ = τ := funext h
-
-namespace Mem
-
-noncomputable def union {u u₁ u₂ : Finset Var} (σ : Mem u₁) (τ : Mem u₂)
-  (hu : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) : Mem u :=
-  fun x ↦
-    if h : x.val ∈ u₁ then
-      σ ⟨x.val, h⟩
-    else
-      τ ⟨x.val, by
-        obtain ⟨x, hx⟩ := x; rw [hu.2] at hx
-        rcases Finset.mem_union.mp hx with hx | hx
-        · exfalso; exact h hx
-        · exact hx
-      ⟩
-def emp : Mem ∅ := fun x ↦ False.elim (Finset.not_mem_empty _ x.property)
-
-def castMem {u v : Finset Var} (σ : Mem u) (h : u = v) : Mem v :=
-  cast (congrArg _ h) σ
-
-noncomputable def sep {u u₁ u₂ : Finset Var} (A : Set (Mem u₁)) (B : Set (Mem u₂))
-    (hu : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) :
-    Set (Mem u) :=
-  ⋃ σ ∈ A, ⋃ τ ∈ B, { σ.union τ hu }
-
-lemma sep_emp {u : Finset Var} (σ : Mem u) :
-    σ.union emp ⟨Finset.disjoint_empty_right _, (Finset.union_empty _).symm⟩ = σ := by sorry
-
-def proj {u v : Finset Var} (σ : Mem u) (h : v ⊆ u) : Mem v :=
-  fun x ↦ σ ⟨x.val, h x.property⟩
-
-lemma union_mem {u u₁ u₂ : Finset Var} {σ : Mem u₁} {τ : Mem u₂} {A : Set (Mem u₁)} {B : Set (Mem u₂)}
-    (h : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) :
-    σ.union τ h ∈ Mem.sep A B h ↔ σ ∈ A ∧ τ ∈ B := by
-  sorry
-
-end Mem
-
-noncomputable def prob {α : Type} (μ : Distr α) (A : Set α) : ENNReal :=
-  ∑' x : ↑A, μ x
-
-noncomputable def minProb {α : Type} (S : C α) (A : Set α) : ENNReal :=
-  ⨅ μ ∈ S, prob μ A
-
-lemma minProb_bind {X Y : Type} (S : C X) (f : X → C Y) (A : Set Y) :
-    minProb (bind S f) A =
-    ⨅ μ ∈ S, ∑' x : ↑{ x : X | some x ∈ μ.support }, μ x * minProb (f x) A := sorry
-
-lemma minProb_pure {X : Type} (x : X) (A : Set X) :
-    minProb (pure x) A = if x ∈ A then 1 else 0 := by
-  refine iInf_singleton.trans ?_; sorry
-
-lemma minProb_bot {X : Type} {A : Set X} :
-    minProb ⊥ A = 0 := by
-  refine eq_bot_iff.mpr ?_
-  have h : ⊥ = prob ⊥ A := by sorry
-  rw [h]; refine biInf_le _ ?_; exact Set.mem_univ _
-
-lemma minProb_ne_top {X : Type} {s : C X} {A : Set X} :
-    minProb s A ≠ ⊤ := by
-  sorry
-
-lemma iInf_mul_minProb {X ι : Type} {t : C X} {A : Set X}
-    {f : ι → ENNReal} (h : Nonempty ι) :
-    iInf f * minProb t A = iInf fun x ↦ f x * minProb t A := by
-  refine @ENNReal.iInf_mul _ _ _ h ?_
-  intro c; exfalso; exact minProb_ne_top c
-
-lemma iInf_C_mul_minProb {X Y : Type} {s : C X} {t : C Y} {A : Set Y}
-    {f : Distr X → ENNReal} :
-    (⨅ x ∈ s, f x) * minProb t A = ⨅ x ∈ s, f x * minProb t A := by
-  rw [iInf_subtype', iInf_subtype']
-  refine iInf_mul_minProb (nonempty_subtype.mpr ?_)
-  exact s.property.nonempty
-
-lemma iInf_next_mul {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : C X} {A : Set X}
-    {f : ↑(Lpo.next α s) → ENNReal} (h : s ≠ ∅) :
-    iInf f * minProb t A = iInf fun x ↦ f x * minProb t A := by
-  refine iInf_mul_minProb ?_
-  clear f; induction s using Finset.induction with
-  | empty => contradiction
-  | @insert x s hx ih =>
-    by_cases hemp : s.Nonempty
-    · obtain ⟨y, hys, hy, hs⟩ := ih hemp.ne_empty
-      by_cases hxy : α.rel x y
-      · refine ⟨x, Finset.mem_insert_self _ _, ?_, ?_⟩
-        · exact (α.val.property.rel_dom hxy).1
-        · intro z hz; refine Finset.mem_insert.mp.mt (not_or.mpr ⟨?_, ?_⟩)
-          · rintro rfl; exact α.val.property.rel.irrefl _ hz
-          · exact hs z (α.val.property.rel.trans hz hxy)
-      · refine ⟨y, ?_, hy, ?_⟩
-        · exact Finset.mem_insert_of_mem hys
-        · intro z hz; refine Finset.mem_insert.mp.mt (not_or.mpr ⟨?_, ?_⟩)
-          · rintro rfl; exact hxy hz
-          · exact hs _ hz
-    · refine ⟨x, Finset.mem_insert_self _ _, ?_, ?_⟩
-      · sorry -- Will need to add assumptions so that s ⊆ α.nodes
-      · intro y hy hins; rcases Finset.mem_insert.mp hins with rfl | hy
-        · exact α.val.property.rel.irrefl _ hy
-        · rw [Finset.not_nonempty_iff_eq_empty.mp hemp] at hy
-          exact Finset.not_mem_empty _ hy
-
-lemma mul_iInf_next {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : C X} {A : Set X}
-    {f : ↑(Lpo.next α s) → ENNReal} (h : s ≠ ∅) :
-    minProb t A * iInf f = iInf fun x ↦ minProb t A * f x :=
-  (mul_comm _ _).trans ((iInf_next_mul h).trans
-    (iInf_congr fun _ ↦ mul_comm _ _))
-
+-- An instance for linearizing into the convex powerdomain
 instance : Linearizable C where
   nondet {ι X} (f : ι → C X) := bind ⟨(Set.univ : Set (Distr ι)), sorry⟩ f
   nondet_mono := sorry
-  nondet_congr := by
-    intro ι ι' f g e h; simp only
-    sorry
   bind_mono := sorry
 
 lemma nondet_singleton {u : Finset Var} {X : Type} {x : X} {f : ↑(Set.singleton x) → C (Mem u)} :
@@ -141,150 +23,25 @@ lemma minProb_nondet {u : Finset Var} {ι : Type} (f : ι → C (Mem u)) (A : Se
     minProb (Linearizable.nondet f) A =
     ⨅ x : ι, minProb (f x) A := sorry
 
-lemma minProb_mono {X : Type} {s t : C X} {A : Set X}
-    (h : s ≤ t) :
-    minProb s A ≤ minProb t A :=
-  iInf_le_iInf_of_subset (le_iff_supset.mp h)
-
-structure WithInv (act : Type) (u : Finset Var) where
-  action : act
-  inv_dom : Finset Var
-  inv_dom_valid : inv_dom ⊆ u
-  inv : Finset (Mem inv_dom)
-
-namespace WithInv
-
-def upcast {act : Type} {u v : Finset Var} (a : WithInv act u) (h : u ⊆ v) : WithInv act v := {
-  action := a.action
-  inv_dom := a.inv_dom
-  inv_dom_valid := a.inv_dom_valid.trans h
-  inv := a.inv
-}
-
-def has_inv {act : Type} {u v : Finset Var}
-    (a : WithInv act u) (inv : Finset (Mem v)) : Prop :=
-  ∃ h : v = a.inv_dom, by { rw [h] at inv; exact a.inv = inv }
-
-end WithInv
-
-def upcast_lab {act test : Type} {u v : Finset Var}
-    (l : Label (WithInv act u) (WithInv test u))
-    (h : u ⊆ v) :
-    Label (WithInv act v) (WithInv test v) :=
-  match l with
-  | Label.lab_bot => Label.lab_bot
-  | Label.lab_fork => Label.lab_fork
-  | Label.lab_act a => Label.lab_act (a.upcast h)
-  | Label.lab_test a => Label.lab_test (a.upcast h)
-
-instance {act : Type} {u : Finset Var} : LE (WithInv act u) where
-  le a₁ a₂ :=
-    a₁.action = a₂.action ∧
-    ∃ hsub : a₂.inv_dom ⊆ a₁.inv_dom,
-    ∃ inv : Finset (Mem (a₁.inv_dom \ a₂.inv_dom)),
-      a₁.inv = sorry
-      --Mem.sep a₂.inv inv Finset.disjoint_sdiff (Finset.union_sdiff_of_subset hsub)
-
-instance {act : Type} {u : Finset Var} : Preorder (WithInv act u) where
-  le_refl := by {
-    intro a; refine ⟨rfl, Finset.Subset.refl _, cast ?_ ({Mem.emp} : Finset (Mem ∅)), ?_⟩
-    · refine congrArg _ (congrArg _ ?_); exact (Finset.sdiff_self _).symm
-    · sorry
-  }
-  le_trans := sorry
-
-instance {act : Type} {u : Finset Var} : PartialOrder (WithInv act u) where
-  le_antisymm := sorry
-
-namespace Inv
-
-def check {u v : Finset Var} (inv : Finset (Mem v)) (σ : Mem u) (h : v ⊆ u) : C (Mem u) :=
-  if σ.proj h ∈ inv then pure σ else ⊥
-
-def replace {u v : Finset Var} (inv : Finset (Mem v)) (σ : Mem u) : C (Mem u) :=
-  Linearizable.nondet fun τ : ↑inv ↦ pure fun x ↦
-    if hx : x.val ∈ v then τ.val ⟨x.val, hx⟩ else σ x
-
-end Inv
-
-instance {act : Type} {u : Finset Var} [Sem act (Mem u) (C (Mem u))] :
-  Sem (WithInv act u) (Mem u) (C (Mem u)) where
-  sem a σ := do
-    let σ₁ ← Inv.check a.inv σ a.inv_dom_valid
-    let σ₂ ← Inv.replace a.inv σ₁
-    let τ ← Sem.sem a.action σ₂
-    Inv.check a.inv τ a.inv_dom_valid
-  sem_mono := sorry
-
-instance {test : Type} {u : Finset Var} [Sem test (Mem u) Bool] :
-  Sem (WithInv test u) (Mem u) (C Bool) where
-  sem t σ := do
-    let σ₁ ← Inv.check t.inv σ t.inv_dom_valid
-    let σ₂ ← Inv.replace t.inv σ₁
-    pure (Sem.sem t.action σ₂)
-  sem_mono := sorry
-
-lemma inv_sem_eq {act : Type} {u v : Finset Var} {inv : Finset (Mem v)}
-    [Sem act (Mem u) (C (Mem u))]
-    {a : WithInv act u} (hinv : a.has_inv inv)
-    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
-    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : C (Mem u)) =
-    Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) := by
-  --refine congrArg₂ bind ?_ rfl
-  sorry
-
-lemma inv_sem_eq_test {test : Type} {u v : Finset Var} {inv : Finset (Mem v)}
-    [Sem test (Mem u) Bool]
-    {a : WithInv test u} (hinv : a.has_inv inv)
-    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
-    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : C Bool) =
-    Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) := by
-  sorry
-
--- This would have to be proved by cases on the type of action
--- Intuitively it's true because when you upcast an action, it means that the domain
--- includes more variables. Those variables are either not used (in which case the
--- behavior doesn't change), or they are used and then the prior behavior is ⊥
-lemma upcast_mono {act : Type} {u₁ u₂ u : Finset Var} {a : WithInv act u₁}
-    [∀ v, Sem act (Mem v) (C (Mem v))]
-    (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
-    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
-    (bind (Sem.sem a σ₁ : C (Mem u₁)) (fun σ₁' : Mem u₁ ↦ pure (σ₂.union σ₁' h))) ≤
-    Sem.sem (a.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) := sorry
-
-lemma upcast_mono_test {test : Type} {u₁ u₂ u : Finset Var} {t : WithInv test u₁}
-    [∀ v, Sem test (Mem v) Bool]
-    (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
-    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
-    (Sem.sem t σ₁ : C Bool) ≤ Sem.sem (t.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) := sorry
-
-namespace Lpofin
-
-def has_inv {act test : Type} {u v : Finset Var}
-    (α : Lpofin (Label (WithInv act u) (WithInv test u)))
-    (inv : Finset (Mem v)) : Prop :=
-  ∀ x ∈ α.nodes,
-    match α.lab x with
-    | Label.lab_bot => True
-    | Label.lab_fork => True
-    | Label.lab_act a => a.has_inv inv
-    | Label.lab_test t => t.has_inv inv
-
-end Lpofin
-
-def par_comp {u₁ u₂ u : Finset Var} {act test : Type}
+-- Parallel composition of α and β by upcasting
+noncomputable def par_comp {u₁ u₂ u : Finset Var} {act test : Type}
     (α : Lpofin (Label (WithInv act u₁) (WithInv test u₁)))
     (β : Lpofin (Label (WithInv act u₂) (WithInv test u₂)))
     (hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
     {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes) :
-    Lpofin (Label (WithInv act u) (WithInv test u)) := sorry
+    Lpofin (Label (WithInv act u) (WithInv test u)) :=
+  Lpo.par_fin Label.lab_fork root
+    (α.upcast (Finset.subset_union_left.trans (Finset.subset_of_eq hu.symm)))
+    (β.upcast (Finset.subset_union_right.trans (Finset.subset_of_eq hu.symm)))
+    hr₁ hr₂ hdn
 
 lemma par_comp_lab_root {u₁ u₂ u : Finset Var} {act test : Type}
     {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}
     {β : Lpofin (Label (WithInv act u₂) (WithInv test u₂))}
     (hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
     {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes) :
-    (par_comp α β hdn hu hr₁ hr₂).lab root = Label.lab_fork := sorry
+    (par_comp α β hdn hu hr₁ hr₂).lab root = Label.lab_fork := by
+  simp only [Lpofin.lab, Lpo.lab, par_comp, Lpo.par_fin, Lpo.par_base, ↓reduceIte]
 
 lemma par_comp_comm {u₁ u₂ u : Finset Var} {act test : Type}
     {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}
@@ -293,6 +50,11 @@ lemma par_comp_comm {u₁ u₂ u : Finset Var} {act test : Type}
     {root : Node} {hr₁ : root ∉ α.nodes} {hr₂ : root ∉ β.nodes} :
     par_comp α β hdn hu hr₁ hr₂ = par_comp β α hdn.symm (hu.trans (Finset.union_comm _ _)) hr₂ hr₁ := sorry
 
+-- The set of next nodes in a parallel composition is either
+-- 1) Only the root
+-- 2) The union of (nonempty) next node sets from α and β
+-- 3) The next nodes of α (if β is done executing)
+-- 4) The next nodes of β (if β is done executing)
 lemma next_par {u₁ u₂ u : Finset Var} {act test : Type}
     (α : Lpofin (Label (WithInv act u₁) (WithInv test u₁)))
     (β : Lpofin (Label (WithInv act u₂) (WithInv test u₂)))
@@ -308,140 +70,45 @@ lemma next_par {u₁ u₂ u : Finset Var} {act test : Type}
       s ∩ β.nodes_finset ≠ ∅)
     := sorry
 
-lemma dsj₁ {u₁ u₂ v : Finset Var} (h : v = u₁ ∩ u₂) :
-    Disjoint (u₁ \ v) v ∧ u₁ = (u₁ \ v) ∪ v := by
-  refine ⟨Finset.sdiff_disjoint, (Finset.sdiff_union_of_subset ?_).symm⟩
-  rw [h]; exact Finset.inter_subset_left
-
-lemma dsj₂ {u₁ u₂ v : Finset Var} (h : v = u₁ ∩ u₂) :
-    Disjoint (u₂ \ v) v ∧ u₂ = (u₂ \ v) ∪ v :=
-  dsj₁ (h.trans (Finset.inter_comm _ _))
-
-lemma dsj₁₂ {u₁ u₂ u v : Finset Var} (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
-    Disjoint (u₁ \ v) u₂ ∧ u = (u₁ \ v) ∪ u₂ := by
-  rw [hv, Finset.sdiff_inter_self_left]; constructor
-  · exact Finset.sdiff_disjoint
-  · exact hu.trans Finset.sdiff_union_self_eq_union.symm
-
-lemma dsj₂₁ {u₁ u₂ u v : Finset Var} (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
-    Disjoint (u₂ \ v) u₁ ∧ u = (u₂ \ v) ∪ u₁ :=
-  dsj₁₂ (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _))
-
-lemma union_comm_assoc {u u₁ u₂ v : Finset Var}
-    {σ₁ : Mem (u₁ \ v)} {σ₂ : Mem (u₂ \ v)} {τ : Mem v}
-    (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
-    (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)) =
-    (σ₂.union (σ₁.union τ (dsj₁ hv)) (dsj₂₁ hu hv)) := by
-  ext ⟨x, hx⟩; unfold Mem.union; by_cases hx' : x ∈ u₁ \ v
-  · simp only [hx', ↓reduceDIte, Finset.mem_sdiff]; sorry
-  · sorry
-
-lemma sep_comm_assoc {u u₁ u₂ v : Finset Var}
-    {A : Set (Mem (u₁ \ v))} {B : Set (Mem (u₂ \ v))} {I : Set (Mem v)}
-    (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
-    (Mem.sep A (Mem.sep B I (dsj₂ hv)) (dsj₁₂ hu hv)) =
-    (Mem.sep B (Mem.sep A I (dsj₁ hv)) (dsj₂₁ hu hv)) := by sorry
-
-noncomputable def equiv_sem_upcast {act : Type} {u u₁ u₂ v : Finset Var}
-    [∀ u, Sem act (Mem u) (C (Mem u))] {a : WithInv act u₁}
-    {σ₁ : Mem (u₁ \ v)} {σ₂ : Mem (u₂ \ v)} {τ τ₁ : Mem v}
-    (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
-    Subtype (Membership.mem
-      (@Sem.sem (WithInv act u) (Mem u) (C (Mem u)) _
-        (a.upcast (by { rw [hu]; exact Finset.subset_union_left }))
-        (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))) ≃
-    Subtype (Membership.mem
-      (@Sem.sem (WithInv act u₁) (Mem u₁) (C (Mem u₁)) _ a (σ₁.union τ₁ (dsj₁ hv)))) := {
-  toFun := by
-    intro ⟨μ, hμ⟩
-    refine
-      ⟨PMF.bind μ fun σ ↦ pure
-        (match σ with
-         | ⊥ => ⊥
-         | some σ => some (σ.proj ?_)), ?_⟩
-    · rw [hu]; exact Finset.subset_union_left
-    · sorry
-  invFun := by
-    intro ⟨μ, hμ⟩
-    refine
-      ⟨PMF.bind μ fun σ ↦ pure
-        (match σ with
-         | ⊥ => ⊥
-         | some σ => some (σ₂.union σ (dsj₂₁ hu hv))), ?_⟩
-    sorry
-  left_inv := by
-    intro ⟨μ, hμ⟩
-    simp only [id_eq, eq_mpr_eq_cast, PMF.bind_bind, Subtype.mk.injEq]
-    sorry
-  right_inv := sorry
- }
-
--- lemma tsum_upcast {u u₁ u₂ v : Finset Var} {act : Type}
---     [∀ u, Sem (WithInv act u) (Mem u) (C (Mem u))]
---     (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂)
---     {μ : Distr (Mem u) } {a : WithInv act u₁}
---     {σ₁ : Mem (u₁ \ v)} {σ₂ : Mem (u₂ \ v)} {τ : Mem v}
---     (hμ : μ ∈ Sem.sem (upcast a sorry) (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
---     {f : ↑{x | some x ∈ PMF.support ((equiv_sem_upcast hu hv) ⟨μ, hμ⟩).val } → ENNReal } :
---     ∑' x : ↑{x | some x ∈ PMF.support ((equiv_sem_upcast hu hv) ⟨μ, hμ⟩).val}, f x =
---     ∑' x : ↑{ x | some x ∈ PMF.support μ }, f (equiv_sem_upcast hu hv x) := by
-
-lemma tsum_congr' {ι ι' : Type} {f : ι → ENNReal} {g : ι' → ENNReal}
-    (e : ι ≃ ι') (h : ∀ x, f x = g (e x)) :
-    ∑' x, f x = ∑' x, g x := by
-  refine Eq.symm (ENNReal.summable.hasSum_iff.mp ?_)
-  refine (e.hasSum_iff  (α := ENNReal)).mp ?_
-  have : g ∘ e = f := by
-    ext x; exact (h x).symm
-  rw [this]
-  exact ENNReal.summable.hasSum
-
 variable {u u₁ u₂ v : Finset Var} {act test : Type}
   [∀ u, Sem act (Mem u) (C (Mem u))]
   [∀ u, Sem test (Mem u) Bool]
   {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}
   {β : Lpofin (Label (WithInv act u₂) (WithInv test u₂))}
   {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes)
-  {inv : Finset (Mem v)} (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv)
+  {inv : Finset (Mem v)}
   (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂)
   (hdn : Disjoint α.nodes β.nodes)
   (A : Set (Mem (u₁ \ v))) (B : Set (Mem (u₂ \ v)))
 
+-- Shorthand for the independence property
+--
+-- Note that this is not actually indepedence, as it is an inequality rather than an equality. The equality
+-- holds as long as α and β do not rely on each other's private variables, which would manifest as
+-- nontermination (⊥), whereas it would be valid in α || β.
+--
+-- It is easier to prove the inequality than to string through extra assumptions. The inequality will become
+-- and equality later, once we show that the minimum probabilities of all events add to 1, so that no
+-- event can have probability strictly greater than its lower bound.
 def is_indep
   (s : Finset Node) (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
-      (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) : Prop :=
+      (_ : τ ∈ inv) (_ : τ₁ ∈ inv) (_ : τ₂ ∈ inv)
+      (_ : α.has_inv inv) (_ : β.has_inv inv) : Prop :=
   minProb (Lpo.lin_rec (par_comp α β hdn hu hr₁ hr₂) s (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
       (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv) : Set (Mem u)) ≥
   minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv) : Mem u₁)) (Mem.sep A ↑inv (dsj₁ hv)) *
     minProb (Lpo.lin_rec β (s ∩ β.nodes_finset) (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv))
 
-lemma flip_hind
-    {s : Finset Node}
-    (hind : ∀ t ⊂ s,
-      ∀ (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
-      (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
-      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂) :
-    ∀ t ⊂ s,
-    ∀ {σ₂ : Mem (u₂ \ v)} {σ₁ : Mem (u₁ \ v)} {τ τ₂ τ₁ : Mem v}
-      (hτ : τ ∈ inv) (hτ₂ : τ₂ ∈ inv) (hτ₁ : τ₁ ∈ inv),
-      is_indep hr₂ hr₁
-        (hu.trans (Finset.union_comm _ _))
-        (hv.trans (Finset.inter_comm _ _)) hdn.symm B A t σ₂ σ₁ hτ hτ₂ hτ₁ := by
-  intro t ht σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂; unfold is_indep
-  rw [par_comp_comm,
-      union_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
-      sep_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
-      mul_comm]
-  exact hind t ht σ₂ σ₁ hτ hτ₂ hτ₁
-
+-- The inductive step broken into its own lemma, since it needs to be invoked multiple times
  lemma par_comp_inductive_step
     {s : Finset Node} {x : Node} (hx : x ∈ Lpo.next α (s ∩ α.nodes_finset))
     (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
     (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv)
+    (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv)
     (hind : ∀ t ⊂ s,
       ∀ (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
       (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
-      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂) :
+      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂) :
     minProb (Lpo.lin_node (par_comp α β hdn hu hr₁ hr₂) s x sorry (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
       (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
     minProb (Lpo.lin_node α (s ∩ α.nodes_finset) x hx.1 (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
@@ -449,8 +116,8 @@ lemma flip_hind
   unfold Lpo.lin_node
   have hu' := hu.trans (Finset.union_comm _ _)
   have hv' := hv.trans (Finset.inter_comm _ _)
-  have hlab : (par_comp α β hdn hu hr₁ hr₂).lab x = upcast_lab (α.lab x) sorry := sorry -- LEMMA
-  rw [hlab]; cases α.lab x with
+  have hlab_eq : (par_comp α β hdn hu hr₁ hr₂).lab x = upcast_lab (α.lab x) sorry := sorry -- LEMMA
+  rw [hlab_eq]; cases hlab : α.lab x with
   -- Case : α.lab y = ⊥
   | lab_bot => simp only [upcast_lab, minProb_bot, zero_mul, le_refl]
   -- Case : α.lab y = Fork
@@ -469,7 +136,9 @@ lemma flip_hind
       (minProb_mono (Linearizable.bind_mono (upcast_mono (dsj₂₁ hu hv)) (le_refl _)))
     rw [bind_assoc, minProb_bind, minProb_bind]
     refine le_of_eq_of_le iInf_C_mul_minProb ?_
-    rw [inv_sem_eq sorry hτ hτ₁]
+    have hinv : a.has_inv inv := by
+      have h := hinv₁ x hx.2.1; simp only [hlab] at h; exact h
+    rw [inv_sem_eq hinv hτ hτ₁]
     refine iInf₂_mono fun μ hμ ↦ ?_
     rw [← ENNReal.tsum_mul_right]
     refine ENNReal.tsum_le_tsum fun ⟨σ, hσ⟩ ↦ ?_
@@ -490,7 +159,9 @@ lemma flip_hind
       (minProb_mono (Linearizable.bind_mono (upcast_mono_test (dsj₂₁ hu hv)) (le_refl _)))
     rw [minProb_bind, minProb_bind]
     refine le_of_eq_of_le iInf_C_mul_minProb ?_
-    rw [inv_sem_eq_test sorry hτ hτ₁]
+    have hinv : t.has_inv inv := by
+      have h := hinv₁ x hx.2.1; simp only [hlab] at h; exact h
+    rw [inv_sem_eq_test hinv hτ hτ₁]
     refine iInf₂_mono fun μ hμ ↦ ?_
     rw [← ENNReal.tsum_mul_right]
     refine ENNReal.tsum_le_tsum fun ⟨b, hb⟩ ↦ ?_
@@ -519,10 +190,11 @@ lemma par_comp_inductive_step'
     {s : Finset Node} {x : Node} (hx : x ∈ Lpo.next β (s ∩ β.nodes_finset))
     (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
     (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv)
+    (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv)
     (hind : ∀ t ⊂ s,
       ∀ (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
          (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
-      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂) :
+      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂) :
     minProb (Lpo.lin_node (par_comp α β hdn hu hr₁ hr₂) s x sorry (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
       (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
     minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
@@ -530,9 +202,14 @@ lemma par_comp_inductive_step'
   rw [mul_comm, union_comm_assoc hu hv, sep_comm_assoc hu hv, par_comp_comm hu]
   have hu' := hu.trans (Finset.union_comm _ _)
   have hv' := hv.trans (Finset.inter_comm _ _)
-  exact
-    par_comp_inductive_step hr₂ hr₁ hu' hv' hdn.symm B A hx σ₂ σ₁ hτ hτ₂ hτ₁
-      (flip_hind hr₁ hr₂ hu hv hdn A B hind)
+  refine
+    par_comp_inductive_step hr₂ hr₁ hu' hv' hdn.symm B A hx σ₂ σ₁ hτ hτ₂ hτ₁ hinv₂ hinv₁ ?_
+  intro t ht σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂; unfold is_indep
+  rw [par_comp_comm,
+      union_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
+      sep_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
+      mul_comm]
+  exact hind t ht σ₂ σ₁ hτ hτ₂ hτ₁
 
 -- We need this annoying lemma to make the dependent types work out
 lemma nondet_lin_node_congr {u : Finset Var} {act test : Type}
@@ -548,7 +225,8 @@ lemma nondet_lin_node_congr {u : Finset Var} {act test : Type}
 -- Lemma C.3 from POPL'26
 theorem par_comp_fin
     {σ₁ : Mem (u₁ \ v)} {σ₂ : Mem (u₂ \ v)} {τ τ₁ τ₂ : Mem v}
-    (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
+    (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv)
+    (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv) :
     minProb
       (Lpo.lin
         (par_comp α β hdn hu hr₁ hr₂)
@@ -595,31 +273,33 @@ theorem par_comp_fin
             iInf_or
             ).symm
         rw [iInf_inf_eq, iInf_subtype', iInf_subtype']
+        -- The min prob is the min of the probability from either executing α or β.
+        -- We split the two cases to handle them separately
         refine le_of_eq_of_le (inf_idem _).symm (inf_le_inf ?_ ?_)
         · nth_rw 1 [Lpo.lin_rec]; simp only [hne, ↓reduceIte]
           rw [minProb_nondet]
           refine le_of_eq_of_le (iInf_next_mul hne) ?_
           refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
           exact
-            par_comp_inductive_step hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
+            par_comp_inductive_step hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂ hind
         · nth_rw 2 [Lpo.lin_rec]
           simp only [↓reduceIte, hne']
           rw [minProb_nondet]
           refine le_of_eq_of_le (mul_iInf_next hne') ?_
           refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
           exact
-            par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
+            par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂ hind
       -- Case 3: Next comes from α (β is empty)
       · nth_rw 1 [Lpo.lin_rec]; simp only [↓reduceIte, hne]
         rw [minProb_nondet, minProb_nondet]
         refine le_of_eq_of_le (iInf_next_mul hne) ?_
         refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
         exact
-          par_comp_inductive_step hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
+          par_comp_inductive_step hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂ hind
       -- Case 4: Next comes from β (α is empty)
       · nth_rw 2 [Lpo.lin_rec]; simp only [hne, ↓reduceIte]
         rw [minProb_nondet, minProb_nondet]
         refine le_of_eq_of_le (mul_iInf_next hne) ?_
         refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
         exact
-          par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
+          par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂ hind

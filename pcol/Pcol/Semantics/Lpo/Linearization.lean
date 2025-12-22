@@ -84,13 +84,6 @@ class Linearizable (t : Type → Type)
   where
   nondet {ι α : Type} : (ι → t α) → t α
   nondet_mono {ι α : Type} : Monotone (nondet : (ι → t α) → t α)
-  nondet_congr {ι ι' α : Type} {f : ι → t α} {g : ι' → t α}
-      (e : ι ≃ ι') (h : ∀ x : ι, f x = g (e x)) :
-      nondet f = nondet g
-  -- nondet_mono {β : Type} {s u : Set β} {f : ↑s → t α} {g : ↑u → t α }
-  --   (heq : s = u)
-  --   (hle : ∀ x : ↑s, f x ≤ g (cast (congrArg Subtype heq) x)) :
-  --   nondet s f ≤ nondet u g
   bind_mono {β γ : Type} : ∀ {m₁ m₂ : t β} {k₁ k₂ : β → t γ},
     m₁ ≤ m₂ → k₁ ≤ k₂ → bind m₁ k₁ ≤ bind m₂ k₂
  --  bind_additivity : ∀ f s, bind (nondet s) f = nondet (Finset.image (fun x => bind x f) s)
