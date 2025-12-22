@@ -79,12 +79,12 @@ instance {act test : Type} [PartialOrder act] [PartialOrder test] : PartialOrder
 instance {act test : Type} [LE act] [LE test] : OrderBot (Label act test) where
   bot_le _ := True.intro
 
-class Linearizable (t : Type → Type) (α : Type)
+class Linearizable (t : Type → Type)
   [Monad t] [∀ {β : Type}, Preorder (t β)]
   where
-  nondet {ι : Type} : (ι → t α) → t α
-  nondet_mono {ι : Type} : Monotone (nondet : (ι → t α) → t α)
-  nondet_congr {ι ι' : Type} {f : ι → t α} {g : ι' → t α}
+  nondet {ι α : Type} : (ι → t α) → t α
+  nondet_mono {ι α : Type} : Monotone (nondet : (ι → t α) → t α)
+  nondet_congr {ι ι' α : Type} {f : ι → t α} {g : ι' → t α}
       (e : ι ≃ ι') (h : ∀ x : ι, f x = g (e x)) :
       nondet f = nondet g
   -- nondet_mono {β : Type} {s u : Set β} {f : ↑s → t α} {g : ↑u → t α }
@@ -113,10 +113,17 @@ lemma next_empty {l : Type} [Bot l] {a : Lpofin l} :
   · rintro ⟨⟨⟩, _⟩
   · rintro ⟨⟩
 
+noncomputable def filter_by_outcome {l : Type} [Bot l]
+    (α : Lpofin l) (s : Finset Node) (x : Node) (b : Bool) : Finset Node :=
+  (s.erase x).filter fun z ↦
+    Form.sat
+      ((α.form z).and
+        (bif b then (Form.literal x) else (Form.literal x).not))
+
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
     [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
-    [Linearizable t α] [Bot (t α)]
+    [Linearizable t] [Bot (t α)]
     (a : Lpofin (Label act test)) (s : Finset Node) (st : α) : t α :=
     if s = ∅ then
       pure st
@@ -126,7 +133,7 @@ mutual
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
       [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
-      [Linearizable t α] [Bot (t α)]
+      [Linearizable t] [Bot (t α)]
       (a : Lpofin (Label act test)) (s : Finset Node) (x : Node) (hx : x ∈ s)
       (st : α) : t α :=
     have _h : (s.erase x).card < s.card := Finset.card_erase_lt_of_mem hx
@@ -137,9 +144,7 @@ mutual
     | Label.lab_test b =>
         bind (Sem.sem b st)
           fun (r : Bool) =>
-            let φ : Form Node := cond r (Form.literal x) (Form.literal x).not
-            lin_rec a ((s.erase x).filter fun z => (φ.and (a.form z)).sat)
-              st
+            lin_rec a (filter_by_outcome a s x r) st
   termination_by (s.card, 0)
   decreasing_by
   · left; exact _h
@@ -149,7 +154,7 @@ end
 
 noncomputable def lin {t : Type → Type} {α act test: Type}
   [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
-  [Linearizable t α] [Bot (t α)]
+  [Linearizable t] [Bot (t α)]
   (a : Lpofin (Label act test)) : α → t α :=
     lin_rec a a.nodes_finset
 
@@ -195,7 +200,7 @@ lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
 
 theorem lin_rec_mono {m : Type → Type} {α act test : Type}
   [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
-  [OrderBot (m α)] [Linearizable m α]
+  [OrderBot (m α)] [Linearizable m]
   {s t : Finset Node} {a b : Lpofin (Label act test)}
   (hst : s = t ∩ a.nodes_finset)
   (hscl : a.rel.IsUpClosed s)
@@ -234,7 +239,7 @@ theorem lin_rec_mono {m : Type → Type} {α act test : Type}
         | Label.lab_act ac =>
             have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
             rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx]
-            refine Linearizable.bind_mono (α := α) (Sem.sem_mono (c := act) st hxle) ?_
+            refine Linearizable.bind_mono (Sem.sem_mono (c := act) st hxle) ?_
             apply hind
             · exact Finset.erase_ssubset hx.1
             · rw [Finset.erase_inter, ← hst]
@@ -244,14 +249,14 @@ theorem lin_rec_mono {m : Type → Type} {α act test : Type}
         | Label.lab_test bb =>
             have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
             rcases lab_is_test_le hlx with ⟨b', hbx, hxle⟩; rw [hbx]
-            refine Linearizable.bind_mono (α := α) (Sem.sem_mono (c := test) st hxle) ?_
+            refine Linearizable.bind_mono (Sem.sem_mono (c := test) st hxle) ?_
             -- Need to prove that a.form = b.form
             sorry
   }
 
 theorem lin_mono {m : Type → Type} {α act test : Type}
   [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, PartialOrder (m β)]
-  [∀ β, OrderBot (m β)] [Linearizable m α] :
+  [∀ β, OrderBot (m β)] [Linearizable m] :
   Monotone (lin : Lpofin (Label act test) → α → m α) := by {
     unfold lin; intro α β hle
     refine lin_rec_mono ?_ ?_ ?_ hle
@@ -264,7 +269,7 @@ theorem lin_mono {m : Type → Type} {α act test : Type}
 
 lemma lin_rec_iso {m : Type → Type} {α act test : Type}
     [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
-    [OrderBot (m α)] [Linearizable m α]
+    [OrderBot (m α)] [Linearizable m]
     {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
     (lin_rec a s : α →  m α) = lin_rec (a.permute e) (s.image e) := by
   induction s using Finset.strongInduction with
@@ -276,7 +281,7 @@ lemma lin_rec_iso {m : Type → Type} {α act test : Type}
 
 lemma lin_iso {m : Type → Type} {α act test : Type}
     [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
-    [OrderBot (m α)] [Linearizable m α]
+    [OrderBot (m α)] [Linearizable m]
     {a b : Lpofin (Label act test)} (h : a ≈ b) :
     (lin a : α →  m α) = lin b := by
   unfold lin; rcases h with ⟨e, h⟩

@@ -13,6 +13,8 @@ instance {α : Type} : FunLike (Distr α) (WithBot α) ENNReal where
   coe := Subtype.val
   coe_injective' _ _ h := Subtype.eq h
 
+instance {α : Type} : Nonempty (Distr α) := Nonempty.intro (PMF.pure ⊥)
+
 lemma distr_coe {α : Type} {μ : Distr α} {x : WithBot α} : μ x = μ.val x := rfl
 
 @[ext]

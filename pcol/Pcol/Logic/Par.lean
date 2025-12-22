@@ -80,12 +80,45 @@ lemma minProb_ne_top {X : Type} {s : C X} {A : Set X} :
     minProb s A ≠ ⊤ := by
   sorry
 
+lemma iInf_mul_minProb {X ι : Type} {t : C X} {A : Set X}
+    {f : ι → ENNReal} (h : Nonempty ι) :
+    iInf f * minProb t A = iInf fun x ↦ f x * minProb t A := by
+  refine @ENNReal.iInf_mul _ _ _ h ?_
+  intro c; exfalso; exact minProb_ne_top c
+
+lemma iInf_C_mul_minProb {X Y : Type} {s : C X} {t : C Y} {A : Set Y}
+    {f : Distr X → ENNReal} :
+    (⨅ x ∈ s, f x) * minProb t A = ⨅ x ∈ s, f x * minProb t A := by
+  rw [iInf_subtype', iInf_subtype']
+  refine iInf_mul_minProb (nonempty_subtype.mpr ?_)
+  exact s.property.nonempty
+
 lemma iInf_next_mul {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : C X} {A : Set X}
     {f : ↑(Lpo.next α s) → ENNReal} (h : s ≠ ∅) :
     iInf f * minProb t A = iInf fun x ↦ f x * minProb t A := by
-  refine @ENNReal.iInf_mul _ _ _ ?_ ?_
-  · sorry -- This is a bit tricky since we have to find the minimal element
-  · intro c; exfalso; exact minProb_ne_top c
+  refine iInf_mul_minProb ?_
+  clear f; induction s using Finset.induction with
+  | empty => contradiction
+  | @insert x s hx ih =>
+    by_cases hemp : s.Nonempty
+    · obtain ⟨y, hys, hy, hs⟩ := ih hemp.ne_empty
+      by_cases hxy : α.rel x y
+      · refine ⟨x, Finset.mem_insert_self _ _, ?_, ?_⟩
+        · exact (α.val.property.rel_dom hxy).1
+        · intro z hz; refine Finset.mem_insert.mp.mt (not_or.mpr ⟨?_, ?_⟩)
+          · rintro rfl; exact α.val.property.rel.irrefl _ hz
+          · exact hs z (α.val.property.rel.trans hz hxy)
+      · refine ⟨y, ?_, hy, ?_⟩
+        · exact Finset.mem_insert_of_mem hys
+        · intro z hz; refine Finset.mem_insert.mp.mt (not_or.mpr ⟨?_, ?_⟩)
+          · rintro rfl; exact hxy hz
+          · exact hs _ hz
+    · refine ⟨x, Finset.mem_insert_self _ _, ?_, ?_⟩
+      · sorry -- Will need to add assumptions so that s ⊆ α.nodes
+      · intro y hy hins; rcases Finset.mem_insert.mp hins with rfl | hy
+        · exact α.val.property.rel.irrefl _ hy
+        · rw [Finset.not_nonempty_iff_eq_empty.mp hemp] at hy
+          exact Finset.not_mem_empty _ hy
 
 lemma mul_iInf_next {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : C X} {A : Set X}
     {f : ↑(Lpo.next α s) → ENNReal} (h : s ≠ ∅) :
@@ -93,8 +126,8 @@ lemma mul_iInf_next {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : 
   (mul_comm _ _).trans ((iInf_next_mul h).trans
     (iInf_congr fun _ ↦ mul_comm _ _))
 
-instance {X : Type} : Linearizable C X where
-  nondet {ι} (f : ι → C X) := bind ⟨(Set.univ : Set (Distr ι)), sorry⟩ f
+instance : Linearizable C where
+  nondet {ι X} (f : ι → C X) := bind ⟨(Set.univ : Set (Distr ι)), sorry⟩ f
   nondet_mono := sorry
   nondet_congr := by
     intro ι ι' f g e h; simp only
@@ -108,11 +141,18 @@ lemma minProb_nondet {u : Finset Var} {ι : Type} (f : ι → C (Mem u)) (A : Se
     minProb (Linearizable.nondet f) A =
     ⨅ x : ι, minProb (f x) A := sorry
 
+lemma minProb_mono {X : Type} {s t : C X} {A : Set X}
+    (h : s ≤ t) :
+    minProb s A ≤ minProb t A :=
+  iInf_le_iInf_of_subset (le_iff_supset.mp h)
+
 structure WithInv (act : Type) (u : Finset Var) where
   action : act
   inv_dom : Finset Var
   inv_dom_valid : inv_dom ⊆ u
   inv : Finset (Mem inv_dom)
+
+namespace WithInv
 
 def upcast {act : Type} {u v : Finset Var} (a : WithInv act u) (h : u ⊆ v) : WithInv act v := {
   action := a.action
@@ -121,6 +161,12 @@ def upcast {act : Type} {u v : Finset Var} (a : WithInv act u) (h : u ⊆ v) : W
   inv := a.inv
 }
 
+def has_inv {act : Type} {u v : Finset Var}
+    (a : WithInv act u) (inv : Finset (Mem v)) : Prop :=
+  ∃ h : v = a.inv_dom, by { rw [h] at inv; exact a.inv = inv }
+
+end WithInv
+
 def upcast_lab {act test : Type} {u v : Finset Var}
     (l : Label (WithInv act u) (WithInv test u))
     (h : u ⊆ v) :
@@ -128,8 +174,8 @@ def upcast_lab {act test : Type} {u v : Finset Var}
   match l with
   | Label.lab_bot => Label.lab_bot
   | Label.lab_fork => Label.lab_fork
-  | Label.lab_act a => Label.lab_act (upcast a h)
-  | Label.lab_test a => Label.lab_test (upcast a h)
+  | Label.lab_act a => Label.lab_act (a.upcast h)
+  | Label.lab_test a => Label.lab_test (a.upcast h)
 
 instance {act : Type} {u : Finset Var} : LE (WithInv act u) where
   le a₁ a₂ :=
@@ -178,6 +224,40 @@ instance {test : Type} {u : Finset Var} [Sem test (Mem u) Bool] :
     pure (Sem.sem t.action σ₂)
   sem_mono := sorry
 
+lemma inv_sem_eq {act : Type} {u v : Finset Var} {inv : Finset (Mem v)}
+    [Sem act (Mem u) (C (Mem u))]
+    {a : WithInv act u} (hinv : a.has_inv inv)
+    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
+    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : C (Mem u)) =
+    Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) := by
+  --refine congrArg₂ bind ?_ rfl
+  sorry
+
+lemma inv_sem_eq_test {test : Type} {u v : Finset Var} {inv : Finset (Mem v)}
+    [Sem test (Mem u) Bool]
+    {a : WithInv test u} (hinv : a.has_inv inv)
+    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
+    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : C Bool) =
+    Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) := by
+  sorry
+
+-- This would have to be proved by cases on the type of action
+-- Intuitively it's true because when you upcast an action, it means that the domain
+-- includes more variables. Those variables are either not used (in which case the
+-- behavior doesn't change), or they are used and then the prior behavior is ⊥
+lemma upcast_mono {act : Type} {u₁ u₂ u : Finset Var} {a : WithInv act u₁}
+    [∀ v, Sem act (Mem v) (C (Mem v))]
+    (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
+    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
+    (bind (Sem.sem a σ₁ : C (Mem u₁)) (fun σ₁' : Mem u₁ ↦ pure (σ₂.union σ₁' h))) ≤
+    Sem.sem (a.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) := sorry
+
+lemma upcast_mono_test {test : Type} {u₁ u₂ u : Finset Var} {t : WithInv test u₁}
+    [∀ v, Sem test (Mem v) Bool]
+    (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
+    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
+    (Sem.sem t σ₁ : C Bool) ≤ Sem.sem (t.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) := sorry
+
 namespace Lpofin
 
 def has_inv {act test : Type} {u v : Finset Var}
@@ -187,10 +267,8 @@ def has_inv {act test : Type} {u v : Finset Var}
     match α.lab x with
     | Label.lab_bot => True
     | Label.lab_fork => True
-    | Label.lab_act a =>
-      ∃ h : v = a.inv_dom, a.inv = cast (congrArg _ (congrArg _ h)) inv
-    | Label.lab_test t =>
-      ∃ h : v = t.inv_dom, t.inv = cast (congrArg _ (congrArg _ h)) inv
+    | Label.lab_act a => a.has_inv inv
+    | Label.lab_test t => t.has_inv inv
 
 end Lpofin
 
@@ -270,7 +348,7 @@ noncomputable def equiv_sem_upcast {act : Type} {u u₁ u₂ v : Finset Var}
     (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
     Subtype (Membership.mem
       (@Sem.sem (WithInv act u) (Mem u) (C (Mem u)) _
-        (upcast a (by { rw [hu]; exact Finset.subset_union_left }))
+        (a.upcast (by { rw [hu]; exact Finset.subset_union_left }))
         (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))) ≃
     Subtype (Membership.mem
       (@Sem.sem (WithInv act u₁) (Mem u₁) (C (Mem u₁)) _ a (σ₁.union τ₁ (dsj₁ hv)))) := {
@@ -333,7 +411,7 @@ def is_indep
   (s : Finset Node) (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
       (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) : Prop :=
   minProb (Lpo.lin_rec (par_comp α β hdn hu hr₁ hr₂) s (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv) : Set (Mem u)) =
+      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv) : Set (Mem u)) ≥
   minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv) : Mem u₁)) (Mem.sep A ↑inv (dsj₁ hv)) *
     minProb (Lpo.lin_rec β (s ∩ β.nodes_finset) (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv))
 
@@ -365,7 +443,7 @@ lemma flip_hind
       (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
       is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂) :
     minProb (Lpo.lin_node (par_comp α β hdn hu hr₁ hr₂) s x sorry (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) =
+      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
     minProb (Lpo.lin_node α (s ∩ α.nodes_finset) x hx.1 (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
       minProb (Lpo.lin_rec β (s ∩ β.nodes_finset) (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv)) := by
   unfold Lpo.lin_node
@@ -373,9 +451,9 @@ lemma flip_hind
   have hv' := hv.trans (Finset.inter_comm _ _)
   have hlab : (par_comp α β hdn hu hr₁ hr₂).lab x = upcast_lab (α.lab x) sorry := sorry -- LEMMA
   rw [hlab]; cases α.lab x with
-  -- Case : β.lab y = ⊥
-  | lab_bot => simp only [upcast_lab, minProb_bot, zero_mul]
-  -- Case : β.lab y = Fork
+  -- Case : α.lab y = ⊥
+  | lab_bot => simp only [upcast_lab, minProb_bot, zero_mul, le_refl]
+  -- Case : α.lab y = Fork
   | lab_fork =>
     simp only [upcast_lab]
     have h₁ : (s ∩ α.nodes_finset).erase x = s.erase x ∩ α.nodes_finset := sorry
@@ -383,36 +461,60 @@ lemma flip_hind
     rw [h₁, h₂]
     refine hind (s.erase x) ?_ _ _ hτ hτ₁ hτ₂
     exact Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1)
-  -- Case : β.lab y = act
+  -- Case : α.lab y = act
   | lab_act a =>
-    rw [upcast_lab, minProb_bind, minProb_bind]
-    rw [iInf_subtype', iInf_subtype']
-    refine Eq.trans ?_ (@ENNReal.iInf_mul _ _ _ sorry sorry).symm
-    refine (equiv_sem_upcast hu hv (act := act)).iInf_congr ?_
-    intro ⟨μ, hμ⟩
---    simp only [id_eq, eq_mpr_eq_cast, Set.coe_setOf, Set.mem_setOf_eq]
+    simp only [upcast_lab]
+    rw [union_comm_assoc hu hv]
+    refine le_trans ?_
+      (minProb_mono (Linearizable.bind_mono (upcast_mono (dsj₂₁ hu hv)) (le_refl _)))
+    rw [bind_assoc, minProb_bind, minProb_bind]
+    refine le_of_eq_of_le iInf_C_mul_minProb ?_
+    rw [inv_sem_eq sorry hτ hτ₁]
+    refine iInf₂_mono fun μ hμ ↦ ?_
     rw [← ENNReal.tsum_mul_right]
-    refine tsum_congr' ?_ ?_
-    · refine ⟨?_, ?_, ?_, ?_⟩
-      · intro ⟨σ, hσ⟩
-        refine ⟨σ₂.union σ (dsj₂₁ hu hv), ?_⟩
-        sorry
-      · sorry
-      · sorry
-      · sorry
-    · intro ⟨σ, hσ⟩
-      rw [mul_assoc]; refine congrArg₂ _ ?_ ?_
-      · sorry
-      · have h₂ : s ∩ β.nodes_finset = s.erase x ∩ β.nodes_finset := sorry
-        obtain ⟨σ', τ, heq, hinv⟩ : ∃ σ' : Mem (u₁ \ v), ∃ τ : Mem v, σ = σ'.union τ (dsj₁ hv) ∧ τ ∈ inv := sorry
-        rw [← Finset.erase_inter, h₂]
-        simp only [heq, Set.mem_setOf_eq, id_eq, eq_mpr_eq_cast, Set.coe_setOf,
-          Equiv.coe_fn_mk]
-        rw [union_comm_assoc hu' hv']
-        refine (hind (s.erase x) ?_ _ _ hinv hinv hτ₂).symm
-        exact Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1)
-  | lab_test t => sorry
+    refine ENNReal.tsum_le_tsum fun ⟨σ, hσ⟩ ↦ ?_
+    refine le_of_eq_of_le
+      (mul_assoc _ _ _)
+      (mul_le_mul (le_refl _) ?_ bot_le bot_le)
+    have h₂ : s ∩ β.nodes_finset = s.erase x ∩ β.nodes_finset := sorry
+    rw [← Finset.erase_inter, h₂]
+    rw [pure_bind]
+    obtain ⟨σ', τ, heq, hinv⟩ : ∃ σ' : Mem (u₁ \ v), ∃ τ : Mem v, σ = σ'.union τ (dsj₁ hv) ∧ τ ∈ inv := sorry
+    simp only [heq]; rw [union_comm_assoc hu' hv']
+    refine (hind (s.erase x) ?_ _ _ hinv hinv hτ₂)
+    exact Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1)
+  | lab_test t =>
+    simp only [upcast_lab]
+    rw [union_comm_assoc hu hv]
+    refine le_trans ?_
+      (minProb_mono (Linearizable.bind_mono (upcast_mono_test (dsj₂₁ hu hv)) (le_refl _)))
+    rw [minProb_bind, minProb_bind]
+    refine le_of_eq_of_le iInf_C_mul_minProb ?_
+    rw [inv_sem_eq_test sorry hτ hτ₁]
+    refine iInf₂_mono fun μ hμ ↦ ?_
+    rw [← ENNReal.tsum_mul_right]
+    refine ENNReal.tsum_le_tsum fun ⟨b, hb⟩ ↦ ?_
+    refine le_of_eq_of_le
+      (mul_assoc _ _ _)
+      (mul_le_mul (le_refl _) ?_ bot_le bot_le)
+    have h₁ :
+        Lpo.filter_by_outcome α (s ∩ α.nodes_finset) x b =
+        (Lpo.filter_by_outcome α s x b) ∩ α.nodes_finset := by
+      unfold Lpo.filter_by_outcome
+      rw [← Finset.erase_inter]; exact (Finset.filter_inter _ _ _).symm
+    have h₂ :
+      s ∩ β.nodes_finset =
+      (Lpo.filter_by_outcome α s x b) ∩ β.nodes_finset := sorry
+    have h₃ :
+        Lpo.filter_by_outcome (par_comp α β hdn hu hr₁ hr₂) s x b =
+        Lpo.filter_by_outcome α s x b := by sorry
+    rw [h₁, h₂, h₃]
+    rw [union_comm_assoc hu' hv']
+    refine (hind _ ?_ _ _ hτ hτ₁ hτ₂)
+    refine Finset.ssubset_of_subset_of_ssubset (Finset.filter_subset _ _) ?_
+    exact (Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1))
 
+-- Version of the previous lemma but swapped so that β is taking a step instead of α
 lemma par_comp_inductive_step'
     {s : Finset Node} {x : Node} (hx : x ∈ Lpo.next β (s ∩ β.nodes_finset))
     (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
@@ -422,7 +524,7 @@ lemma par_comp_inductive_step'
          (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
       is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂) :
     minProb (Lpo.lin_node (par_comp α β hdn hu hr₁ hr₂) s x sorry (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) =
+      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
     minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
       minProb (Lpo.lin_node β (s ∩ β.nodes_finset) x hx.1 (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv)) := by
   rw [mul_comm, union_comm_assoc hu hv, sep_comm_assoc hu hv, par_comp_comm hu]
@@ -451,7 +553,7 @@ theorem par_comp_fin
       (Lpo.lin
         (par_comp α β hdn hu hr₁ hr₂)
         (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) =
+      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
       minProb (Lpo.lin α (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
       minProb (Lpo.lin β (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv)) := by
   unfold Lpo.lin
@@ -467,7 +569,7 @@ theorem par_comp_fin
     · unfold Lpo.lin_rec; simp only [hemp, ↓reduceIte, Finset.empty_inter, minProb_pure, Mem.union_mem]
       by_cases h₁ : σ₁ ∈ A <;> by_cases h₂ : σ₂ ∈ B <;>
         simp only [h₁, h₂, Finset.mem_coe.mpr hτ, Finset.mem_coe.mpr hτ₁, Finset.mem_coe.mpr hτ₂,
-          and_true, and_false, ↓reduceIte, and_self, mul_zero, mul_one]
+          and_true, and_false, ↓reduceIte, and_self, mul_zero, mul_one, le_refl]
     -- Inductive Case
     · nth_rw 1 [Lpo.lin_rec]; simp only [hemp, ↓reduceIte]
       rcases next_par α β hdn hu hr₁ hr₂ s with hnext | ⟨hnext, hne, hne'⟩ | ⟨hnext, hne⟩ | ⟨hnext, hne⟩ <;>
@@ -487,37 +589,37 @@ theorem par_comp_fin
         refine Finset.erase_ssubset ?_; exact (ge_of_eq hnext (Set.mem_singleton root)).1
       -- Case 2: Next comes from either α or β
       · rw [minProb_nondet, iInf_subtype]
-        refine
+        refine le_of_le_of_eq ?_
           (iInf_congr fun i ↦
             (iInf_congr_Prop (Set.mem_union i _ _) fun _ ↦ rfl).trans
             iInf_or
-            ).trans ?_
+            ).symm
         rw [iInf_inf_eq, iInf_subtype', iInf_subtype']
-        refine Eq.trans (congrArg₂ _ ?_ ?_) (inf_idem _)
+        refine le_of_eq_of_le (inf_idem _).symm (inf_le_inf ?_ ?_)
         · nth_rw 1 [Lpo.lin_rec]; simp only [hne, ↓reduceIte]
           rw [minProb_nondet]
-          refine Eq.trans ?_ (iInf_next_mul hne).symm
-          refine iInf_congr fun ⟨y, hy⟩ ↦ ?_
+          refine le_of_eq_of_le (iInf_next_mul hne) ?_
+          refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
           exact
             par_comp_inductive_step hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
         · nth_rw 2 [Lpo.lin_rec]
           simp only [↓reduceIte, hne']
           rw [minProb_nondet]
-          refine Eq.trans ?_ (mul_iInf_next hne').symm
-          refine iInf_congr fun ⟨y, hy⟩ ↦ ?_
+          refine le_of_eq_of_le (mul_iInf_next hne') ?_
+          refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
           exact
             par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
       -- Case 3: Next comes from α (β is empty)
       · nth_rw 1 [Lpo.lin_rec]; simp only [↓reduceIte, hne]
         rw [minProb_nondet, minProb_nondet]
-        refine Eq.trans ?_ (iInf_next_mul hne).symm
-        refine iInf_congr fun ⟨y, hy⟩ ↦ ?_
+        refine le_of_eq_of_le (iInf_next_mul hne) ?_
+        refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
         exact
           par_comp_inductive_step hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
       -- Case 4: Next comes from β (α is empty)
       · nth_rw 2 [Lpo.lin_rec]; simp only [hne, ↓reduceIte]
         rw [minProb_nondet, minProb_nondet]
-        refine Eq.trans ?_ (mul_iInf_next hne).symm
-        refine iInf_congr fun ⟨y, hy⟩ ↦ ?_
+        refine le_of_eq_of_le (mul_iInf_next hne) ?_
+        refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
         exact
           par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hind
