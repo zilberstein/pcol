@@ -1,9 +1,13 @@
+import Init.Prelude
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
 import Pcol.Semantics.Lpo.FinApprox
 import Pcol.Semantics.Lpo.Isomorphism
 
+import Pcol.Dist
+
 open Classical
+open ENNReal
 
 inductive Label (act : Type) (test : Type)
   | lab_bot : Label act test
@@ -82,18 +86,22 @@ instance {act test : Type} [LE act] [LE test] : OrderBot (Label act test) where
 class Linearizable (t : Type → Type)
   [Monad t] [∀ {β : Type}, Preorder (t β)]
   where
+  -- Nondeterministic choice with minimum probability
+  nondet_min {ι α : Type} : ENNReal → (ι → t α) → t α
+
+  -- Nondeterministic choice (TODO: derive from previous)
   nondet {ι α : Type} : (ι → t α) → t α
+
   nondet_mono {ι α : Type} : Monotone (nondet : (ι → t α) → t α)
   bind_mono {β γ : Type} : ∀ {m₁ m₂ : t β} {k₁ k₂ : β → t γ},
     m₁ ≤ m₂ → k₁ ≤ k₂ → bind m₁ k₁ ≤ bind m₂ k₂
  --  bind_additivity : ∀ f s, bind (nondet s) f = nondet (Finset.image (fun x => bind x f) s)
 
-
 class Sem (c : Type) (in_type out_type : Type)
   extends PartialOrder c
   where
-    sem : c → in_type → out_type
-    sem_mono [Preorder out_type] (s : in_type) : Monotone (sem · s)
+    sem : c → Finset in_type → in_type → out_type
+    sem_mono [Preorder out_type] (s : in_type) : Monotone (sem · · s)
 
 namespace Lpo
 
@@ -108,7 +116,7 @@ lemma next_empty {l : Type} [Bot l] {a : Lpofin l} :
 
 noncomputable def filter_by_outcome {l : Type} [Bot l]
     (α : Lpofin l) (s : Finset Node) (x : Node) (b : Bool) : Finset Node :=
-  (s.erase x).filter fun z ↦
+  s.filter fun z ↦
     Form.sat
       ((α.form z).and
         (bif b then (Form.literal x) else (Form.literal x).not))
@@ -116,40 +124,60 @@ noncomputable def filter_by_outcome {l : Type} [Bot l]
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
     [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
-    [Linearizable t] [Bot (t α)]
-    (a : Lpofin (Label act test)) (s : Finset Node) (st : α) : t α :=
+    [Linearizable t] [∀ {β}, Bot (t β)]
+    (rely: Finset α) (inv: Finset α)
+    (a : Lpofin (Label act test)) (s : Finset Node)
+    (st : α × (ℕ → ENNReal)) : t (α × (ℕ → ENNReal)) :=
     if s = ∅ then
       pure st
     else
-      Linearizable.nondet fun x : next a s => lin_node a s x.val x.property.1 st
-    termination_by (s.card, 1)
+      Linearizable.nondet fun x : next a s => lin_node rely inv a (s.erase x) x.val st
+    termination_by (s.card, 0)
+    decreasing_by
+      · left; apply Finset.card_erase_lt_of_mem x.property.1
+
+  noncomputable def lin_act {t : Type → Type} {α act: Type}
+      [Sem act α (t α)]
+      [Monad t] [∀ {β : Type}, Preorder (t β)] [Linearizable t]
+      (rely: Finset α) (inv: Finset α)
+      (ac : act)
+      (st : α × (ℕ → ENNReal)) : t (α × (ℕ → ENNReal)) :=
+      have j := sorry
+      Linearizable.nondet_min (st.2 j) fun x =>
+        if x then
+          (fun st' => (st', fun _ => 1)) <$> Sem.sem ac (rely ∩ inv) st.1 -- TODO: is intersection what we want here?
+        else
+          (fun st' => (st', fun k => st.2 (Nat.succ k))) <$> Sem.sem ac inv st.1
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
       [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
-      [Linearizable t] [Bot (t α)]
-      (a : Lpofin (Label act test)) (s : Finset Node) (x : Node) (hx : x ∈ s)
-      (st : α) : t α :=
-    have _h : (s.erase x).card < s.card := Finset.card_erase_lt_of_mem hx
+      [Linearizable t] [∀ {β}, Bot (t β)]
+      (rely: Finset α) (inv: Finset α)
+      (a : Lpofin (Label act test)) (s : Finset Node) (x : Node)
+      (st : α × (ℕ → ENNReal)) : t (α × (ℕ → ENNReal)) :=
+    have h (r : Bool) : (filter_by_outcome a s x r).card ≤ s.card := by apply Finset.card_filter_le
     match a.lab x with
     | Label.lab_bot => ⊥
-    | Label.lab_fork => lin_rec a (s.erase x) st
-    | Label.lab_act ac => bind (Sem.sem ac st) (lin_rec a (s.erase x))
+    | Label.lab_fork => lin_rec rely inv a s st
+    | Label.lab_act ac => bind (lin_act rely inv ac st) (lin_rec rely inv a s)
     | Label.lab_test b =>
-        bind (Sem.sem b st)
-          fun (r : Bool) =>
-            lin_rec a (filter_by_outcome a s x r) st
-  termination_by (s.card, 0)
-  decreasing_by
-  · left; exact _h
-  · left; exact _h
-  · left; exact lt_of_lt_of_le' _h (Finset.card_filter_le _ _)
+        bind (Sem.sem b sorry st.1)
+          fun r => lin_rec rely inv a (filter_by_outcome a s x r) st
+    termination_by (s.card, 1)
+    decreasing_by
+    · right ; simp
+    · right ; simp
+    · cases lt_or_eq_of_le (h r) with
+    | inl h => left; exact h
+    | inr h => rw [h] ; right ; simp
 end
 
 noncomputable def lin {t : Type → Type} {α act test: Type}
   [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
-  [Linearizable t] [Bot (t α)]
-  (a : Lpofin (Label act test)) : α → t α :=
-    lin_rec a a.nodes_finset
+  [Linearizable t] [∀ {β}, Bot (t β)]
+  (rely: Finset α) (inv : Finset α)
+  (a : Lpofin (Label act test)) (st : α) (pₖ : ℕ → ENNReal) : t α :=
+    (fun (st, _) => st) <$> (lin_rec rely inv a a.nodes_finset (st, pₖ))
 
 lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
   (hle : a ≤ b)
