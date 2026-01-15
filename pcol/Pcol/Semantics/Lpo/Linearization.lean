@@ -121,17 +121,24 @@ noncomputable def filter_by_outcome {l : Type} [Bot l]
       ((α.form z).and
         (bif b then (Form.literal x) else (Form.literal x).not))
 
+structure LinState (α : Type) where
+  mk ::
+  state : α
+  prob : ℕ → ENNReal
+  step : ℕ
+
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
     [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
     [Linearizable t] [∀ {β}, Bot (t β)]
-    (rely: Finset α) (inv: Finset α)
+    (rely: Finset α) (inv: Finset α) (guar: Finset α)
     (a : Lpofin (Label act test)) (s : Finset Node)
-    (st : α × (ℕ → ENNReal)) : t (α × (ℕ → ENNReal)) :=
+    (st : LinState α) : t (LinState α) :=
     if s = ∅ then
-      pure st
+      pure st -- TODO: check against guar
     else
-      Linearizable.nondet fun x : next a s => lin_node rely inv a (s.erase x) x.val st
+      Linearizable.nondet fun x : next a s =>
+        lin_node rely inv guar a (s.erase x) x.val {st with step := Nat.succ st.step}
     termination_by (s.card, 0)
     decreasing_by
       · left; apply Finset.card_erase_lt_of_mem x.property.1
@@ -139,30 +146,29 @@ mutual
   noncomputable def lin_act {t : Type → Type} {α act: Type}
       [Sem act α (t α)]
       [Monad t] [∀ {β : Type}, Preorder (t β)] [Linearizable t]
-      (rely: Finset α) (inv: Finset α)
+      (rely: Finset α) (inv: Finset α) (guar: Finset α)
       (ac : act)
-      (st : α × (ℕ → ENNReal)) : t (α × (ℕ → ENNReal)) :=
-      have j := sorry
-      Linearizable.nondet_min (st.2 j) fun x =>
+      (st : LinState α) : t (LinState α) :=
+      Linearizable.nondet_min (st.prob 0) fun x =>
         if x then
-          (fun st' => (st', fun _ => 1)) <$> Sem.sem ac (rely ∩ inv) st.1 -- TODO: is intersection what we want here?
+          (⟨·, fun _ => 1, st.step⟩) <$> Sem.sem ac (rely ∩ inv) st.state -- TODO: is intersection what we want here?
         else
-          (fun st' => (st', fun k => st.2 (Nat.succ k))) <$> Sem.sem ac inv st.1
+          (⟨·, fun k => st.prob (Nat.succ k), st.step⟩) <$> Sem.sem ac inv st.state
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
       [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
       [Linearizable t] [∀ {β}, Bot (t β)]
-      (rely: Finset α) (inv: Finset α)
+      (rely: Finset α) (inv: Finset α) (guar: Finset α)
       (a : Lpofin (Label act test)) (s : Finset Node) (x : Node)
-      (st : α × (ℕ → ENNReal)) : t (α × (ℕ → ENNReal)) :=
+      (st : LinState α) : t (LinState α) :=
     have h (r : Bool) : (filter_by_outcome a s x r).card ≤ s.card := by apply Finset.card_filter_le
     match a.lab x with
     | Label.lab_bot => ⊥
-    | Label.lab_fork => lin_rec rely inv a s st
-    | Label.lab_act ac => bind (lin_act rely inv ac st) (lin_rec rely inv a s)
+    | Label.lab_fork => lin_rec rely inv guar a s st
+    | Label.lab_act ac => bind (lin_act rely inv guar ac st) (lin_rec rely inv guar a s)
     | Label.lab_test b =>
-        bind (Sem.sem b sorry st.1)
-          fun r => lin_rec rely inv a (filter_by_outcome a s x r) st
+        bind (Sem.sem b sorry st.1) -- TODO: activate rely here also (need separate "probabilistic rely activation" function)
+          fun r => lin_rec rely inv guar a (filter_by_outcome a s x r) st
     termination_by (s.card, 1)
     decreasing_by
     · right ; simp
@@ -175,9 +181,9 @@ end
 noncomputable def lin {t : Type → Type} {α act test: Type}
   [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
   [Linearizable t] [∀ {β}, Bot (t β)]
-  (rely: Finset α) (inv : Finset α)
-  (a : Lpofin (Label act test)) (st : α) (pₖ : ℕ → ENNReal) : t α :=
-    (fun (st, _) => st) <$> (lin_rec rely inv a a.nodes_finset (st, pₖ))
+  (rely: Finset α) (inv: Finset α) (guar: Finset α)
+  (a : Lpofin (Label act test)) (pₖ : ℕ → ENNReal) (init: α × ℕ) : t (α × ℕ) :=
+    (fun st => (st.state, st.step)) <$> (lin_rec rely inv guar a a.nodes_finset (LinState.mk init.1 pₖ init.2))
 
 lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
   (hle : a ≤ b)
