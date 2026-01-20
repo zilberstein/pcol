@@ -121,11 +121,27 @@ noncomputable def filter_by_outcome {l : Type} [Bot l]
       ((α.form z).and
         (bif b then (Form.literal x) else (Form.literal x).not))
 
+-- Linearization state:
+--   * underlying state
+--   * current rely invariant probability
+--   * current local scheduler steps taken so far
 structure LinState (α : Type) where
   mk ::
   state : α
   prob : ℕ → ENNReal
   step : ℕ
+
+-- Check if rely is active / nondeterministically activate rely
+noncomputable def check_rely {t : Type → Type} {α β: Type}
+  [Monad t] [∀ {β : Type}, Preorder (t β)] [Linearizable t]
+  (rely: Finset α) (inv: Finset α)
+  (st: LinState α)
+  (f: Finset α → t β) (cont: β → (ℕ → ENNReal) → t (LinState α)) : t (LinState α) :=
+    Linearizable.nondet_min (st.prob 0) fun x =>
+      if x then
+        f (rely ∩ inv) >>= (cont · (fun _ => 1)) -- TODO: is intersection what we want here?
+      else
+        f inv >>= (cont · (fun k => st.prob (Nat.succ k)))
 
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
@@ -143,18 +159,6 @@ mutual
     decreasing_by
       · left; apply Finset.card_erase_lt_of_mem x.property.1
 
-  noncomputable def lin_act {t : Type → Type} {α act: Type}
-      [Sem act α (t α)]
-      [Monad t] [∀ {β : Type}, Preorder (t β)] [Linearizable t]
-      (rely: Finset α) (inv: Finset α) (guar: Finset α)
-      (ac : act)
-      (st : LinState α) : t (LinState α) :=
-      Linearizable.nondet_min (st.prob 0) fun x =>
-        if x then
-          (⟨·, fun _ => 1, st.step⟩) <$> Sem.sem ac (rely ∩ inv) st.state -- TODO: is intersection what we want here?
-        else
-          (⟨·, fun k => st.prob (Nat.succ k), st.step⟩) <$> Sem.sem ac inv st.state
-
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
       [Sem act α (t α)] [Sem test α (t Bool)] [Monad t] [∀ {β : Type}, Preorder (t β)]
       [Linearizable t] [∀ {β}, Bot (t β)]
@@ -165,17 +169,19 @@ mutual
     match a.lab x with
     | Label.lab_bot => ⊥
     | Label.lab_fork => lin_rec rely inv guar a s st
-    | Label.lab_act ac => bind (lin_act rely inv guar ac st) (lin_rec rely inv guar a s)
+    | Label.lab_act ac =>
+      check_rely rely inv st (Sem.sem ac · st.state)
+        (lin_rec rely inv guar a s {st with state := ·, prob := ·})
     | Label.lab_test b =>
-        bind (Sem.sem b sorry st.1) -- TODO: activate rely here also (need separate "probabilistic rely activation" function)
-          fun r => lin_rec rely inv guar a (filter_by_outcome a s x r) st
+      check_rely rely inv st (Sem.sem b · st.state)
+        fun r => (lin_rec rely inv guar a (filter_by_outcome a s x r) {st with prob := ·})
     termination_by (s.card, 1)
     decreasing_by
     · right ; simp
     · right ; simp
     · cases lt_or_eq_of_le (h r) with
-    | inl h => left; exact h
-    | inr h => rw [h] ; right ; simp
+      | inl h => left; exact h
+      | inr h => rw [h] ; right ; simp
 end
 
 noncomputable def lin {t : Type → Type} {α act test: Type}
