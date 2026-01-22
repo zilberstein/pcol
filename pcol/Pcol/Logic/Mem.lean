@@ -1,33 +1,63 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Lattice.Union
 
-def Var := Nat
-instance : DecidableEq Var := instDecidableEqNat
+abbrev Var := Nat
+abbrev Val := Nat
+abbrev Mem := List (Var × Val)
 
-def Val := Nat
-def Mem (v : Finset Var) := ↑v → Val
+def insert (x: Var) (v: Val) (σ: Mem) : Mem :=
+  match σ with
+  | [] => [(x, v)]
+  | (y, v') :: σ' =>
+    if x ≤ y then
+      (x, v) :: (y, v') :: σ'
+    else
+      (y, v') :: insert x v σ'
 
-@[ext]
-theorem mem_ext {u : Finset Var} {σ τ : Mem u} (h : ∀ x, σ x = τ x) : σ = τ := funext h
+def lookup (x: Var) (σ: Mem) : Option Val :=
+  match σ with
+  | [] => none
+  | (y, v) :: σ' =>
+    if x = y then some v else lookup x σ'
+
+def union (σ τ: Mem) : Mem :=
+  match σ with
+  | [] => τ
+  | (x, v) :: σ' => insert x v (union σ' τ)
+
+def list_greater (x: Var) (σ: Mem) : Prop :=
+  match σ with
+  | [] => True
+  | (y, _) :: σ' => x < y ∧ list_greater x σ'
+
+def wf (σ: Mem) : Prop :=
+  match σ with
+  | [] => True
+  | (x, _) :: σ' => list_greater x σ' ∧ wf σ'
+
+instance : GetElem Mem Var (Option Val) (fun _ _ => True) where
+  getElem σ x _ := lookup x σ
+
+def indom (x: Var) (σ: Mem) : Prop :=
+    match σ with
+    | [] => False
+    | (y, _) :: σ' => if x = y then True else indom x σ'
+
+instance : Membership Var Mem where
+  mem σ x := indom x σ
+
+def disjoint (σ τ: Mem) : Prop :=
+  match σ with
+  | [] => True
+  | (x, _) :: σ' => ¬ (x ∈ τ) ∧ disjoint σ' τ
 
 namespace Mem
 
-noncomputable def union {u u₁ u₂ : Finset Var} (σ : Mem u₁) (τ : Mem u₂)
-  (hu : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) : Mem u :=
-  fun x ↦
-    if h : x.val ∈ u₁ then
-      σ ⟨x.val, h⟩
-    else
-      τ ⟨x.val, by
-        obtain ⟨x, hx⟩ := x; rw [hu.2] at hx
-        rcases Finset.mem_union.mp hx with hx | hx
-        · exfalso; exact h hx
-        · exact hx
-      ⟩
-def emp : Mem ∅ := fun x ↦ False.elim (Finset.not_mem_empty _ x.property)
+def sep (A B: Set Mem) : Set Mem :=
+  -- TODO: should this set require some disjointness property?
+  ⋃ σ ∈ A, ⋃ τ ∈ B, { union σ τ }
 
-def castMem {u v : Finset Var} (σ : Mem u) (h : u = v) : Mem v :=
-  cast (congrArg _ h) σ
+/-
 
 noncomputable def sep {u u₁ u₂ : Finset Var} (A : Set (Mem u₁)) (B : Set (Mem u₂))
     (hu : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) :
@@ -44,9 +74,11 @@ lemma union_mem {u u₁ u₂ : Finset Var} {σ : Mem u₁} {τ : Mem u₂} {A : 
     (h : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) :
     σ.union τ h ∈ Mem.sep A B h ↔ σ ∈ A ∧ τ ∈ B := by
   sorry
+-/
 
 end Mem
 
+/-
 -- Shorthands for some disjointness lemmas
 lemma dsj₁ {u₁ u₂ v : Finset Var} (h : v = u₁ ∩ u₂) :
     Disjoint (u₁ \ v) v ∧ u₁ = (u₁ \ v) ∪ v := by
@@ -81,3 +113,4 @@ lemma sep_comm_assoc {u u₁ u₂ v : Finset Var}
     (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
     (Mem.sep A (Mem.sep B I (dsj₂ hv)) (dsj₁₂ hu hv)) =
     (Mem.sep B (Mem.sep A I (dsj₁ hv)) (dsj₂₁ hu hv)) := by sorry
+-/
