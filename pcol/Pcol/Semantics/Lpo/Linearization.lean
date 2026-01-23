@@ -189,9 +189,10 @@ end
 noncomputable def lin {t : Type → Type} {α act test: Type}
   [Sem act α (t α)] [Sem test α Bool] [Monad t] [∀ {β : Type}, Preorder (t β)]
   [Linearizable t] [∀ {β}, Bot (t β)]
-  (rely: Finset α) (inv: Finset α) (guar: Finset α)
-  (a : Lpofin (Label act test)) (pₖ : ℕ → ENNReal) (init: α × ℕ) : t (α × ℕ) :=
-    (fun st => (st.state, st.step)) <$> (lin_rec rely inv guar a a.nodes_finset (LinState.mk init.1 pₖ init.2 inv))
+  (rely: Finset α) (inv: Finset α) (guar: Finset α) (pₖ : ℕ → ENNReal)
+  (a : Lpofin (Label act test)) (init: α × ℕ) : t (α × ℕ) :=
+    (lin_rec rely inv guar a a.nodes_finset (LinState.mk init.1 pₖ init.2 inv)) >>=
+      fun st => pure (st.state, st.step)
 
 lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
   (hle : a ≤ b)
@@ -253,17 +254,19 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
     | Label.lab_fork =>
       have hlle := hle.lab x; unfold Lpofin.lab at *
       simp [hl, LE.le] at hlle; rw [hlle]; simp
-      apply hind ; all_goals try assumption
-      · simp
-      · sorry
+      apply hind ; all_goals try first | assumption | simp
+      intros y hin hy ; by_cases heq : y = x
+      · rw [heq] at hy ; rw [hy] at hl ; contradiction
+      · exact hbot _ hin heq hy
     | Label.lab_act ac =>
-        have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
-        rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx]
-        refine Linearizable.bind_mono (Sem.sem_mono (c := act) st.state st.curr_inv hxle) ?_
-        refine Pi.le_def.2 ?_ ; intro
-        apply hind ; all_goals try assumption
-        · sorry
-        · sorry
+      have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
+      rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx]
+      refine Linearizable.bind_mono (Sem.sem_mono (c := act) st.state st.curr_inv hxle) ?_
+      refine Pi.le_def.2 ?_ ; intro
+      apply hind ; all_goals try first | assumption | simp
+      intros y hin hy ; by_cases heq : y = x
+      · rw [heq] at hy ; rw [hy] at hl ; contradiction
+      · exact hbot _ hin heq hy
     | Label.lab_test bb =>
         have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
         rcases lab_is_test_le hlx with ⟨b', hbx, hxle⟩; rw [hbx]
@@ -317,26 +320,28 @@ lemma lin_rec_mono {m : Type → Type} {α act test : Type}
         apply hind
         sorry
 
-/-
 theorem lin_mono {m : Type → Type} {α act test : Type}
   [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, PartialOrder (m β)]
   [∀ β, OrderBot (m β)] [Linearizable m]
-  (rely inv guar: Finset α) :
-  Monotone (lin rely inv guar : Lpofin (Label act test) → (ℕ → ENNReal) → (α × ℕ) → m (α × ℕ)) := by {
-    unfold lin; intro α β hle
-    refine lin_rec_mono ?_ ?_ ?_ hle
-    · unfold Lpofin.nodes_finset; refine Eq.symm (Finset.inter_eq_right.2 ?_)
-      simp [hle.nodes]
-    · intro _ _ y hr; simp [Lpofin.nodes, Lpo.nodes]
-      exact (Set.Finite.mem_toFinset _).mpr (α.val.property.rel_dom hr).2
-    · intro _ hx _; exact (Set.Finite.mem_toFinset _).mpr hx
-  }
+  (rely inv guar: Finset α) (pₖ : ℕ → ENNReal) :
+  Monotone (lin rely inv guar pₖ : Lpofin (Label act test) → (α × ℕ) → m (α × ℕ)) := by
+    unfold lin ; intro α β hle
+    refine Pi.le_def.2 ?_
+    intros ; refine Linearizable.bind_mono ?_ ?_
+    · refine lin_rec_mono ?_ ?_ ?_ hle ?_
+      · unfold Lpofin.nodes_finset; refine Eq.symm (Finset.inter_eq_right.2 ?_)
+        simp [hle.nodes]
+      · intro _ _ y hr; simp [Lpofin.nodes, Lpo.nodes]
+        exact (Set.Finite.mem_toFinset _).mpr (α.val.property.rel_dom hr).2
+      · intro _ hx _; exact (Set.Finite.mem_toFinset _).mpr hx
+    · simp
 
 lemma lin_rec_iso {m : Type → Type} {α act test : Type}
-    [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
-    [OrderBot (m α)] [Linearizable m]
+    [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, Preorder (m β)]
+    [∀ {β}, OrderBot (m β)] [Linearizable m]
+    {rely inv guar : Finset α}
     {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
-    (lin_rec a s : α →  m α) = lin_rec (a.permute e) (s.image e) := by
+    (lin_rec rely inv guar a s : LinState α →  m (LinState α)) = lin_rec rely inv guar (a.permute e) (s.image e) := by
   induction s using Finset.strongInduction with
   | H s hind =>
     ext st; unfold lin_rec; by_cases h : s = ∅
@@ -345,11 +350,15 @@ lemma lin_rec_iso {m : Type → Type} {α act test : Type}
       sorry
 
 lemma lin_iso {m : Type → Type} {α act test : Type}
-    [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
-    [OrderBot (m α)] [Linearizable m]
+    [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, Preorder (m β)]
+    [∀ {β}, OrderBot (m β)] [Linearizable m]
+    {rely inv guar : Finset α} {pₖ : ℕ → ENNReal}
     {a b : Lpofin (Label act test)} (h : a ≈ b) :
-    (lin a : α →  m α) = lin b := by
+    (lin rely inv guar pₖ a : α × ℕ →  m (α × ℕ)) = lin rely inv guar pₖ b := by
   unfold lin; rcases h with ⟨e, h⟩
+  funext
+  sorry
+  /-
   refine Eq.trans lin_rec_iso (congr_arg₂ _ (Subtype.ext h) ?_)
   have hn := congr_arg Lpo.nodes h; simp [permute, Lpo.nodes] at hn
   have _ : Fintype ↑(e '' a.val.val.nodes) := by
@@ -359,6 +368,5 @@ lemma lin_iso {m : Type → Type} {α act test : Type}
   · unfold Lpo.nodes; rw [hn]; exact b.property
   · unfold Lpofin.nodes_finset; unfold Set.Finite.toFinset
     refine @Set.toFinset_congr _ _ _ ?_ ?_ hn
-
--/
+  -/
 end Lpo
