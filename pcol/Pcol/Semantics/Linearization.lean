@@ -1,4 +1,5 @@
 import Init.Prelude
+import Pcol.Semantics.Basic
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
 import Pcol.Semantics.Lpo.FinApprox
@@ -83,35 +84,6 @@ instance {act test : Type} [PartialOrder act] [PartialOrder test] : PartialOrder
 instance {act test : Type} [LE act] [LE test] : OrderBot (Label act test) where
   bot_le _ := True.intro
 
-class Linearizable (t : Type → Type)
-  [Monad t] [∀ {β : Type}, Preorder (t β)]
-  where
-  -- Nondeterministic choice with minimum probability `p` for
-  -- first choice (so that nondet_min 1 m₁ m₂ = m₁)
-  nondet_min {α : Type} : ENNReal → t α → t α → t α
-
-  -- Nondeterministic choice (TODO: derive from previous)
-  nondet {ι α : Type} : (ι → t α) → t α
-
-  nondet_min_mono {α : Type} : ∀ {m₁ m₂ t₁ t₂ : t α} (p : ENNReal),
-    m₁ ≤ m₂ → t₁ ≤ t₂ → nondet_min p m₁ t₁ ≤ nondet_min p m₂ t₂
-
-  nondet_mono {ι α : Type} : Monotone (nondet : (ι → t α) → t α)
-
-  bind_mono {β γ : Type} : ∀ {m₁ m₂ : t β} {k₁ k₂ : β → t γ},
-    m₁ ≤ m₂ → k₁ ≤ k₂ → bind m₁ k₁ ≤ bind m₂ k₂
- --  bind_additivity : ∀ f s, bind (nondet s) f = nondet (Finset.image (fun x => bind x f) s)
-
-
-class Sem (c : Type) (in_type out_type : Type)
-  extends PartialOrder c
-  where
-    sem : c → Finset in_type → in_type → out_type
-    sem_mono [Preorder out_type] (s : in_type) (inv : Finset in_type) : Monotone (sem · inv s)
-
-noncomputable def check {t : Type → Type} {α : Type} [Monad t] [∀ {β}, Bot (t β)]
-  (a: α) (s: Finset α) : t α := if a ∈ s then pure a else ⊥
-
 namespace Lpo
 
 def next {l : Type} [Bot l] (a : Lpofin l) (s : Finset Node) : Set Node :=
@@ -143,17 +115,17 @@ structure LinState (α : Type) where
 
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
-    [Sem act α (t α)] [Sem test α Bool] [Monad t] [∀ {β : Type}, Preorder (t β)]
-    [Linearizable t] [∀ {β}, Bot (t β)]
+    [InvSem act α (t α)] [Sem test α Bool] [Monad t]
+    [Check t α] [Bot (t (LinState α))] [Lin t]
     (rely: Finset α) (inv: Finset α) (guar: Finset α)
     (a : Lpofin (Label act test)) (s : Finset Node)
     (st : LinState α) : t (LinState α) :=
     if s = ∅ then
-      ({st with state := ·}) <$> check st.state guar
+      ({st with state := ·}) <$> Check.check guar st.state
     else
-      Linearizable.nondet fun x : next a s =>
+      Lin.nondet fun x : next a s =>
         have st' := { st with step := Nat.succ st.step }
-        Linearizable.nondet_min
+        Lin.nondet_min
           (st.prob 0)
           (lin_node rely inv guar a (s.erase x) x.val {st' with prob := fun _ => 1, curr_inv := rely ∩ inv})
           (lin_node rely inv guar a (s.erase x) x.val {st' with prob := fun k => st.prob (Nat.succ k)})
@@ -163,8 +135,8 @@ mutual
       · left; apply Finset.card_erase_lt_of_mem x.property.1
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
-      [Sem act α (t α)] [Sem test α Bool] [Monad t] [∀ {β : Type}, Preorder (t β)]
-      [Linearizable t] [∀ {β}, Bot (t β)]
+      [InvSem act α (t α)] [Sem test α Bool] [Monad t]
+      [Check t α] [Lin t] [Bot (t (LinState α))]
       (rely: Finset α) (inv: Finset α) (guar: Finset α)
       (a : Lpofin (Label act test)) (s : Finset Node) (x : Node)
       (st : LinState α) : t (LinState α) :=
@@ -173,9 +145,9 @@ mutual
     | Label.lab_bot => ⊥
     | Label.lab_fork => lin_rec rely inv guar a s st
     | Label.lab_act ac =>
-      Sem.sem ac st.curr_inv st.state >>= (lin_rec rely inv guar a s {st with state := ·})
+      InvSem.inv_sem ac st.curr_inv st.state >>= (lin_rec rely inv guar a s {st with state := ·})
     | Label.lab_test b =>
-      have r := Sem.sem b st.curr_inv st.state
+      have r := Sem.sem b st.state
       lin_rec rely inv guar a (filter_by_outcome a s x r) st
     termination_by (s.card, 1)
     decreasing_by
@@ -187,8 +159,8 @@ mutual
 end
 
 noncomputable def lin {t : Type → Type} {α act test: Type}
-  [Sem act α (t α)] [Sem test α Bool] [Monad t] [∀ {β : Type}, Preorder (t β)]
-  [Linearizable t] [∀ {β}, Bot (t β)]
+  [InvSem act α (t α)] [Sem test α Bool] [Monad t]
+  [Check t α] [Lin t] [Bot (t (LinState α))]
   (rely: Finset α) (inv: Finset α) (guar: Finset α) (pₖ : ℕ → ENNReal)
   (a : Lpofin (Label act test)) (init: α × ℕ) : t (α × ℕ) :=
     (lin_rec rely inv guar a a.nodes_finset (LinState.mk init.1 pₖ init.2 inv)) >>=
@@ -234,8 +206,9 @@ lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
 
 --   }
 lemma lin_node_mono {m : Type → Type} {α act test : Type}
-  [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, Preorder (m β)]
-  [∀ β, OrderBot (m β)] [Linearizable m]
+  [Monad m] [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
+  [Preorder act] [Preorder (m α)] [Preorder test] [Preorder (m (LinState α))]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {rely inv guar : Finset α} {x : Node}
   (hst : s = t ∩ a.nodes_finset)
   (hcl : a.rel.IsUpClosed s)
@@ -261,7 +234,7 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
     | Label.lab_act ac =>
       have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
       rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx]
-      refine Linearizable.bind_mono (Sem.sem_mono (c := act) st.state st.curr_inv hxle) ?_
+      refine LawfulLin.bind_mono (LawfulInvSem.inv_sem_mono (c := act) st.state st.curr_inv hxle) ?_
       refine Pi.le_def.2 ?_ ; intro
       apply hind ; all_goals try first | assumption | simp
       intros y hin hy ; by_cases heq : y = x
@@ -278,7 +251,7 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
         · sorry
 
 lemma lin_rec_mono {m : Type → Type} {α act test : Type}
-  [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, Preorder (m β)]
+  [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, Preorder (m β)]
   [∀ β, OrderBot (m β)] [Linearizable m]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {rely inv guar : Finset α}
   (hst : s = t ∩ a.nodes_finset)
@@ -321,7 +294,7 @@ lemma lin_rec_mono {m : Type → Type} {α act test : Type}
         sorry
 
 theorem lin_mono {m : Type → Type} {α act test : Type}
-  [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, PartialOrder (m β)]
+  [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, PartialOrder (m β)]
   [∀ β, OrderBot (m β)] [Linearizable m]
   (rely inv guar: Finset α) (pₖ : ℕ → ENNReal) :
   Monotone (lin rely inv guar pₖ : Lpofin (Label act test) → (α × ℕ) → m (α × ℕ)) := by
@@ -337,7 +310,7 @@ theorem lin_mono {m : Type → Type} {α act test : Type}
     · simp
 
 lemma lin_rec_iso {m : Type → Type} {α act test : Type}
-    [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, Preorder (m β)]
+    [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, Preorder (m β)]
     [∀ {β}, OrderBot (m β)] [Linearizable m]
     {rely inv guar : Finset α}
     {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
@@ -350,7 +323,7 @@ lemma lin_rec_iso {m : Type → Type} {α act test : Type}
       sorry
 
 lemma lin_iso {m : Type → Type} {α act test : Type}
-    [Monad m] [Sem act α (m α)] [Sem test α Bool] [∀ β, Preorder (m β)]
+    [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, Preorder (m β)]
     [∀ {β}, OrderBot (m β)] [Linearizable m]
     {rely inv guar : Finset α} {pₖ : ℕ → ENNReal}
     {a b : Lpofin (Label act test)} (h : a ≈ b) :
