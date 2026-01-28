@@ -1,6 +1,8 @@
 import Pcol.ConvexPowerset
 import Pcol.ConvexPowerset.Monad
-import Pcol.Semantics.Lpo.Linearization
+import Pcol.Semantics.Linearization
+import Pcol.Semantics.Lpo.Basic
+import Pcol.Semantics.Lpo.FinApprox
 
 open Classical
 
@@ -42,7 +44,7 @@ lemma iInf_C_mul_minProb {X Y : Type} {s : C X} {t : C Y} {A : Set Y}
   exact s.property.nonempty
 
 lemma iInf_next_mul {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : C X} {A : Set X}
-    {f : ↑(Lpo.next α s) → ENNReal} (h : s ≠ ∅) :
+    {f : ↑(Lin.next α s) → ENNReal} (h : s ≠ ∅) :
     iInf f * minProb t A = iInf fun x ↦ f x * minProb t A := by
   refine iInf_mul_minProb ?_
   clear f; induction s using Finset.induction with
@@ -69,7 +71,7 @@ lemma iInf_next_mul {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : 
           exact Finset.not_mem_empty _ hy
 
 lemma mul_iInf_next {l X : Type} [Bot l] {α : Lpofin l} {s : Finset Node} {t : C X} {A : Set X}
-    {f : ↑(Lpo.next α s) → ENNReal} (h : s ≠ ∅) :
+    {f : ↑(Lin.next α s) → ENNReal} (h : s ≠ ∅) :
     minProb t A * iInf f = iInf fun x ↦ minProb t A * f x :=
   (mul_comm _ _).trans ((iInf_next_mul h).trans
     (iInf_congr fun _ ↦ mul_comm _ _))

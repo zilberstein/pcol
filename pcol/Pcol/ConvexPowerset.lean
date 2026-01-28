@@ -5,6 +5,7 @@ import Pcol.Dist
 
 open ENNReal
 open PMF
+open Set
 
 -- Orders on Probability Distributions
 
@@ -245,3 +246,24 @@ noncomputable instance {α : Type} : CompletePartialOrder (C α) where
     · intro c hc; apply le_iff_supset.2; rw [sSup_of_directed hd]
       rintro μ hμ t ⟨t', hth, htt'⟩; rw [← htt']; exact le_iff_supset.1 (hc hth) hμ
   }
+
+-- Convex combination operation
+def convex_comb {α : Type} (S₁ S₂ : Set (Distr α)) (p : ENNReal) (hp : p ≤ 1) : Set (Distr α) :=
+  { d | ∀ d₁ ∈ S₁, ∀ d₂ ∈ S₂, d = convex_sum' d₁ d₂ p hp }
+
+lemma closed_convex_comb {α : Type} {S₁ S₂ : Set (Distr α)} (p : ENNReal) (hp : p ≤ 1) :
+  ConvexSet S₁ → ConvexSet S₂ → ConvexSet (convex_comb S₁ S₂ p hp) := sorry
+
+-- Convex union operation
+def convex_union {α : Type} (S₁ S₂ : Set (Distr α)) : Set (Distr α) :=
+  ⋃ (p : ENNReal) (hp : p ≤ 1), (convex_comb S₁ S₂ p hp)
+
+lemma closed_convex_union {α : Type} {S₁ S₂ : Set (Distr α)} :
+  ConvexSet S₁ → ConvexSet S₂ → ConvexSet (convex_union S₁ S₂) := sorry
+
+-- 'Fair' convex union: only include convex combinations with probability at least `p`
+def convex_union_fair {α : Type} (S₁ S₂ : Set (Distr α)) (p : ENNReal) (hp : p ≤ 1) : Set (Distr α) :=
+  ⋃ (q : ENNReal) (_ : q ≥ p) (hq : q ≤ 1 - p), (convex_comb S₁ S₂ q (le_trans hq (tsub_le_self)))
+
+lemma closed_convex_union_fair {α : Type} {S₁ S₂ : Set (Distr α)} (p : ENNReal) (hp : p ≤ 1):
+  ConvexSet S₁ → ConvexSet S₂ → ConvexSet (convex_union_fair S₁ S₂ p hp) := sorry

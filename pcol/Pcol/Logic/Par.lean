@@ -3,37 +3,50 @@ import Mathlib.Data.Finset.Lattice.Basic
 import Pcol.ConvexPowerset
 import Pcol.ConvexPowerset.Monad
 
-import Pcol.Logic.Invariant
+--import Pcol.Logic.Invariant
+import Pcol.Logic.Mem
 import Pcol.Logic.MinProb
-import Pcol.Semantics.Lpo.Linearization
+import Pcol.Semantics.Linearization
 import Pcol.Semantics.Lpo.Operations.Par
 
 open Classical
 
 -- An instance for linearizing into the convex powerdomain
-instance : Linearizable C where
-  nondet {ι X} (f : ι → C X) := bind ⟨(Set.univ : Set (Distr ι)), sorry⟩ f
+instance : Lin C where
+  nondet {ι X} (f : ι → C X) :=
+    bind ⟨(Set.univ : Set (Distr ι)), sorry⟩ f
+
+  nondet_min p S₁ S₂ :=
+    ⟨ ⋃ (q : ENNReal) (_ : q ≥ p) (hq : q ≤ 1), (convex_comb S₁.1 S₂.1 q hq)
+    , sorry ⟩
+
+instance : LawfulLin C where
   nondet_mono := sorry
-  bind_mono := sorry
+  nondet_min_mono := sorry
+  bind_mono_left := sorry
+  bind_mono_right := sorry
 
-lemma nondet_singleton {u : Finset Var} {X : Type} {x : X} {f : ↑(Set.singleton x) → C (Mem u)} :
-    Linearizable.nondet f = f ⟨x, Set.mem_singleton _⟩ := sorry
+lemma nondet_singleton {u : Finset Var} {X : Type} {x : X} {f : ↑(Set.singleton x) → C Mem} :
+    Lin.nondet f = f ⟨x, Set.mem_singleton _⟩ := sorry
 
-lemma minProb_nondet {u : Finset Var} {ι : Type} (f : ι → C (Mem u)) (A : Set (Mem u)) :
-    minProb (Linearizable.nondet f) A =
+lemma minProb_nondet {u : Finset Var} {ι : Type} (f : ι → C Mem) (A : Set Mem) :
+    minProb (Lin.nondet f) A =
     ⨅ x : ι, minProb (f x) A := sorry
 
 -- Parallel composition of α and β by upcasting
-noncomputable def par_comp {u₁ u₂ u : Finset Var} {act test : Type}
-    (α : Lpofin (Label (WithInv act u₁) (WithInv test u₁)))
-    (β : Lpofin (Label (WithInv act u₂) (WithInv test u₂)))
-    (hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
-    {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes) :
-    Lpofin (Label (WithInv act u) (WithInv test u)) :=
-  Lpo.par_fin Label.lab_fork root
-    (α.upcast (Finset.subset_union_left.trans (Finset.subset_of_eq hu.symm)))
-    (β.upcast (Finset.subset_union_right.trans (Finset.subset_of_eq hu.symm)))
-    hr₁ hr₂ hdn
+noncomputable def par_comp {act test : Type}
+    (α : Lpofin (Label act test))
+    (β : Lpofin (Label act test))
+    --(hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
+    --{root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes) :
+    (root : Node)
+    :
+    Lpofin (Label act test) :=
+  Lpo.par_fin Label.lab_fork root α β
+    sorry sorry sorry
+    --(α.upcast (Finset.subset_union_left.trans (Finset.subset_of_eq hu.symm)))
+    --(β.upcast (Finset.subset_union_right.trans (Finset.subset_of_eq hu.symm)))
+    --hr₁ hr₂ hdn
 
 lemma par_comp_lab_root {u₁ u₂ u : Finset Var} {act test : Type}
     {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}

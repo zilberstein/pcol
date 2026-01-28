@@ -10,81 +10,7 @@ import Pcol.Dist
 open Classical
 open ENNReal
 
-inductive Label (act : Type) (test : Type)
-  | lab_bot : Label act test
-  | lab_fork : Label act test
-  | lab_act : act → Label act test
-  | lab_test : test → Label act test
-
-instance {act test : Type} : Bot (Label act test) where
-  bot := Label.lab_bot
-
-instance {act test : Type} [LE act] [LE test] : LE (Label act test) where
-  le l1 l2 :=
-    match l1 with
-    | Label.lab_bot => True
-    | Label.lab_fork => l2 = Label.lab_fork
-    | Label.lab_act a =>
-      match l2 with
-      | Label.lab_act a' => a ≤ a'
-      | _ => False
-    | Label.lab_test b =>
-      match l2 with
-      | Label.lab_test b' => b ≤ b'
-      | _ => False
-
-lemma lab_is_act_le {act test : Type} {a : act} {l : Label act test}
-  [Preorder act] [Preorder test]
-  (hle : Label.lab_act a ≤ l) :
-  ∃ a', l = Label.lab_act a' ∧ a ≤ a' := by {
-    match l with
-    | Label.lab_bot => simp [LE.le] at hle
-    | Label.lab_fork => simp [LE.le] at hle
-    | Label.lab_act a' => simp [LE.le] at hle; exact ⟨a', rfl, hle⟩
-    | Label.lab_test _ => simp [LE.le] at hle
-  }
-
-lemma lab_is_test_le {act test : Type} {b : test} {l : Label act test}
-  [Preorder act] [Preorder test]
-  (hle : Label.lab_test b ≤ l) :
-  ∃ b', l = Label.lab_test b' ∧ b ≤ b' := by {
-    match l with
-    | Label.lab_bot => simp [LE.le] at hle
-    | Label.lab_fork => simp [LE.le] at hle
-    | Label.lab_act _ => simp [LE.le] at hle
-    | Label.lab_test b' => simp [LE.le] at hle; exact ⟨b', rfl, hle⟩
-  }
-
-instance {act test : Type} [Preorder act] [Preorder test] : Preorder (Label act test) where
-  le_refl := by intro l; simp [LE.le]; cases l; all_goals simp
-  le_trans := by {
-    intro l₁ l₂ l₃ h12 h23; simp [LE.le]
-    match l₁ with
-    | Label.lab_bot => simp
-    | Label.lab_fork =>
-        simp [LE.le] at h12; simp [h12, LE.le] at h23
-        exact h23
-    | Label.lab_act a =>
-        rcases lab_is_act_le h12 with ⟨a₂, hl₂, ha₂⟩; subst hl₂
-        rcases lab_is_act_le h23 with ⟨a₃, hl₃, ha₃⟩; subst hl₃
-        simp at *; exact le_trans ha₂ ha₃
-    | Label.lab_test b =>
-        rcases lab_is_test_le h12 with ⟨b₂, hl₂, hb₂⟩; subst hl₂
-        rcases lab_is_test_le h23 with ⟨b₃, hl₃, hb₃⟩; subst hl₃
-        simp at *; exact le_trans hb₂ hb₃
-  }
-
-instance {act test : Type} [PartialOrder act] [PartialOrder test] : PartialOrder (Label act test) where
-  le_antisymm l₁ l₂ h12 h21 := by {
-    cases l₁ <;> cases l₂ <;> simp [LE.le] at *
-    · exact le_antisymm h12 h21
-    · exact le_antisymm h12 h21
-  }
-
-instance {act test : Type} [LE act] [LE test] : OrderBot (Label act test) where
-  bot_le _ := True.intro
-
-namespace Lpo
+namespace Lin
 
 def next {l : Type} [Bot l] (a : Lpofin l) (s : Finset Node) : Set Node :=
   { x | x ∈ s ∧ x ∈ a.nodes ∧ ∀ y, a.rel y x → y ∉ s }
@@ -115,7 +41,7 @@ structure LinState (α : Type) where
 
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
-    [InvSem act α (t α)] [Sem test α Bool] [Monad t]
+    [InvSem act α (t α)] [Sem test α Bool]
     [Check t α] [Bot (t (LinState α))] [Lin t]
     (rely: Finset α) (inv: Finset α) (guar: Finset α)
     (a : Lpofin (Label act test)) (s : Finset Node)
@@ -135,7 +61,7 @@ mutual
       · left; apply Finset.card_erase_lt_of_mem x.property.1
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
-      [InvSem act α (t α)] [Sem test α Bool] [Monad t]
+      [InvSem act α (t α)] [Sem test α Bool]
       [Check t α] [Lin t] [Bot (t (LinState α))]
       (rely: Finset α) (inv: Finset α) (guar: Finset α)
       (a : Lpofin (Label act test)) (s : Finset Node) (x : Node)
@@ -159,7 +85,7 @@ mutual
 end
 
 noncomputable def lin {t : Type → Type} {α act test: Type}
-  [InvSem act α (t α)] [Sem test α Bool] [Monad t]
+  [InvSem act α (t α)] [Sem test α Bool]
   [Check t α] [Lin t] [Bot (t (LinState α))]
   (rely: Finset α) (inv: Finset α) (guar: Finset α) (pₖ : ℕ → ENNReal)
   (a : Lpofin (Label act test)) (init: α × ℕ) : t (α × ℕ) :=
@@ -206,8 +132,8 @@ lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
 
 --   }
 lemma lin_node_mono {m : Type → Type} {α act test : Type}
-  [Monad m] [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
-  [Preorder act] [Preorder (m α)] [Preorder test] [Preorder (m (LinState α))]
+  [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
+  [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
   [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {rely inv guar : Finset α} {x : Node}
   (hst : s = t ∩ a.nodes_finset)
@@ -219,7 +145,8 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
           (∀ x ∈ a.nodes, a.lab x = ⊥ → x ∈ s') →
           (lin_rec rely inv guar a s' : LinState α → m (LinState α)) ≤ lin_rec rely inv guar b t')
   (hle : a ≤ b) :
-  ∀ st : LinState α, (lin_node rely inv guar a s x st : m (LinState α)) ≤ lin_node rely inv guar b t x st := by
+  ∀ st : LinState α,
+    (lin_node rely inv guar a s x st : m (LinState α)) ≤ lin_node rely inv guar b t x st := by
     intros st
     unfold lin_node
     match hl : a.lab x with
@@ -233,13 +160,16 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
       · exact hbot _ hin heq hy
     | Label.lab_act ac =>
       have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
-      rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx]
-      refine LawfulLin.bind_mono (LawfulInvSem.inv_sem_mono (c := act) st.state st.curr_inv hxle) ?_
-      refine Pi.le_def.2 ?_ ; intro
-      apply hind ; all_goals try first | assumption | simp
-      intros y hin hy ; by_cases heq : y = x
-      · rw [heq] at hy ; rw [hy] at hl ; contradiction
-      · exact hbot _ hin heq hy
+      rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx] ; simp
+      apply le_trans
+      · apply LawfulLin.bind_mono_left
+        apply LawfulInvSem.inv_sem_mono _ _ hxle
+      · apply LawfulLin.bind_mono_right
+        · refine Pi.le_def.2 ?_ ; intro
+          apply hind ; all_goals try first | assumption | simp
+          intros y hin hy ; by_cases heq : y = x
+          · rw [heq] at hy ; rw [hy] at hl ; contradiction
+          · exact hbot _ hin heq hy
     | Label.lab_test bb =>
         have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
         rcases lab_is_test_le hlx with ⟨b', hbx, hxle⟩; rw [hbx]
@@ -251,8 +181,9 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
         · sorry
 
 lemma lin_rec_mono {m : Type → Type} {α act test : Type}
-  [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, Preorder (m β)]
-  [∀ β, OrderBot (m β)] [Linearizable m]
+  [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
+  [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {rely inv guar : Finset α}
   (hst : s = t ∩ a.nodes_finset)
   (hscl : a.rel.IsUpClosed s)
@@ -261,7 +192,7 @@ lemma lin_rec_mono {m : Type → Type} {α act test : Type}
   (lin_rec rely inv guar a s : LinState α → m (LinState α)) ≤ lin_rec rely inv guar b t := by
    induction s using Finset.strongInduction generalizing t with
    | H s hind =>
-    refine Pi.le_def.2 ?_; intro st; unfold Lpo.lin_rec
+    refine Pi.le_def.2 ?_; intro st; unfold lin_rec
     by_cases h : s = ∅
     · subst h; simp;
       have ht : t = ∅ := sorry
@@ -269,7 +200,7 @@ lemma lin_rec_mono {m : Type → Type} {α act test : Type}
     · have ht : t ≠ ∅ := by sorry
       simp [eq_false h, eq_false ht]
       rw [← next_iso hle hst hscl hbot]
-      refine Linearizable.nondet_mono ?_
+      refine LawfulLin.nondet_mono ?_
       refine Pi.le_def.2 ?_; intro ⟨x, hx⟩
       have hst' : s.erase x = (t.erase x) ∩ a.nodes_finset :=
         by rw [Finset.erase_inter, ← hst]
@@ -283,7 +214,7 @@ lemma lin_rec_mono {m : Type → Type} {α act test : Type}
         refine Finset.mem_erase.2 ⟨?_,?_⟩
         · simp ; intros hc ; contradiction
         · exact hbot _ hy hyb
-      refine Linearizable.nondet_min_mono (st.prob 0) ?_ ?_
+      apply LawfulLin.nondet_min_mono (st.prob 0)
       · apply lin_node_mono hst' hcl' hbot' ?_ hle
         intros s' hsub
         apply hind
@@ -294,27 +225,35 @@ lemma lin_rec_mono {m : Type → Type} {α act test : Type}
         sorry
 
 theorem lin_mono {m : Type → Type} {α act test : Type}
-  [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, PartialOrder (m β)]
-  [∀ β, OrderBot (m β)] [Linearizable m]
+  [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
+  [PartialOrder act] [∀ {α}, Preorder (m α)] [PartialOrder test]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
+  [OrderBot (m (LinState α))]
   (rely inv guar: Finset α) (pₖ : ℕ → ENNReal) :
   Monotone (lin rely inv guar pₖ : Lpofin (Label act test) → (α × ℕ) → m (α × ℕ)) := by
     unfold lin ; intro α β hle
     refine Pi.le_def.2 ?_
-    intros ; refine Linearizable.bind_mono ?_ ?_
-    · refine lin_rec_mono ?_ ?_ ?_ hle ?_
-      · unfold Lpofin.nodes_finset; refine Eq.symm (Finset.inter_eq_right.2 ?_)
-        simp [hle.nodes]
-      · intro _ _ y hr; simp [Lpofin.nodes, Lpo.nodes]
-        exact (Set.Finite.mem_toFinset _).mpr (α.val.property.rel_dom hr).2
-      · intro _ hx _; exact (Set.Finite.mem_toFinset _).mpr hx
+    intros ; simp
+    apply le_trans
+    · apply LawfulLin.bind_mono_left
+      · apply lin_rec_mono (t := β.nodes_finset)
+        · unfold Lpofin.nodes_finset
+          rw [Finset.inter_eq_right.2]
+          simp
+          apply hle.nodes
+        · intro _ _ y hr; simp [Lpofin.nodes, Lpo.nodes]
+          exact (Set.Finite.mem_toFinset _).mpr (α.val.property.rel_dom hr).2
+        · intro _ hx _; exact (Set.Finite.mem_toFinset _).mpr hx
+        · apply hle
     · simp
 
 lemma lin_rec_iso {m : Type → Type} {α act test : Type}
-    [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, Preorder (m β)]
-    [∀ {β}, OrderBot (m β)] [Linearizable m]
-    {rely inv guar : Finset α}
-    {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
-    (lin_rec rely inv guar a s : LinState α →  m (LinState α)) = lin_rec rely inv guar (a.permute e) (s.image e) := by
+  [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
+  [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
+  {rely inv guar : Finset α}
+  {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
+  (lin_rec rely inv guar a s : LinState α →  m (LinState α)) = lin_rec rely inv guar (a.permute e) (s.image e) := by
   induction s using Finset.strongInduction with
   | H s hind =>
     ext st; unfold lin_rec; by_cases h : s = ∅
@@ -323,11 +262,12 @@ lemma lin_rec_iso {m : Type → Type} {α act test : Type}
       sorry
 
 lemma lin_iso {m : Type → Type} {α act test : Type}
-    [Monad m] [InvSem act α (m α)] [InvSem test α Bool] [∀ β, Preorder (m β)]
-    [∀ {β}, OrderBot (m β)] [Linearizable m]
-    {rely inv guar : Finset α} {pₖ : ℕ → ENNReal}
-    {a b : Lpofin (Label act test)} (h : a ≈ b) :
-    (lin rely inv guar pₖ a : α × ℕ →  m (α × ℕ)) = lin rely inv guar pₖ b := by
+  [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
+  [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
+  {rely inv guar : Finset α} {pₖ : ℕ → ENNReal}
+  {a b : Lpofin (Label act test)} (h : a ≈ b) :
+  (lin rely inv guar pₖ a : α × ℕ →  m (α × ℕ)) = lin rely inv guar pₖ b := by
   unfold lin; rcases h with ⟨e, h⟩
   funext
   sorry
@@ -342,4 +282,5 @@ lemma lin_iso {m : Type → Type} {α act test : Type}
   · unfold Lpofin.nodes_finset; unfold Set.Finite.toFinset
     refine @Set.toFinset_congr _ _ _ ?_ ?_ hn
   -/
-end Lpo
+
+end Lin

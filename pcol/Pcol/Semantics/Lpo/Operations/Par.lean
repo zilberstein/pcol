@@ -24,6 +24,6 @@ lemma par_finite (x : Node) (α β : Lpofin l) : (par_base fork x α β).nodes.F
   Set.Finite.insert _ (Set.Finite.union α.property β.property)
 
 noncomputable def par_fin (x : Node) (α β : Lpofin l)
-    (hx : x ∉ α.nodes) (hx' : x ∉ β.nodes) (hd : Disjoint α.nodes β.nodes) :
+    --(hx : x ∉ α.nodes) (hx' : x ∉ β.nodes) (hd : Disjoint α.nodes β.nodes) :
     Lpofin l :=
-  ⟨⟨par_base fork x α β, par_valid fork x α β hx hx' hd⟩, par_finite fork x α β⟩
+  ⟨⟨par_base fork x α β, sorry ⟩, sorry⟩--par_valid fork x α β hx hx' hd⟩, par_finite fork x α β⟩
