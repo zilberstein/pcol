@@ -25,6 +25,8 @@ def union (σ τ: Mem) : Mem :=
   | [] => τ
   | (x, v) :: σ' => insert x v (union σ' τ)
 
+infixl:65 " ⊎ " => union
+
 def list_greater (x: Var) (σ: Mem) : Prop :=
   match σ with
   | [] => True
@@ -53,9 +55,12 @@ def disjoint (σ τ: Mem) : Prop :=
 
 namespace Mem
 
+def wfₛ (A : Set Mem) : Set Mem := { σ ∈ A | wf σ }
+
 def sep (A B: Set Mem) : Set Mem :=
-  -- TODO: should this set require some disjointness property?
-  ⋃ σ ∈ A, ⋃ τ ∈ B, { union σ τ }
+  ⋃ σ ∈ wfₛ A, ⋃ τ ∈ wfₛ B, { σ' | disjoint σ τ ∧ σ' = union σ τ }
+
+infixl:65 " ** " => sep
 
 /-
 

@@ -35,33 +35,25 @@ lemma minProb_nondet {u : Finset Var} {ι : Type} (f : ι → C Mem) (A : Set Me
 
 -- Parallel composition of α and β by upcasting
 noncomputable def par_comp {act test : Type}
+    (root : Node)
     (α : Lpofin (Label act test))
     (β : Lpofin (Label act test))
-    --(hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
-    --{root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes) :
-    (root : Node)
-    :
-    Lpofin (Label act test) :=
+    : Lpofin (Label act test) :=
   Lpo.par_fin Label.lab_fork root α β
-    sorry sorry sorry
-    --(α.upcast (Finset.subset_union_left.trans (Finset.subset_of_eq hu.symm)))
-    --(β.upcast (Finset.subset_union_right.trans (Finset.subset_of_eq hu.symm)))
-    --hr₁ hr₂ hdn
 
-lemma par_comp_lab_root {u₁ u₂ u : Finset Var} {act test : Type}
-    {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}
-    {β : Lpofin (Label (WithInv act u₂) (WithInv test u₂))}
-    (hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
-    {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes) :
-    (par_comp α β hdn hu hr₁ hr₂).lab root = Label.lab_fork := by
-  simp only [Lpofin.lab, Lpo.lab, par_comp, Lpo.par_fin, Lpo.par_base, ↓reduceIte]
+lemma par_comp_lab_root {act test : Type}
+    (α : Lpofin (Label act test))
+    (β : Lpofin (Label act test))
+    (root : Node)
+  : (par_comp root α β).lab root = Label.lab_fork := by
+    simp only [Lpofin.lab, Lpo.lab, par_comp, Lpo.par_fin, Lpo.par_base]
+    simp
 
 lemma par_comp_comm {u₁ u₂ u : Finset Var} {act test : Type}
-    {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}
-    {β : Lpofin (Label (WithInv act u₂) (WithInv test u₂))}
-    {hdn : Disjoint α.nodes β.nodes} (hu : u = u₁ ∪ u₂)
-    {root : Node} {hr₁ : root ∉ α.nodes} {hr₂ : root ∉ β.nodes} :
-    par_comp α β hdn hu hr₁ hr₂ = par_comp β α hdn.symm (hu.trans (Finset.union_comm _ _)) hr₂ hr₁ := sorry
+    (α : Lpofin (Label act test))
+    (β : Lpofin (Label act test))
+    (root : Node) :
+    par_comp root α β = par_comp root β α := sorry
 
 -- The set of next nodes in a parallel composition is either
 -- 1) Only the root
@@ -69,30 +61,33 @@ lemma par_comp_comm {u₁ u₂ u : Finset Var} {act test : Type}
 -- 3) The next nodes of α (if β is done executing)
 -- 4) The next nodes of β (if β is done executing)
 lemma next_par {u₁ u₂ u : Finset Var} {act test : Type}
-    (α : Lpofin (Label (WithInv act u₁) (WithInv test u₁)))
-    (β : Lpofin (Label (WithInv act u₂) (WithInv test u₂)))
-    (hdn : Disjoint α.nodes β.nodes) (hu : u = u₁ ∪ u₂)
-    {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes)
+    (α : Lpofin (Label act test))
+    (β : Lpofin (Label act test))
+    (root : Node)
     (s : Finset Node) :
-    Lpo.next (par_comp α β hdn hu hr₁ hr₂) s = {root} ∨
-    (Lpo.next (par_comp α β hdn hu hr₁ hr₂) s = Lpo.next α (s ∩ α.nodes_finset) ∪ Lpo.next β (s ∩ β.nodes_finset) ∧
+    Lin.next (par_comp root α β) s = {root} ∨
+    (Lin.next (par_comp root α β) s = Lin.next α (s ∩ α.nodes_finset) ∪ Lin.next β (s ∩ β.nodes_finset) ∧
       s ∩ α.nodes_finset ≠ ∅ ∧ s ∩ β.nodes_finset ≠ ∅) ∨
-    (Lpo.next (par_comp α β hdn hu hr₁ hr₂) s = Lpo.next α (s ∩ α.nodes_finset) ∧
+    (Lin.next (par_comp root α β) s = Lin.next α (s ∩ α.nodes_finset) ∧
       s ∩ α.nodes_finset ≠ ∅) ∨
-    (Lpo.next (par_comp α β hdn hu hr₁ hr₂) s = Lpo.next β (s ∩ β.nodes_finset) ∧
+    (Lin.next (par_comp root α β) s = Lin.next β (s ∩ β.nodes_finset) ∧
       s ∩ β.nodes_finset ≠ ∅)
     := sorry
 
-variable {u u₁ u₂ v : Finset Var} {act test : Type}
-  [∀ u, Sem act (Mem u) (C (Mem u))]
-  [∀ u, Sem test (Mem u) Bool]
-  {α : Lpofin (Label (WithInv act u₁) (WithInv test u₁))}
-  {β : Lpofin (Label (WithInv act u₂) (WithInv test u₂))}
-  {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes)
-  {inv : Finset (Mem v)}
-  (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂)
-  (hdn : Disjoint α.nodes β.nodes)
-  (A : Set (Mem (u₁ \ v))) (B : Set (Mem (u₂ \ v)))
+variable {act test : Type}
+  [Sem act Mem (C Mem)]
+  [Check C Mem]
+  [Replace C Mem]
+  [Sem test Mem Bool]
+  {α : Lpofin (Label act test)}
+  {β : Lpofin (Label act test)}
+  {root : Node}
+--   (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes)
+--  {inv : Finset (Mem v)}
+  {rely inv guar : Finset Mem}
+--  (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂)
+--  (hdn : Disjoint α.nodes β.nodes)
+--  (A : Set (Mem (u₁ \ v))) (B : Set (Mem (u₂ \ v)))
 
 -- Shorthand for the independence property
 --
@@ -104,11 +99,12 @@ variable {u u₁ u₂ v : Finset Var} {act test : Type}
 -- and equality later, once we show that the minimum probabilities of all events add to 1, so that no
 -- event can have probability strictly greater than its lower bound.
 def is_indep
-  (s : Finset Node) (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
+  (s : Finset Node) (σ₁ σ₂ τ : Mem) (A B : Set Mem) (pₖ : ℕ → ENNReal) (k : ℕ) (curr_inv : Finset Mem)
+  /-(s : Finset Node) (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
       (_ : τ ∈ inv) (_ : τ₁ ∈ inv) (_ : τ₂ ∈ inv)
-      (_ : α.has_inv inv) (_ : β.has_inv inv) : Prop :=
-  minProb (Lpo.lin_rec (par_comp α β hdn hu hr₁ hr₂) s (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv) : Set (Mem u)) ≥
+      (_ : α.has_inv inv) (_ : β.has_inv inv)-/ : Prop :=
+  minProb (Lin.lin_rec rely inv guar (par_comp root α β ) s ⟨σ₁ ⊎ σ₂ ⊎ τ, pₖ, k, curr_inv⟩)
+      (A ** B ** inv) ≥
   minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv) : Mem u₁)) (Mem.sep A ↑inv (dsj₁ hv)) *
     minProb (Lpo.lin_rec β (s ∩ β.nodes_finset) (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv))
 
