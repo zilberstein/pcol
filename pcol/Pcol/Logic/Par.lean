@@ -26,6 +26,36 @@ instance : LawfulLin C where
   bind_mono_left := sorry
   bind_mono_right := sorry
 
+class Marginalizable (α β : Type) where
+  marginalize : Distr α → Distr β
+
+noncomputable instance : Marginalizable (Lin.State Mem) Mem where
+  marginalize μ :=
+    PMF.bind μ
+      (fun st_opt =>
+      ⟨ fun σ_opt =>
+        match (st_opt, σ_opt) with
+        | (.none, .none) => μ none
+        | (.some st, .some σ) => if st.state = σ then μ st else 0
+        | _ => 0
+      , sorry
+      ⟩)
+
+noncomputable instance : Marginalizable (Mem × ℕ) Mem where
+  marginalize μ :=
+    PMF.bind μ
+      (fun p_opt =>
+      ⟨ fun σ_opt =>
+        match (p_opt, σ_opt) with
+        | (.none, .none) => μ none
+        | (.some p, .some σ) => if p.1 = σ then μ p else 0
+        | _ => 0
+      , sorry
+      ⟩)
+
+noncomputable def mar {α β} [Marginalizable α β] (S : C α) : C β :=
+  ⟨ { Marginalizable.marginalize μ | μ ∈ S } , sorry ⟩
+
 lemma nondet_singleton {u : Finset Var} {X : Type} {x : X} {f : ↑(Set.singleton x) → C Mem} :
     Lin.nondet f = f ⟨x, Set.mem_singleton _⟩ := sorry
 
@@ -60,7 +90,7 @@ lemma par_comp_comm {u₁ u₂ u : Finset Var} {act test : Type}
 -- 2) The union of (nonempty) next node sets from α and β
 -- 3) The next nodes of α (if β is done executing)
 -- 4) The next nodes of β (if β is done executing)
-lemma next_par {u₁ u₂ u : Finset Var} {act test : Type}
+lemma next_par {act test : Type}
     (α : Lpofin (Label act test))
     (β : Lpofin (Label act test))
     (root : Node)
@@ -79,12 +109,9 @@ variable {act test : Type}
   [Check C Mem]
   [Replace C Mem]
   [Sem test Mem Bool]
-  {α : Lpofin (Label act test)}
-  {β : Lpofin (Label act test)}
-  {root : Node}
+  (root : Node)
 --   (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes)
 --  {inv : Finset (Mem v)}
-  {rely inv guar : Finset Mem}
 --  (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂)
 --  (hdn : Disjoint α.nodes β.nodes)
 --  (A : Set (Mem (u₁ \ v))) (B : Set (Mem (u₂ \ v)))
@@ -99,30 +126,60 @@ variable {act test : Type}
 -- and equality later, once we show that the minimum probabilities of all events add to 1, so that no
 -- event can have probability strictly greater than its lower bound.
 def is_indep
-  (s : Finset Node) (σ₁ σ₂ τ : Mem) (A B : Set Mem) (pₖ : ℕ → ENNReal) (k : ℕ) (curr_inv : Finset Mem)
+  (ℐ 𝒢 : Finset Mem)
+  (α β : Lpofin (Label act test))
+  (s : Finset Node) (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem) (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Finset Mem)
   /-(s : Finset Node) (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
       (_ : τ ∈ inv) (_ : τ₁ ∈ inv) (_ : τ₂ ∈ inv)
-      (_ : α.has_inv inv) (_ : β.has_inv inv)-/ : Prop :=
-  minProb (Lin.lin_rec rely inv guar (par_comp root α β ) s ⟨σ₁ ⊎ σ₂ ⊎ τ, pₖ, k, curr_inv⟩)
-      (A ** B ** inv) ≥
-  minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv) : Mem u₁)) (Mem.sep A ↑inv (dsj₁ hv)) *
-    minProb (Lpo.lin_rec β (s ∩ β.nodes_finset) (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv))
+      (_ : α.has_inv inv) (_ : β.has_inv inv)-/
+  : Prop :=
+  -- TODO:
+  --  * shared global rely?
+  --  * establish restrictions / conditions on pₖ ?
+  --  * use fun _ => 1 instead of ω ?
+  minProb (mar (Lin.lin_rec ℐ ℐ 𝒢 (par_comp root α β) s ⟨σ₁ ⊎ σ₂ ⊎ τ, ω, n₁ + n₂, curr_inv⟩))
+          (A ** B ** ℐ)
+  ≥ minProb (mar (Lin.lin_rec ℐ ℐ 𝒢 α (s ∩ α.nodes_finset) ⟨σ₁ ⊎ τ₁, ω, n₁, curr_inv⟩)) (A ** ℐ) *
+    minProb (mar (Lin.lin_rec 𝒢 ℐ ℐ β (s ∩ β.nodes_finset) ⟨σ₂ ⊎ τ₂, pₖ, n₂, curr_inv⟩)) (B ** ℐ)
 
 -- The inductive step broken into its own lemma, since it needs to be invoked multiple times
- lemma par_comp_inductive_step
-    {s : Finset Node} {x : Node} (hx : x ∈ Lpo.next α (s ∩ α.nodes_finset))
-    (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
-    (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv)
-    (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv)
-    (hind : ∀ t ⊂ s,
-      ∀ (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
-      (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
-      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂) :
-    minProb (Lpo.lin_node (par_comp α β hdn hu hr₁ hr₂) s x sorry (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
-    minProb (Lpo.lin_node α (s ∩ α.nodes_finset) x hx.1 (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
-      minProb (Lpo.lin_rec β (s ∩ β.nodes_finset) (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv)) := by
-  unfold Lpo.lin_node
+lemma par_comp_inductive_step_left
+  {ℐ 𝒢 : Finset Mem} {α β : Lpofin (Label act test)}
+  {x : Node} (s : Finset Node)
+  (hx : x ∈ Lin.next α (s ∩ α.nodes_finset))
+  (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem)
+  -- TODO : well-formedness conditions on memories / sets of memories
+  (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Finset Mem)
+  (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ)
+  (hind : ∀ t ⊆ s,
+    ∀ (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem) (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Finset Mem)
+      (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ),
+      is_indep root ℐ 𝒢 α β s σ₁ σ₂ τ τ₁ τ₂ A B ω pₖ n₁ n₂ curr_inv)
+  :
+    minProb (mar (Lin.lin_node ℐ ℐ 𝒢 (par_comp root α β) s x ⟨σ₁ ⊎ σ₂ ⊎ τ, ω, n₁ + n₂, curr_inv⟩)) (A ** B ** ℐ)
+  ≥ minProb (mar (Lin.lin_node ℐ ℐ 𝒢 α (s ∩ α.nodes_finset) x ⟨σ₁ ⊎ τ₁, ω, n₁, curr_inv⟩)) (A ** ℐ) *
+    minProb (mar (Lin.lin_rec 𝒢 ℐ ℐ β (s ∩ β.nodes_finset) ⟨σ₂ ⊎ τ₂, pₖ, n₂, curr_inv⟩)) (B ** ℐ)
+  := by
+  unfold Lin.lin_node
+  have hlab_eq : (par_comp root α β).lab x = α.lab x := sorry
+  rw [hlab_eq]
+  cases hlab : α.lab x with
+  -- Case : α.lab x = ⊥
+  | lab_bot =>
+    simp
+    sorry
+  -- Case : α.lab x = Fork
+  | lab_fork =>
+    simp
+    apply hind ; all_goals try assumption
+    simp
+  -- Case : α.lab x = act
+  | lab_act a =>
+    sorry
+  -- Case : α.lab x = test
+  | lab_test b =>
+    sorry
+  /-
   have hu' := hu.trans (Finset.union_comm _ _)
   have hv' := hv.trans (Finset.inter_comm _ _)
   have hlab_eq : (par_comp α β hdn hu hr₁ hr₂).lab x = upcast_lab (α.lab x) sorry := sorry -- LEMMA
@@ -193,32 +250,42 @@ def is_indep
     refine (hind _ ?_ _ _ hτ hτ₁ hτ₂)
     refine Finset.ssubset_of_subset_of_ssubset (Finset.filter_subset _ _) ?_
     exact (Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1))
+-/
 
 -- Version of the previous lemma but swapped so that β is taking a step instead of α
-lemma par_comp_inductive_step'
-    {s : Finset Node} {x : Node} (hx : x ∈ Lpo.next β (s ∩ β.nodes_finset))
-    (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
-    (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv)
-    (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv)
-    (hind : ∀ t ⊂ s,
-      ∀ (σ₁ : Mem (u₁ \ v)) (σ₂ : Mem (u₂ \ v)) {τ τ₁ τ₂ : Mem v}
-         (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv),
-      is_indep hr₁ hr₂ hu hv hdn A B t σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂) :
-    minProb (Lpo.lin_node (par_comp α β hdn hu hr₁ hr₂) s x sorry (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
-    minProb (Lpo.lin_rec α (s ∩ α.nodes_finset) (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
-      minProb (Lpo.lin_node β (s ∩ β.nodes_finset) x hx.1 (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv)) := by
-  rw [mul_comm, union_comm_assoc hu hv, sep_comm_assoc hu hv, par_comp_comm hu]
-  have hu' := hu.trans (Finset.union_comm _ _)
-  have hv' := hv.trans (Finset.inter_comm _ _)
-  refine
-    par_comp_inductive_step hr₂ hr₁ hu' hv' hdn.symm B A hx σ₂ σ₁ hτ hτ₂ hτ₁ hinv₂ hinv₁ ?_
-  intro t ht σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂; unfold is_indep
+lemma par_comp_inductive_step_right
+  {ℐ 𝒢 : Finset Mem} {α β : Lpofin (Label act test)}
+  {x : Node} (s : Finset Node)
+  (hx : x ∈ Lin.next α (s ∩ α.nodes_finset))
+  (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem)
+  -- TODO : well-formedness conditions on memories / sets of memories
+  (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Finset Mem)
+  (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ)
+  (hind : ∀ t ⊆ s,
+    ∀ (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem) (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Finset Mem)
+      (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ),
+      is_indep root ℐ 𝒢 α β s σ₁ σ₂ τ τ₁ τ₂ A B ω pₖ n₁ n₂ curr_inv)
+  :
+    minProb (mar (Lin.lin_node ℐ ℐ 𝒢 (par_comp root α β) s x ⟨σ₁ ⊎ σ₂ ⊎ τ, ω, n₁ + n₂, curr_inv⟩)) (A ** B ** ℐ)
+  ≥ minProb (mar (Lin.lin_rec ℐ ℐ 𝒢 α (s ∩ α.nodes_finset) ⟨σ₁ ⊎ τ₁, ω, n₁, curr_inv⟩)) (A ** ℐ) *
+    minProb (mar (Lin.lin_node 𝒢 ℐ ℐ β (s ∩ β.nodes_finset) x ⟨σ₂ ⊎ τ₂, pₖ, n₂, curr_inv⟩)) (B ** ℐ)
+  := by
+  rw [mul_comm, union_comm_assoc σ₁ σ₂ τ, sep_comm_assoc A B ℐ, par_comp_comm]
+  -- TODO: this property is no longer commutative (because of rely/inv)
+  -- apply par_comp_inductive_step_left root s hx σ₂ σ₁ τ τ₂ τ₁ A B ω pₖ n₁ n₂ curr_inv hτ hτ₂ hτ₁ -/
+  /-intro t ht σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂; unfold is_indep
   rw [par_comp_comm,
       union_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
       sep_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
       mul_comm]
   exact hind t ht σ₂ σ₁ hτ hτ₂ hτ₁
+  -/
+  · sorry
+  · sorry
+  · sorry
+  · sorry
+
+/-
 
 -- We need this annoying lemma to make the dependent types work out
 lemma nondet_lin_node_congr {u : Finset Var} {act test : Type}
@@ -230,36 +297,48 @@ lemma nondet_lin_node_congr {u : Finset Var} {act test : Type}
     (Linearizable.nondet fun x : ↑i ↦ Lpo.lin_node α s x.val (hi x.property) σ : C (Mem u)) =
     (Linearizable.nondet fun x : ↑j ↦ Lpo.lin_node α s x.val (hi ((congrArg₂ Membership.mem h rfl).mpr x.property)) σ) := by
   simp only [Lpo.lin_node]; rw [h]
+-/
 
 -- Lemma C.3 from POPL'26
 theorem par_comp_fin
-    {σ₁ : Mem (u₁ \ v)} {σ₂ : Mem (u₂ \ v)} {τ τ₁ τ₂ : Mem v}
-    (hτ : τ ∈ inv) (hτ₁ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv)
-    (hinv₁ : α.has_inv inv) (hinv₂ : β.has_inv inv) :
+  {ℐ 𝒢 : Finset Mem} {α β : Lpofin (Label act test)}
+  (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem)
+  (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Finset Mem)
+  (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ) :
     minProb
-      (Lpo.lin
-        (par_comp α β hdn hu hr₁ hr₂)
-        (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)))
-      (Mem.sep A (Mem.sep B ↑inv (dsj₂ hv)) (dsj₁₂ hu hv)) ≥
-      minProb (Lpo.lin α (σ₁.union τ₁ (dsj₁ hv))) (Mem.sep A ↑inv (dsj₁ hv)) *
-      minProb (Lpo.lin β (σ₂.union τ₂ (dsj₂ hv))) (Mem.sep B ↑inv (dsj₂ hv)) := by
-  unfold Lpo.lin
-  generalize hs : (par_comp α β hdn hu hr₁ hr₂).nodes_finset = s
-  have h₁ : α.nodes_finset = s ∩ α.nodes_finset := sorry; rw [h₁]
-  have h₂ : β.nodes_finset = s ∩ β.nodes_finset := sorry; rw [h₂]
+      (mar (Lin.lin ℐ ℐ 𝒢 pₖ (par_comp root α β) ⟨σ₁ ⊎ σ₂ ⊎ τ, n₁ + n₂⟩))
+      (A ** B ** ℐ)
+  ≥ minProb (mar (Lin.lin ℐ ℐ 𝒢 ω α ⟨σ₁ ⊎ τ₁, n₁⟩)) (A ** ℐ) *
+    minProb (mar (Lin.lin 𝒢 ℐ ℐ ω β ⟨σ₂ ⊎ τ₂, n₂⟩)) (B ** ℐ) := by
+  unfold Lin.lin
+  generalize hs : (par_comp root α β).nodes_finset = s
+  have h₁ : α.nodes_finset = s ∩ α.nodes_finset := sorry; rw [h₁] -- TODO: why this rewrite ok ?
+  have h₂ : β.nodes_finset = s ∩ β.nodes_finset := sorry; rw [h₂] -- TODO: same q
   clear h₁ h₂ hs; revert σ₁ σ₂ τ τ₁ τ₂
   induction s using Finset.strongInduction with
   | H s hind =>
     intro σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂
     by_cases hemp : s = ∅
     -- Base Case: No more nodes to schedule
-    · unfold Lpo.lin_rec; simp only [hemp, ↓reduceIte, Finset.empty_inter, minProb_pure, Mem.union_mem]
-      by_cases h₁ : σ₁ ∈ A <;> by_cases h₂ : σ₂ ∈ B <;>
-        simp only [h₁, h₂, Finset.mem_coe.mpr hτ, Finset.mem_coe.mpr hτ₁, Finset.mem_coe.mpr hτ₂,
-          and_true, and_false, ↓reduceIte, and_self, mul_zero, mul_one, le_refl]
+    · unfold Lin.lin_rec
+      simp only [hemp, ↓reduceIte, Finset.empty_inter]
+      sorry
+
+--      , minProb_pure, Mem.union_mem]
+--      by_cases h₁ : σ₁ ∈ A <;> by_cases h₂ : σ₂ ∈ B <;>
+--        simp only [h₁, h₂, Finset.mem_coe.mpr hτ, Finset.mem_coe.mpr hτ₁, Finset.mem_coe.mpr hτ₂,
+--          and_true, and_false, ↓reduceIte, and_self, mul_zero, mul_one, le_refl]
     -- Inductive Case
-    · nth_rw 1 [Lpo.lin_rec]; simp only [hemp, ↓reduceIte]
-      rcases next_par α β hdn hu hr₁ hr₂ s with hnext | ⟨hnext, hne, hne'⟩ | ⟨hnext, hne⟩ | ⟨hnext, hne⟩ <;>
+    · nth_rw 1 [Lin.lin_rec]; simp only [hemp, ↓reduceIte]
+      rcases next_par α β root s with hnext | ⟨hnext, hne, hne'⟩ | ⟨hnext, hne⟩ | ⟨hnext, hne⟩
+      · simp only [Lin.lin_node]
+        sorry
+      · sorry
+      · sorry
+      · sorry
+
+
+      /-
         rw [nondet_lin_node_congr _ hnext (fun _ hx ↦ hx.1)]
       -- Case 1: Next node is the root
       · simp only [Lpo.lin_node]
@@ -312,3 +391,4 @@ theorem par_comp_fin
         refine iInf_mono fun ⟨y, hy⟩ ↦ ?_
         exact
           par_comp_inductive_step' hr₁ hr₂ hu hv hdn A B hy σ₁ σ₂ hτ hτ₁ hτ₂ hinv₁ hinv₂ hind
+      -/
