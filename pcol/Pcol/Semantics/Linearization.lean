@@ -32,7 +32,7 @@ noncomputable def filter_by_outcome {l : Type} [Bot l]
 --   * underlying state
 --   * current rely invariant probability
 --   * current local scheduler steps taken so far
-structure LinState (α : Type) where
+structure State (α : Type) where
   mk ::
   state : α
   prob : ℕ → ENNReal
@@ -42,10 +42,10 @@ structure LinState (α : Type) where
 mutual
   noncomputable def lin_rec {t : Type → Type} {α act test: Type}
     [InvSem act α (t α)] [Sem test α Bool]
-    [Check t α] [Bot (t (LinState α))] [Lin t]
+    [Check t α] [Bot (t (State α))] [Lin t]
     (rely: Finset α) (inv: Finset α) (guar: Finset α)
     (a : Lpofin (Label act test)) (s : Finset Node)
-    (st : LinState α) : t (LinState α) :=
+    (st : State α) : t (State α) :=
     if s = ∅ then
       ({st with state := ·}) <$> Check.check guar st.state
     else
@@ -62,10 +62,10 @@ mutual
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
       [InvSem act α (t α)] [Sem test α Bool]
-      [Check t α] [Lin t] [Bot (t (LinState α))]
+      [Check t α] [Lin t] [Bot (t (State α))]
       (rely: Finset α) (inv: Finset α) (guar: Finset α)
       (a : Lpofin (Label act test)) (s : Finset Node) (x : Node)
-      (st : LinState α) : t (LinState α) :=
+      (st : State α) : t (State α) :=
     have h (r : Bool) : (filter_by_outcome a s x r).card ≤ s.card := by apply Finset.card_filter_le
     match a.lab x with
     | Label.lab_bot => ⊥
@@ -86,10 +86,10 @@ end
 
 noncomputable def lin {t : Type → Type} {α act test: Type}
   [InvSem act α (t α)] [Sem test α Bool]
-  [Check t α] [Lin t] [Bot (t (LinState α))]
+  [Check t α] [Lin t] [Bot (t (State α))]
   (rely: Finset α) (inv: Finset α) (guar: Finset α) (pₖ : ℕ → ENNReal)
   (a : Lpofin (Label act test)) (init: α × ℕ) : t (α × ℕ) :=
-    (lin_rec rely inv guar a a.nodes_finset (LinState.mk init.1 pₖ init.2 inv)) >>=
+    (lin_rec rely inv guar a a.nodes_finset (State.mk init.1 pₖ init.2 inv)) >>=
       fun st => pure (st.state, st.step)
 
 lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
@@ -134,7 +134,7 @@ lemma next_iso {l : Type} [Bot l] [LE l] {s t : Finset Node} {a b : Lpofin l}
 lemma lin_node_mono {m : Type → Type} {α act test : Type}
   [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
   [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
-  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (State α))]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {rely inv guar : Finset α} {x : Node}
   (hst : s = t ∩ a.nodes_finset)
   (hcl : a.rel.IsUpClosed s)
@@ -143,10 +143,10 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
           s' = t' ∩ a.nodes_finset →
           a.rel.IsUpClosed s' →
           (∀ x ∈ a.nodes, a.lab x = ⊥ → x ∈ s') →
-          (lin_rec rely inv guar a s' : LinState α → m (LinState α)) ≤ lin_rec rely inv guar b t')
+          (lin_rec rely inv guar a s' : State α → m (State α)) ≤ lin_rec rely inv guar b t')
   (hle : a ≤ b) :
-  ∀ st : LinState α,
-    (lin_node rely inv guar a s x st : m (LinState α)) ≤ lin_node rely inv guar b t x st := by
+  ∀ st : State α,
+    (lin_node rely inv guar a s x st : m (State α)) ≤ lin_node rely inv guar b t x st := by
     intros st
     unfold lin_node
     match hl : a.lab x with
@@ -183,13 +183,13 @@ lemma lin_node_mono {m : Type → Type} {α act test : Type}
 lemma lin_rec_mono {m : Type → Type} {α act test : Type}
   [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
   [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
-  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (State α))]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {rely inv guar : Finset α}
   (hst : s = t ∩ a.nodes_finset)
   (hscl : a.rel.IsUpClosed s)
   (hbot : ∀ x ∈ a.nodes, a.lab x = ⊥ → x ∈ s)
   (hle : a ≤ b) :
-  (lin_rec rely inv guar a s : LinState α → m (LinState α)) ≤ lin_rec rely inv guar b t := by
+  (lin_rec rely inv guar a s : State α → m (State α)) ≤ lin_rec rely inv guar b t := by
    induction s using Finset.strongInduction generalizing t with
    | H s hind =>
     refine Pi.le_def.2 ?_; intro st; unfold lin_rec
@@ -228,7 +228,7 @@ theorem lin_mono {m : Type → Type} {α act test : Type}
   [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
   [PartialOrder act] [∀ {α}, Preorder (m α)] [PartialOrder test]
   [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
-  [OrderBot (m (LinState α))]
+  [OrderBot (m (State α))]
   (rely inv guar: Finset α) (pₖ : ℕ → ENNReal) :
   Monotone (lin rely inv guar pₖ : Lpofin (Label act test) → (α × ℕ) → m (α × ℕ)) := by
     unfold lin ; intro α β hle
@@ -250,10 +250,10 @@ theorem lin_mono {m : Type → Type} {α act test : Type}
 lemma lin_rec_iso {m : Type → Type} {α act test : Type}
   [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
   [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
-  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (State α))]
   {rely inv guar : Finset α}
   {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
-  (lin_rec rely inv guar a s : LinState α →  m (LinState α)) = lin_rec rely inv guar (a.permute e) (s.image e) := by
+  (lin_rec rely inv guar a s : State α →  m (State α)) = lin_rec rely inv guar (a.permute e) (s.image e) := by
   induction s using Finset.strongInduction with
   | H s hind =>
     ext st; unfold lin_rec; by_cases h : s = ∅
@@ -264,7 +264,7 @@ lemma lin_rec_iso {m : Type → Type} {α act test : Type}
 lemma lin_iso {m : Type → Type} {α act test : Type}
   [InvSem act α (m α)] [Sem test α Bool] [Lin m] [Check m α]
   [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test]
-  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (LinState α))]
+  [LawfulInvSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m] [OrderBot (m (State α))]
   {rely inv guar : Finset α} {pₖ : ℕ → ENNReal}
   {a b : Lpofin (Label act test)} (h : a ≈ b) :
   (lin rely inv guar pₖ a : α × ℕ →  m (α × ℕ)) = lin rely inv guar pₖ b := by
