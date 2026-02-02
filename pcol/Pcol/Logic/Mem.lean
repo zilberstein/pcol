@@ -5,6 +5,8 @@ abbrev Var := Nat
 abbrev Val := Nat
 abbrev Mem := List (Var × Val)
 
+namespace Mem
+
 def insert (x: Var) (v: Val) (σ: Mem) : Mem :=
   match σ with
   | [] => [(x, v)]
@@ -25,17 +27,17 @@ def union (σ τ: Mem) : Mem :=
   | [] => τ
   | (x, v) :: σ' => insert x v (union σ' τ)
 
-infixl:65 " ⊎ " => union
+infixr:65 " ⊎ " => union
 
 def list_greater (x: Var) (σ: Mem) : Prop :=
   match σ with
   | [] => True
   | (y, _) :: σ' => x < y ∧ list_greater x σ'
 
-def wf (σ: Mem) : Prop :=
+def wf? (σ: Mem) : Prop :=
   match σ with
   | [] => True
-  | (x, _) :: σ' => list_greater x σ' ∧ wf σ'
+  | (x, _) :: σ' => list_greater x σ' ∧ wf? σ'
 
 instance : GetElem Mem Var (Option Val) (fun _ _ => True) where
   getElem σ x _ := lookup x σ
@@ -51,16 +53,38 @@ instance : Membership Var Mem where
 def disjoint (σ τ: Mem) : Prop :=
   match σ with
   | [] => True
-  | (x, _) :: σ' => ¬ (x ∈ τ) ∧ disjoint σ' τ
+  | (x, _) :: σ' => lookup x τ = none ∧ disjoint σ' τ
 
-namespace Mem
+instance {σ τ} : Decidable (disjoint σ τ) := by
+  induction σ generalizing τ with
+  | nil =>
+    simp [disjoint]
+    exact instDecidableTrue
+  | cons p σ' ih =>
+    simp [disjoint]
+    exact instDecidableAnd
 
-def wfₛ (A : Set Mem) : Set Mem := { σ ∈ A | wf σ }
+end Mem
 
-def sep (A B: Set Mem) : Set Mem :=
-  ⋃ σ ∈ wfₛ A, ⋃ τ ∈ wfₛ B, { σ' | disjoint σ τ ∧ σ' = union σ τ }
+def wfₛ (A : Set Mem) : Set Mem := { σ ∈ A | σ.wf? }
 
-infixl:65 " ** " => sep
+class Separation (α : Type) where
+  sep : α → α → α
+
+infixr:65 " ** " => Separation.sep
+
+instance : Separation (Set Mem) where
+  sep A B :=
+    { σ' | ∃ σ ∈ A, ∃ τ ∈ B, σ.disjoint τ ∧ σ' = σ ⊎ τ }
+
+instance : Separation (Finset Mem) where
+  sep A B :=
+    A.biUnion (fun σ =>
+      B.biUnion (fun τ =>
+        if σ.disjoint τ then { σ ⊎ τ } else {}
+      )
+    )
+   --   Finset.image (σ ∪ ·) (B.filter (σ.disjoint))
 
 /-
 
@@ -81,7 +105,6 @@ lemma union_mem {u u₁ u₂ : Finset Var} {σ : Mem u₁} {τ : Mem u₂} {A : 
   sorry
 -/
 
-end Mem
 
 /-
 -- Shorthands for some disjointness lemmas
@@ -103,16 +126,18 @@ lemma dsj₁₂ {u₁ u₂ u v : Finset Var} (hu : u = u₁ ∪ u₂) (hv : v = 
 lemma dsj₂₁ {u₁ u₂ u v : Finset Var} (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
     Disjoint (u₂ \ v) u₁ ∧ u = (u₂ \ v) ∪ u₁ :=
   dsj₁₂ (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _))
+-/
 
-lemma union_comm_assoc {u u₁ u₂ v : Finset Var}
-    {σ₁ : Mem (u₁ \ v)} {σ₂ : Mem (u₂ \ v)} {τ : Mem v}
-    (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
-    (σ₁.union (σ₂.union τ (dsj₂ hv)) (dsj₁₂ hu hv)) =
-    (σ₂.union (σ₁.union τ (dsj₁ hv)) (dsj₂₁ hu hv)) := by
-  ext ⟨x, hx⟩; unfold Mem.union; by_cases hx' : x ∈ u₁ \ v
-  · simp only [hx', ↓reduceDIte, Finset.mem_sdiff]; sorry
-  · sorry
+lemma union_comm_assoc (σ₁ σ₂ τ : Mem) : σ₁ ⊎ (σ₂ ⊎ τ) = σ₂ ⊎ (σ₁ ⊎ τ) := by
+    sorry
+--  ext ⟨x, hx⟩; unfold Mem.union; by_cases hx' : x ∈ u₁ \ v
+--  · simp only [hx', ↓reduceDIte, Finset.mem_sdiff]; sorry
+--  · sorry
 
+lemma sep_comm_assoc (A B C : Set Mem) : A ** (B ** C) = B ** (A ** C) := by
+  sorry
+
+/-
 lemma sep_comm_assoc {u u₁ u₂ v : Finset Var}
     {A : Set (Mem (u₁ \ v))} {B : Set (Mem (u₂ \ v))} {I : Set (Mem v)}
     (hu : u = u₁ ∪ u₂) (hv : v = u₁ ∩ u₂) :
