@@ -337,237 +337,50 @@ lemma exists_finsum_within' {α β : Type} {d : Distr α} {k : WithBot α → Di
         simp; exact distr_upper_bound _ _
   exact exists_finsum_within hsm hsum
 
--- lemma isClosed_distr {α : Type} {s : Set (Distr α)} :
---     IsClosed s ↔ ∀ x, IsClosed ((fun μ ↦ μ x) '' s) := by
---   constructor
---   · intro hc x
---     obtain ⟨t, ht, heq⟩ := distr_inducing.isClosed_iff.1 hc; subst heq
+instance {α : Type} : T2Space (Distr α) where
+  t2 := by
+      -- Since the distributions are injective, their images under the continuous function distr_inj are distinct. Therefore, there exist open sets u' and v' in the range of distr_inj such that x' ∈ u' and y' ∈ v', and u' and v' are disjoint.
+    have h_distinct : ∀ x y : Distr α, x ≠ y → ∃ u' v' : Set (α → NNReal), IsOpen u' ∧ IsOpen v' ∧ distr_inj x ∈ u' ∧ distr_inj y ∈ v' ∧ Disjoint u' v' := by
+      intros x y hxy
+      have h_distinct : distr_inj x ≠ distr_inj y := by
+        exact fun h => hxy <| distr_inj_injective h
+      rcases t2_separation h_distinct with ⟨ u', v', hu', hv', hxu', hyv', huv' ⟩
+      exact ⟨ u', v', hu', hv', hxu', hyv', huv' ⟩
+    -- By definition of induced topology, if u' and v' are open in the range of distr_inj, then their preimages under distr_inj are open in Distr α.
+    intros x y hxy
+    obtain ⟨u', v', hu', hv', hx', hy', huv'⟩ := h_distinct x y hxy
+    use distr_inj ⁻¹' u', distr_inj ⁻¹' v';
+    exact ⟨ IsOpen.preimage (continuous_iff_le_induced.mpr fun U a ↦ a) hu',
+            IsOpen.preimage (continuous_iff_le_induced.mpr fun U a ↦ a) hv',
+            hx',
+            hy',
+            Set.disjoint_left.mpr fun z hzu hzv => huv'.le_bot ⟨ hzu, hzv ⟩ ⟩
 
-
-lemma isOpen_distr {α : Type} {s : Set (Distr α)} {F : Finset α}
-    (h : ∀ x ∈ F, IsOpen ((fun μ : Distr α ↦ μ x) '' s)) : IsOpen s := by sorry
-  -- by_cases hs : s.Nonempty
-  -- · refine isOpen_induced_iff.mpr ⟨_, isOpen_pi_iff.mpr ?_, Set.preimage_image_eq _ distr_inj_injective⟩
-  --   simp only [distr_inj, Set.mem_image, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂,
-  --     Function.comp_apply]
-  --   intro μ hμ
-  --   refine ⟨F, fun y ↦ (fun ν ↦ (ν y).toNNReal) '' s, ?_, ?_⟩
-  --   · intro x hx; apply Finset.eq_of_mem_singleton at hx; subst hx; constructor
-  --     · obtain ⟨l, u, hlt, hop⟩ := IsOpen.exists_Ioo_subset h sorry
-  --       refine Metric.isOpen_iff.mpr fun r hr ↦ ?_
-  --       by_cases hl : l < 0
-  --       · sorry
-  --       · sorry
-  --     · refine ⟨μ, hμ, rfl⟩
-  --   · intro f hf
-  --     simp only [Finset.coe_singleton, Set.singleton_pi, Set.mem_preimage, Function.eval, Set.mem_image] at hf
-  --     rcases hf with ⟨ν, hν, heq⟩; refine ⟨ν, hν, ?_⟩; simp
-  -- · rw [Set.not_nonempty_iff_eq_empty.mp hs]; exact isOpen_empty
-
-
-
-lemma exists_open_cover_bind {α β : Type} {y : β} {μ : Distr α} {k : WithBot α → Distr β}
-    {ε l u : ℝ} {F : Finset (WithBot α)}
-    (hb : (∑' x, (μ x).toReal * (k x y).toReal) ∈ Set.Ioo l u) (hε : 0 < ε)
-    (hfin : (∑ x ∈ F, (μ x).toReal * (k x y).toReal) ∈ Set.Ioo (l + ε) (u - ε)) :
-    ∃ t,
-      t ⊆ (fun d ↦ ∑' (x : WithBot α), (d.1 x).toReal * ((d.2 x) ↑y).toReal) ⁻¹' Set.Ioo l u ∧
-      IsOpen t ∧
-      (μ, k) ∈ t := by
-obtain ⟨δ, hδ, hδ₀⟩ : ∃ δ, (2*δ + δ^2) * F.card < ε ∧ 0 < δ:= by
-  by_cases h : F.card = 0
-  · refine ⟨1, lt_of_eq_of_lt ?_ hε, sorry⟩; rw [h, CharP.cast_eq_zero]; exact mul_zero _
-  · refine ⟨ε / (4 * F.card), ?_, sorry⟩; sorry
-let U := { μ' : Distr α | ∀ x ∈ F, (μ' x).toReal ∈ Set.Ioo ((μ x).toReal - ε) ((μ x).toReal + ε)}
--- Alternatively, add [DecidableEq α] to context
-have _ x := Classical.dec (x ∈ F)
-let V x :=
-  if x ∈ F then
-    { ν : Distr β | (ν y).toReal ∈ Set.Ioo ((k x y).toReal - δ) ((k x y).toReal + δ) }
-  else
-    Set.univ
-refine ⟨U ×ˢ F.toSet.pi V, ?_, ?_, ?_⟩
-· intro ⟨μ, f⟩; simp [U, V]; intro hu hv; constructor
-  · sorry
-    -- have hll : l = l + ε - ε := by { linarith } ; rw [hll]
-    -- refine ((sub_lt_sub_iff_right _).mpr hF.1).trans ?_
-    -- refine (sub_lt_sub_left hδ _).trans ?_
-    -- have hcr : (2 * δ + δ ^ 2) * F.card = ↑F.card • (2 * δ + δ ^ 2) := by
-    --   rw [mul_comm]; sorry
-    -- rw [hcr, ← (sub_right_inj (G := ℝ)).mpr (Finset.sum_const (β := ℝ) _), ← Finset.sum_sub_distrib]
-    -- have hlt x :
-    --     ((d x).toReal * ((k x) ↑y).toReal - (2 * δ + δ ^ 2)) <
-    --     (μ x).toReal * ((f x) ↑y).toReal := by sorry
-    -- refine lt_of_lt_of_le (Finset.sum_lt_sum_of_nonempty sorry fun x _ ↦ hlt x) ?_
-    -- refine sum_le_tsum _ ?_ ?_
-    -- · intro _ _; exact mul_nonneg ENNReal.toReal_nonneg ENNReal.toReal_nonneg
-    -- · sorry
-  · sorry
-· refine IsOpen.prod ?_ ?_
-  · refine isOpen_induced_iff.mpr ⟨_, ?_, Set.preimage_image_eq _ distr_inj_injective⟩
-    simp only [distr_inj, U, Set.image]; refine isOpen_pi_iff.mpr ?_; intro f hf
-    rcases hf with ⟨ξ, hξ, hf⟩; subst hf
-    simp only [Set.mem_Ioo, Set.mem_setOf_eq] at hξ
-    refine
-      ⟨F.filterMap id ?_,
-        fun x ↦
-          if ε < (μ x).toReal then
-            Set.Ioo ((μ x).toReal - ε).toNNReal ((μ x).toReal + ε).toNNReal
-          else
-            Set.Ico 0 ((μ x).toReal + ε).toNNReal,
-        ?_, ?_⟩
-    · intro a b c; simp only [id_eq, Option.mem_def, U, V]; intro ha hb; subst ha hb; rfl
-    · intro x hx
-      obtain ⟨_, hxF, heq⟩ := (Finset.mem_filterMap _).mp hx; subst heq
-      by_cases hx' : ε < (μ ↑x).toReal
-      · simp only [hx', ↓reduceIte]; refine ⟨isOpen_Ioo, ?_, ?_⟩
-        · refine (Real.toNNReal_lt_iff_lt_coe (sub_nonneg_of_le (le_of_lt hx'))).mpr ?_
-          exact lt_of_lt_of_eq (hξ x hxF).1 (ENNReal.coe_toNNReal_eq_toReal _)
-        · refine Real.lt_toNNReal_iff_coe_lt.mpr ?_
-          exact lt_of_eq_of_lt (ENNReal.coe_toNNReal_eq_toReal _) (hξ ↑x hxF).2
-      · simp only [hx', ↓reduceIte]; refine ⟨NNReal.isOpen_Ico_zero, bot_le, ?_⟩
-        refine Real.lt_toNNReal_iff_coe_lt.mpr ?_
-        exact lt_of_eq_of_lt (ENNReal.coe_toNNReal_eq_toReal _) (hξ ↑x hxF).2
-    · intro g hg; simp; refine ⟨ξ, hξ, ?_⟩; sorry
-  · refine isOpen_set_pi (Finset.finite_toSet _) ?_
-    intro x hx; unfold V; apply Finset.mem_coe.mp at hx; simp [hx]
-    refine isOpen_induced_iff.mpr ⟨_, ?_, Set.preimage_image_eq _ distr_inj_injective⟩
-    refine isOpen_pi_iff.mpr ?_; intro f hf
-    refine ⟨{y}, fun z ↦ Set.Ioo ((k x y).toReal - δ).toNNReal ((k x y).toReal + δ).toNNReal, ?_, ?_⟩
-    · simp only [Finset.mem_singleton, ENNReal.toReal_nonneg, Set.mem_Ioo, forall_eq]
-      rcases hf with ⟨μ', ⟨hl, hu⟩, heq⟩; subst heq; refine ⟨isOpen_Ioo, ?_, ?_⟩
-      · unfold distr_inj; sorry
-      · sorry
-    · sorry
-· simp [U, V]; refine ⟨fun _ _ ↦ hε, fun _ _ ↦ hδ₀⟩
-
--- Based on Lemma B.3 of the POPL '25 paper. Original Proof due to Dexter Kozen
-lemma distr_bind_tsum_continuous {α β : Type} {y : β} :
---    (hsum : Summable fun d : Distr α × (WithBot α → Distr β) ↦ ∑' x, (d.1 x * d.2 x y).toReal) :
-    @Continuous (Distr α × (WithBot α → Distr β)) ℝ _ _
-      (fun d ↦ ∑' x, (d.1 x * d.2 x y).toReal) := by
-  refine Real.isTopologicalBasis_Ioo_rat.continuous_iff.mpr ?_
-  intro s hs
-  simp only [ENNReal.toReal_mul]
-  simp only [Set.mem_iUnion, Set.mem_singleton_iff, exists_prop] at hs
-  rcases hs with ⟨l, u, hlt, hs⟩; subst hs
-  refine isOpen_iff_mem_nhds.mpr ?_
-  simp only [Set.mem_preimage, Set.mem_Ioo, and_imp, Prod.forall]; intro d k hl hu; refine mem_nhds_iff.mpr ?_
-  rcases exists_finsum_within' (Set.mem_Ioo.mpr ⟨hl, hu⟩) with ⟨ε, ⟨hε, _⟩, F, hF⟩
-  exact exists_open_cover_bind ⟨hl, hu⟩ hε hF
-
-lemma distr_bind_tsum_continuous' {α β : Type} {y : β} :
---    (hsum : Summable fun d : Distr α × (WithBot α → Distr β) ↦ ∑' x, (d.1 x * d.2 x y).toReal) :
-    @Continuous (Distr α × (WithBot α → Distr β)) ℝ _ _
-      (fun d ↦ ∑' x, (d.1 x * d.2 x y).toReal) := by
-  refine Real.isTopologicalBasis_Ioo_rat.continuous_iff.mpr ?_
-  intro s hs
-  simp only [ENNReal.toReal_mul]
-  simp only [Set.mem_iUnion, Set.mem_singleton_iff, exists_prop] at hs
-  rcases hs with ⟨l, u, hlt, hs⟩; subst hs
-  --refine isOpen_induced_iff.mpr ⟨_, ?_, Set.preimage_image_eq _ distr_inj_injective⟩
-
-  refine isOpen_iff_mem_nhds.mpr ?_
-  simp only [Set.mem_preimage, Set.mem_Ioo, and_imp, Prod.forall]; intro d k hl hu; refine mem_nhds_iff.mpr ?_
-  rcases exists_finsum_within' (Set.mem_Ioo.mpr ⟨hl, hu⟩) with ⟨ε, ⟨hε, _⟩, F, hF⟩
-  exact exists_open_cover_bind ⟨hl, hu⟩ hε hF
-
---   obtain ⟨δ, hδ⟩ : ∃ δ, (2*δ + δ^2) * F.card < ε := by
---     by_cases h : F.card = 0
---     · refine ⟨1, lt_of_eq_of_lt ?_ hε⟩; rw [h, CharP.cast_eq_zero]; exact mul_zero _
---     · refine ⟨ε / (4 * F.card), ?_⟩; sorry
---   let U := { μ : Distr α | ∀ x ∈ F, (μ x).toReal ∈ Set.Ioo ((d x).toReal - ε) ((d x).toReal + ε)}
---   -- Alternatively, add [DecidableEq α] to context
---   have _ x := Classical.dec (x ∈ F)
---   let V x := if x ∈ F then { ν : Distr β | (ν y).toReal ∈ Set.Ioo ((k x y).toReal - δ) ((k x y).toReal + δ)} else Set.univ
---   refine ⟨U ×ˢ F.toSet.pi V, ?_, ?_, ?_⟩
---   · intro ⟨μ, f⟩; simp [U, V]; intro hu hv; constructor
---     · have hll : l = l + ε - ε := by { linarith } ; rw [hll]
---       refine ((sub_lt_sub_iff_right _).mpr hFl).trans ?_
---       refine (sub_lt_sub_left hδ _).trans ?_
---       have hcr : (2 * δ + δ ^ 2) * F.card = ↑F.card • (2 * δ + δ ^ 2) := by
---         rw [mul_comm]; sorry
---       rw [hcr, ← (sub_right_inj (G := ℝ)).mpr (Finset.sum_const (β := ℝ) _), ← Finset.sum_sub_distrib]
---       have hlt x :
---           ((d x).toReal * ((k x) ↑y).toReal - (2 * δ + δ ^ 2)) <
---           (μ x).toReal * ((f x) ↑y).toReal := by sorry
---       refine lt_of_lt_of_le (Finset.sum_lt_sum_of_nonempty sorry fun x _ ↦ hlt x) ?_
---       refine sum_le_tsum _ ?_ ?_
---       · intro _ _; exact mul_nonneg ENNReal.toReal_nonneg ENNReal.toReal_nonneg
---       · sorry
---     · sorry
---   · refine IsOpen.prod (isOpen_induced_iff.mpr ⟨distr_inj '' U, ?_, ?_⟩) ?_
---     · simp only [distr_inj, U, Set.image]; refine isOpen_pi_iff.mpr ?_; intro f hf
---       rcases hf with ⟨μ, hμ, hf⟩; subst hf
---       simp only [Set.mem_Ioo, Set.mem_setOf_eq] at hμ
---       refine
---         ⟨F.filterMap id ?_,
---           fun x ↦ Set.Ioo ((d x).toReal - ε).toNNReal ((d x).toReal + ε).toNNReal, ?_, ?_⟩
---       · intro a b c; simp only [id_eq, Option.mem_def, U, V]; intro ha hb; subst ha hb; rfl
---       · intro x hx; refine ⟨isOpen_Ioo, ?_, ?_⟩
---         ·
---       · sorry
---     · exact Set.preimage_image_eq _ distr_inj_injective
---     · refine isOpen_set_pi (Finset.finite_toSet _) ?_
---       intro x hx; unfold V; apply Finset.mem_coe.mp at hx; simp [hx]
---       sorry
---   · simp [U, V]; refine ⟨fun _ _ ↦ hε, ?_⟩
---     intro _ _; unfold δ; refine div_pos hε ?_; sorry
--- }
-
-lemma distr_bind_continuous {α β : Type} :
-  @Continuous (Distr α × (WithBot α → Distr β)) (β → NNReal) _ _
-  (distr_inj ∘ Function.uncurry PMF.bind) := by {
-    refine continuous_pi ?_; intro y
-    simp [distr_inj, Function.uncurry]
-    refine ContinuousOn.comp_continuous ENNReal.continuousOn_toNNReal ?_ (fun _ => prob_not_top)
-    -- Now, show that the infinite sum is continuous
-    simp [PMF.bind, distr_coe]
-    refine Continuous.congr ?_
-      (fun d => Eq.trans (congrArg _ (Eq.symm (ENNReal.tsum_toReal_eq ?_))) (ENNReal.ofReal_toReal ?_))
-    · refine Continuous.comp ENNReal.continuous_ofReal distr_bind_tsum_continuous (g := ENNReal.ofReal)
-    · intro d; exact ENNReal.mul_ne_top prob_not_top prob_not_top
-    · refine ne_top_of_le_ne_top d.1.tsum_coe_ne_top ?_
-      refine tsum_le_tsum ?_ ENNReal.summable ENNReal.summable
-      intro x
-      exact
-        le_trans (b := d.1 x * 1)
-          (mul_le_mul (le_refl _) (distr_upper_bound _ _) bot_le bot_le)
-          (by simp)
-  }
 
 -- Lemma B.3 of Zilberstein et al. POPL'25
 lemma bind_closed {α β : Type} {s : Set (Distr α)} {k : α → Set (Distr β)}
   (hcs : IsClosed s)
   (hne : ∀ x : α , (k x).Nonempty)
   (h : ∀ x : α , IsClosed (k x)) :
-  IsClosed (distr_bind s k) := by {
-    -- Move into the product topology NNReal^α
-    refine distr_inducing.isClosed_iff.2 ⟨distr_inj '' distr_bind s k, ?_⟩
-    refine ⟨?_, Function.Injective.preimage_image distr_inj_injective _⟩
-    rw [distr_bind_image hne, ← Set.image_comp]
-    -- Any compact set is closed, since we are working in a compact space
-    have hx (x : WithBot α) : IsClosed (Option.elim x Set.univ k) := by {
-      match x with
-      | ⊥ => simp [Option.elim]
-      | WithBot.some y => simp [Option.elim]; exact h y
-    }
-    have hc : IsCompact (Set.prod s (Set.univ.pi (Option.elim · Set.univ k))) :=
-      IsClosed.isCompact (IsClosed.prod hcs (isClosed_set_pi fun x _ => hx x))
-    -- The image of a continuous function in a Hausdorff space is closed
-    exact IsCompact.isClosed (hc.image distr_bind_continuous)
+    IsClosed (distr_bind s k) := by
+  -- Move into the product topology NNReal^α
+  -- refine distr_inducing.isClosed_iff.2 ⟨distr_inj '' distr_bind s k, ?_⟩
+  -- refine ⟨?_, Function.Injective.preimage_image distr_inj_injective _⟩
+  rw [distr_bind_image hne] --, ← Set.image_comp]
+  -- Any compact set is closed, since we are working in a compact space
+  have hx (x : WithBot α) : IsClosed (Option.elim x Set.univ k) := by {
+    match x with
+    | ⊥ => simp [Option.elim]
+    | WithBot.some y => simp [Option.elim]; exact h y
   }
-
--- lemma bind_convex {α β : Type}  {s : Set (Distr α)} {k : α → Set (Distr β)}
---     (hsc : Convex ENNReal (Subtype.val '' s))
---     (hkc : ∀ x : α, Convex ENNReal (Subtype.val '' k x)) :
---     Convex ENNReal (Subtype.val '' distr_bind s k) := by
---   intro d₁ hd₁ d₂ hd₂ p q _ _ hpq
+  have hc : IsCompact (Set.prod s (Set.univ.pi (Option.elim · Set.univ k))) :=
+    IsClosed.isCompact (IsClosed.prod hcs (isClosed_set_pi fun x _ => hx x))
+  -- The image of a continuous function in a Hausdorff space is closed
+  refine IsCompact.isClosed (hc.image ?_)
+  sorry
 
 lemma countably_convex {ι α : Type} {s : Set (Distr α)} {ξ : PMF ι} {f : ι → Distr α}
     (h : ∀ i ∈ ξ.support, f i ∈ s)
     (hcv : Convex ENNReal (Subtype.val '' s))
     (hcl : IsClosed s) : PMF.bind ξ f ∈ s := by
-  have k := Set.enumerateCountable (PMF.support_countable ξ) sorry
-  let sm n y := ∑ i ∈ Finset.range n, ξ (k i) * f (k i) y
   sorry
