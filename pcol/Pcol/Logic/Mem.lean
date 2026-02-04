@@ -1,72 +1,72 @@
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Finset.Lattice.Union
 
+import Pcol.Semantics.Basic
+
 abbrev Var := Nat
 abbrev Val := Nat
-abbrev Mem := List (Var × Val)
+abbrev Mem := Finset Var × (Var → Option Val)
 
-namespace Mem
+noncomputable instance : DecidableEq Mem := by
+  classical
+  infer_instance
 
-def insert (x: Var) (v: Val) (σ: Mem) : Mem :=
-  match σ with
-  | [] => [(x, v)]
-  | (y, v') :: σ' =>
-    if x ≤ y then
-      (x, v) :: (y, v') :: σ'
-    else
-      (y, v') :: insert x v σ'
-
-def lookup (x: Var) (σ: Mem) : Option Val :=
-  match σ with
-  | [] => none
-  | (y, v) :: σ' =>
-    if x = y then some v else lookup x σ'
-
-def union (σ τ: Mem) : Mem :=
-  match σ with
-  | [] => τ
-  | (x, v) :: σ' => insert x v (union σ' τ)
-
-infixr:65 " ⊎ " => union
-
-def list_greater (x: Var) (σ: Mem) : Prop :=
-  match σ with
-  | [] => True
-  | (y, _) :: σ' => x < y ∧ list_greater x σ'
-
-def wf? (σ: Mem) : Prop :=
-  match σ with
-  | [] => True
-  | (x, _) :: σ' => list_greater x σ' ∧ wf? σ'
+class WellFormed (α : Type) where
+  wf? : α → Prop
 
 instance : GetElem Mem Var (Option Val) (fun _ _ => True) where
-  getElem σ x _ := lookup x σ
+  getElem
+  | (_, σ), x, _ => σ x
 
-def indom (x: Var) (σ: Mem) : Prop :=
-    match σ with
-    | [] => False
-    | (y, _) :: σ' => if x = y then True else indom x σ'
+namespace Mem
+  abbrev Inv := Invariant (fun _ => Finset Var) Mem
 
-instance : Membership Var Mem where
-  mem σ x := indom x σ
+  instance : Membership Mem Inv where
+    mem
+    | (_, A), mem => mem ∈ A
 
-def disjoint (σ τ: Mem) : Prop :=
-  match σ with
-  | [] => True
-  | (x, _) :: σ' => lookup x τ = none ∧ disjoint σ' τ
+  def empty : Mem := (∅, fun _ => .none)
 
-instance {σ τ} : Decidable (disjoint σ τ) := by
-  induction σ generalizing τ with
-  | nil =>
-    simp [disjoint]
-    exact instDecidableTrue
-  | cons p σ' ih =>
-    simp [disjoint]
-    exact instDecidableAnd
+  def dom : Mem → Finset Var := Prod.fst
+
+  def wf? : Mem → Prop
+  | (S, σ) => ∀ x, x ∈ S ↔ ∃ v, σ x = .some v
+
+  -- Assumption: x not in domain
+  def insert (x : Var) (v : Val) : Mem → Mem
+  | (S, σ) =>
+    (S ∪ {x} , fun y => if y = x then v else σ y)
+
+  -- Assumption: projected set is subset of current domain
+  def proj : Mem → Finset Var → Mem
+  | (_, σ), S => (S, σ)
+
+  noncomputable instance : CompatibleProj Mem Inv where
+    -- Assumption: T ⊆ S
+    cprojr
+  | mem, (T, A) =>
+    if mem.proj T ∈ A then mem else empty
+
+  noncomputable instance : CompatibleProj Inv Inv where
+    -- Assumption: both inv well-formed
+    cprojr
+    | (S, A), ℐ => (S , A.image (· ◃ ℐ))
+
+  instance : Membership Var Mem where
+    mem
+    | (S, _),  x => (x ∈ S)
+
+  -- Assumption: σ and τ are disjoint
+  def union : Mem → Mem → Mem
+  | (S, σ), (T, τ) =>
+    (S ∪ T, fun y => if y ∈ S then σ y else τ y)
+
+  infixr:65 " ⊎ " => union
+
+  def disjoint : Mem → Mem → Prop
+  | (S, _), (T, _) => Disjoint S T
 
 end Mem
-
-def wfₛ (A : Set Mem) : Set Mem := { σ ∈ A | σ.wf? }
 
 class Separation (α : Type) where
   sep : α → α → α
@@ -74,17 +74,30 @@ class Separation (α : Type) where
 infixr:65 " ** " => Separation.sep
 
 instance : Separation (Set Mem) where
-  sep A B :=
-    { σ' | ∃ σ ∈ A, ∃ τ ∈ B, σ.disjoint τ ∧ σ' = σ ⊎ τ }
+  sep A B := { σ' | ∃ σ ∈ A, ∃ τ ∈ B, σ.disjoint τ ∧ σ' = σ ⊎ τ }
 
-instance : Separation (Finset Mem) where
-  sep A B :=
-    A.biUnion (fun σ =>
-      B.biUnion (fun τ =>
-        if σ.disjoint τ then { σ ⊎ τ } else {}
-      )
-    )
-   --   Finset.image (σ ∪ ·) (B.filter (σ.disjoint))
+abbrev Mems := Finset Var × Set Mem
+
+instance : Separation Mems where
+  sep
+  | (S, A), (T, B) =>
+    (S ∪ T , A ** B)
+
+namespace Mems
+  def wf? : Mems -> Prop
+  | (S, A) => ∀ mem ∈ A, mem.1 = S ∧ mem.wf?
+end Mems
+
+abbrev FinMems := Finset Var × Finset Mem
+
+noncomputable instance : Separation FinMems where
+  sep
+  | (S, A), (T, B) =>
+    (S ∪ T, A.biUnion (fun σ => B.biUnion (fun τ => { σ ⊎ τ })))
+
+instance : Coe FinMems Mems where
+  coe
+  | (S, A) => (S, A)
 
 /-
 

@@ -112,38 +112,48 @@ class LawfulSem (α σ τ : Type)
 where
   sem_mono (s : σ) : Monotone (sem · s : α → τ)
 
-class Check (t : Type → Type) (σ : Type) where
-  check : Finset σ → σ → t σ
+abbrev Invariant (δ : Type → Type) (σ : Type) := δ σ × Finset σ
+
+-- Compatible projection
+class CompatibleProj (α β : Type) where
+  cprojr : α → β → α
+  cprojl b a := cprojr a b
+
+notation:65 a " ◃ " b => CompatibleProj.cprojr a b
+notation:65 b " ▹ " a => CompatibleProj.cprojl b a
+
+class Check (t δ : Type → Type) (σ : Type) where
+  check : Invariant δ σ → σ → t σ
 
 export Check (check)
 
-class LawfulCheck (t : Type → Type) (σ : Type)
-  [Preorder σ] [Preorder (t σ)] [Check t σ]
+class LawfulCheck (t δ : Type → Type) (σ : Type)
+  [Preorder σ] [Preorder (t σ)] [Check t δ σ]
 where
-  check_mono [Preorder (t σ)] (ss : Finset σ) : Monotone (check ss : σ → t σ)
+  check_mono (inv : Invariant δ σ) : Monotone (check inv : σ → t σ)
 
-class Replace (t : Type → Type) (σ : Type) where
-  replace : σ → Finset σ → t σ
+class Replace (t δ : Type → Type) (σ : Type) where
+  replace : σ → Invariant δ σ → t σ
 
 export Replace (replace)
 
-class LawfulReplace (t : Type → Type) (σ : Type)
-  [Preorder σ] [Preorder (t σ)] [Replace t σ]
+class LawfulReplace (t δ : Type → Type) (σ : Type)
+  [Preorder σ] [Preorder (t σ)] [Replace t δ σ]
 where
-  replace_mono (ss : Finset σ) : Monotone (replace · ss : σ → t σ)
+  replace_mono (inv : Invariant δ σ) : Monotone (replace · inv : σ → t σ)
 
-class InvSem (α σ τ : Type) where
-  inv_sem : α → Finset σ → σ → τ
+class InvSem (δ : Type → Type) (α σ τ : Type) where
+  inv_sem : α → Invariant δ σ → σ → τ
 
 export InvSem (inv_sem)
 
-class LawfulInvSem (α σ τ : Type)
-  [Preorder α] [Preorder τ] [InvSem α σ τ]
+class LawfulInvSem (δ : Type → Type) (α σ τ : Type)
+  [Preorder α] [Preorder τ] [InvSem δ α σ τ]
 where
-  inv_sem_mono (s : σ) (inv : Finset σ) : Monotone (inv_sem · inv s : α → τ)
+  inv_sem_mono (s : σ) (inv : Invariant δ σ) : Monotone (inv_sem · inv s : α → τ)
 
-instance {α σ : Type} {t : Type → Type}
-  [Check t σ] [Replace t σ] /-[Monad t]-/ [Lin t] : [Sem α σ (t σ)] → InvSem α σ (t σ)
+instance {α σ : Type} {t δ : Type → Type}
+  [Check t δ σ] [Replace t δ σ] [Lin t] : [Sem α σ (t σ)] → InvSem δ α σ (t σ)
 where
   inv_sem a inv s :=
     bind (Check.check inv s) fun s' =>
@@ -151,11 +161,11 @@ where
     bind (Sem.sem a s'') fun s''' =>
       Check.check inv s'''
 
-instance {α σ} {t : Type → Type}
+instance {t δ : Type → Type} {α σ : Type}
   [Preorder α] [Preorder σ] [Preorder (t σ)] --[Monad t]
-  [Check t σ] [Replace t σ] [Lin t] [Sem α σ (t σ)]
-  [LawfulCheck t σ] [LawfulReplace t σ] [LawfulLin t]
-  : [LawfulSem α σ (t σ)] → LawfulInvSem α σ (t σ)
+  [Check t δ σ] [Replace t δ σ] [Lin t] [Sem α σ (t σ)]
+  [LawfulCheck t δ σ] [LawfulReplace t δ σ] [LawfulLin t]
+  : [LawfulSem α σ (t σ)] → LawfulInvSem δ α σ (t σ)
 where
   inv_sem_mono s inv := by
     intros a₁ a₂ hle
