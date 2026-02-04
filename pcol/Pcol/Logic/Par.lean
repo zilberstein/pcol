@@ -3,7 +3,8 @@ import Mathlib.Data.Finset.Lattice.Basic
 import Pcol.ConvexPowerset
 import Pcol.ConvexPowerset.Monad
 
---import Pcol.Logic.Invariant
+import Pcol.Logic.ConvexPowerset
+import Pcol.Logic.Invariant
 import Pcol.Logic.Mem
 import Pcol.Logic.MinProb
 import Pcol.Semantics.Linearization
@@ -11,29 +12,6 @@ import Pcol.Semantics.Lpo.Operations.Par
 
 open Classical
 
--- An instance for linearizing into the convex powerdomain
-instance : Lin C where
-  nondet {ι X} (f : ι → C X) :=
-    bind ⟨(Set.univ : Set (Distr ι)), sorry⟩ f
-
-  nondet_min p S₁ S₂ :=
-    ⟨ ⋃ (q : ENNReal) (_ : q ≥ p) (hq : q ≤ 1), (convex_comb S₁.1 S₂.1 q hq)
-    , sorry ⟩
-
-instance : Check C (fun _ => Finset Var) Mem where
-  check
-  | (S, A) => fun σ => if σ.proj S ∈ A then pure σ else ⊥
-
-instance : Replace C (fun _ => Finset Var) Mem where
-  replace σ
-  | (T, A) =>
-    nondet (fun τ : A => pure (σ.proj (σ.dom \ T) ⊎ τ))
-
-instance : LawfulLin C where
-  nondet_mono := sorry
-  nondet_min_mono := sorry
-  bind_mono_left := sorry
-  bind_mono_right := sorry
 
 noncomputable def marginalize {α β : Type} (μ : Distr (α × β)) : Distr α :=
   ⟨ fun
@@ -159,8 +137,7 @@ lemma par_comp_inductive_step_left
   cases hlab : α.lab x with
   -- Case : α.lab x = ⊥
   | lab_bot =>
-    simp
-    sorry
+    simp [minProb_mar, minProb_bot]
   -- Case : α.lab x = Fork
   | lab_fork =>
     simp
@@ -168,25 +145,34 @@ lemma par_comp_inductive_step_left
     simp
   -- Case : α.lab x = act
   | lab_act a =>
-    sorry
+    rw [union_comm, ←union_assoc, union_comm, union_comm τ σ₁]
+    simp only [minProb_mar, Lin.State.curr_inv, Lin.State.state]
+    refine
+      le_trans
+        ?_
+        (minProb_mono (LawfulLin.bind_mono_left (upcast_mono a curr_inv (σ₁ ⊎ τ) σ₂)))
+    rw [bind_assoc, minProb_bind, minProb_bind]
+    refine le_of_eq_of_le iInf_C_mul_minProb ?_
+    have real_hτ : τ ∈ curr_inv := by sorry
+    have real_hτ₁ : τ₁ ∈ curr_inv := by sorry
+    rw [inv_sem_eq a σ₁ real_hτ real_hτ₁]
+    apply iInf₂_mono
+    intros μ hμ
+    rw [← ENNReal.tsum_mul_right]
+    refine ENNReal.tsum_le_tsum fun ⟨σ, hσ⟩ => ?_
+    refine le_of_eq_of_le
+      (mul_assoc _ _ _)
+      (mul_le_mul (le_refl _) ?_ bot_le bot_le)
+    rw [←minProb_mar, ←minProb_mar, ←minProb_mar, pure_bind] ; all_goals try simp
+    obtain ⟨σ', τ', heq, hτ'⟩ : ∃ σ', ∃ τ', σ = σ' ⊎ τ' ∧ τ' ∈ ℐ := by sorry
+    simp only [heq]
+    rw [←union_assoc, union_comm τ' σ₂]
+    apply hind ; all_goals try assumption
+    apply Set.Subset.refl
   -- Case : α.lab x = test
   | lab_test b =>
     sorry
   /-
-  have hu' := hu.trans (Finset.union_comm _ _)
-  have hv' := hv.trans (Finset.inter_comm _ _)
-  have hlab_eq : (par_comp α β hdn hu hr₁ hr₂).lab x = upcast_lab (α.lab x) sorry := sorry -- LEMMA
-  rw [hlab_eq]; cases hlab : α.lab x with
-  -- Case : α.lab y = ⊥
-  | lab_bot => simp only [upcast_lab, minProb_bot, zero_mul, le_refl]
-  -- Case : α.lab y = Fork
-  | lab_fork =>
-    simp only [upcast_lab]
-    have h₁ : (s ∩ α.nodes_finset).erase x = s.erase x ∩ α.nodes_finset := sorry
-    have h₂ : s ∩ β.nodes_finset = s.erase x ∩ β.nodes_finset := sorry
-    rw [h₁, h₂]
-    refine hind (s.erase x) ?_ _ _ hτ hτ₁ hτ₂
-    exact Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1)
   -- Case : α.lab y = act
   | lab_act a =>
     simp only [upcast_lab]

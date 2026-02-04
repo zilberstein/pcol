@@ -1,7 +1,9 @@
+import Pcol.ConvexPowerset
+import Pcol.ConvexPowerset.Monad
+import Pcol.Logic.ConvexPowerset
 import Pcol.Logic.Mem
-import Pcol.Semantics.Lpo.Linearization
 
-open Classical
+/-open Classical
 
 -- Invariant Sensitive Semantics
 
@@ -133,43 +135,83 @@ noncomputable instance {t : Type → Type} [Monad t] {test : Type} {u : Finset V
     pure (Sem.sem t.action σ₂)
   sem_mono := sorry
 
-lemma inv_sem_eq {t : Type → Type} [Monad t] {act : Type} {u v : Finset Var}
-    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
-    [Sem act (Mem u) (t (Mem u))]
-    {inv : Finset (Mem v)}
-    {a : WithInv act u} (hinv : a.has_inv inv)
-    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
-    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t (Mem u)) =
-    (Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t (Mem u)) := by
-  --refine congrArg₂ bind ?_ rfl
-  sorry
+-/
 
-lemma inv_sem_eq_test {t : Type → Type} [Monad t] {test : Type} {u v : Finset Var}
-    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
-    [Sem test (Mem u) Bool]
-    {inv : Finset (Mem v)}
-    {a : WithInv test u} (hinv : a.has_inv inv)
-    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
-    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t Bool) =
-    (Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t Bool) := by
-  sorry
+instance : Check C (fun _ => Finset Var) Mem where
+  check
+  | (S, A) => fun σ => if σ.proj S ∈ A then pure σ else ⊥
+
+instance : Replace C (fun _ => Finset Var) Mem where
+  replace σ
+  | (T, A) =>
+    nondet (fun τ : A => pure (σ.proj (σ.dom \ T) ⊎ τ))
+
+variable
+  {act test : Type}
+  [Sem act Mem (C Mem)]
+  [Sem test Mem Bool]
+
+lemma inv_sem_eq
+  {τ τ' : Mem} {ℐ : Mem.Inv}
+  (a : act) (σ : Mem) (hτ : τ ∈ ℐ) (hτ' : τ' ∈ ℐ)
+  : (InvSem.inv_sem a ℐ (σ ⊎ τ) : C Mem) =
+      (InvSem.inv_sem a ℐ (σ ⊎ τ') : C Mem)
+  := by
+    sorry
+
+lemma upcast_mono
+  (a : act) (ℐ : Mem.Inv) (σ₁ σ₂ : Mem)
+  : (InvSem.inv_sem a ℐ σ₁ >>= (fun σ₁' => pure (σ₁' ⊎ σ₂)) : C Mem) ≤
+      (InvSem.inv_sem a ℐ (σ₁ ⊎ σ₂) : C Mem)
+  := by
+    sorry
+
+--lemma upcast_mono {t : Type → Type} [Monad t] {act : Type} {u₁ u₂ u : Finset Var}
+--    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
+--    [∀ v, Sem act (Mem v) (t (Mem v))]
+--    {a : WithInv act u₁} (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
+--    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
+--    (bind (Sem.sem a σ₁ : t (Mem u₁)) (fun σ₁' : Mem u₁ ↦ pure (σ₂.union σ₁' h))) ≤
+--    (Sem.sem (a.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) : t (Mem u)) := sorry
+
+
+--lemma inv_sem_eq {t : Type → Type} [Monad t] {act : Type} {u v : Finset Var}
+--    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
+--    [Sem act (Mem u) (t (Mem u))]
+--    {inv : Finset (Mem v)}
+--    {a : WithInv act u} (hinv : a.has_inv inv)
+--    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
+--    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t (Mem u)) =
+--    (Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t (Mem u)) := by
+--  --refine congrArg₂ bind ?_ rfl
+--  sorry
+
+--lemma inv_sem_eq_test {t : Type → Type} [Monad t] {test : Type} {u v : Finset Var}
+--    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
+--    [Sem test (Mem u) Bool]
+--    {inv : Finset (Mem v)}
+--    {a : WithInv test u} (hinv : a.has_inv inv)
+--    {σ : Mem (u \ v)} {τ₁ τ₂ : Mem v} (hτ : τ₁ ∈ inv) (hτ₂ : τ₂ ∈ inv) :
+--    (Sem.sem a (σ.union τ₁ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t Bool) =
+--    (Sem.sem a (σ.union τ₂ ⟨Finset.sdiff_disjoint, (sorry : u = (u \ v) ∪ v)⟩) : t Bool) := by
+--  sorry
 
 -- This would have to be proved by cases on the type of action
 -- Intuitively it's true because when you upcast an action, it means that the domain
 -- includes more variables. Those variables are either not used (in which case the
 -- behavior doesn't change), or they are used and then the prior behavior is ⊥
-lemma upcast_mono {t : Type → Type} [Monad t] {act : Type} {u₁ u₂ u : Finset Var}
-    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
-    [∀ v, Sem act (Mem v) (t (Mem v))]
-    {a : WithInv act u₁} (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
-    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
-    (bind (Sem.sem a σ₁ : t (Mem u₁)) (fun σ₁' : Mem u₁ ↦ pure (σ₂.union σ₁' h))) ≤
-    (Sem.sem (a.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) : t (Mem u)) := sorry
-
-lemma upcast_mono_test {m : Type → Type} [Monad m] {test : Type} {u₁ u₂ u : Finset Var}
-    [∀ X, Preorder (m X)] [∀ X, Bot (m X)] [Linearizable m]
-    [∀ v, Sem test (Mem v) Bool]
-    {t : WithInv test u₁} (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
-    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
-    (Sem.sem t σ₁ : m Bool) ≤
-    (Sem.sem (t.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) : m Bool) := sorry
+--lemma upcast_mono {t : Type → Type} [Monad t] {act : Type} {u₁ u₂ u : Finset Var}
+--    [∀ X, Preorder (t X)] [∀ X, Bot (t X)] [Linearizable t]
+--    [∀ v, Sem act (Mem v) (t (Mem v))]
+--    {a : WithInv act u₁} (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
+--    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
+--    (bind (Sem.sem a σ₁ : t (Mem u₁)) (fun σ₁' : Mem u₁ ↦ pure (σ₂.union σ₁' h))) ≤
+--    (Sem.sem (a.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) : t (Mem u)) := sorry
+--
+--lemma upcast_mono_test {m : Type → Type} [Monad m] {test : Type} {u₁ u₂ u : Finset Var}
+--    [∀ X, Preorder (m X)] [∀ X, Bot (m X)] [Linearizable m]
+--    [∀ v, Sem test (Mem v) Bool]
+--    {t : WithInv test u₁} (h : Disjoint u₂ u₁ ∧ u = u₂ ∪ u₁)
+--    {σ₁ : Mem u₁} {σ₂ : Mem u₂} :
+--    (Sem.sem t σ₁ : m Bool) ≤
+--    (Sem.sem (t.upcast (sorry : u₁ ⊆ u)) (σ₂.union σ₁ h) : m Bool) := sorry

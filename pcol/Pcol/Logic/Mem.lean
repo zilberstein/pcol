@@ -141,8 +141,12 @@ lemma dsj₂₁ {u₁ u₂ u v : Finset Var} (hu : u = u₁ ∪ u₂) (hv : v = 
   dsj₁₂ (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _))
 -/
 
-lemma union_comm_assoc (σ₁ σ₂ τ : Mem) : σ₁ ⊎ (σ₂ ⊎ τ) = σ₂ ⊎ (σ₁ ⊎ τ) := by
-    sorry
+lemma union_comm (σ₁ σ₂ : Mem) : σ₁ ⊎ σ₂ = σ₂ ⊎ σ₁ := sorry
+
+lemma union_assoc (σ₁ σ₂ σ₃ : Mem) : σ₁ ⊎ (σ₂ ⊎ σ₃) = (σ₁ ⊎ σ₂) ⊎ σ₃ := sorry
+
+--lemma union_comm_assoc (σ₁ σ₂ τ : Mem) : σ₁ ⊎ (σ₂ ⊎ τ) = σ₂ ⊎ (σ₁ ⊎ τ) := by
+--    sorry
 --  ext ⟨x, hx⟩; unfold Mem.union; by_cases hx' : x ∈ u₁ \ v
 --  · simp only [hx', ↓reduceDIte, Finset.mem_sdiff]; sorry
 --  · sorry
