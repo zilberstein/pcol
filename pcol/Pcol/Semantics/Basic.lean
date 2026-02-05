@@ -95,6 +95,9 @@ class LawfulLin (t : Type → Type) [Lin t] where
 
   nondet_mono {ι α : Type} [Preorder (t α)] : Monotone (Lin.nondet : (ι → t α) → t α)
 
+  pure_mono {α : Type} [Preorder α] [Preorder (t α)] : ∀ {a₁ a₂ : α},
+    a₁ ≤ a₂ → (pure a₁ : t α) ≤ pure a₂
+
   bind_mono_left {β γ : Type} [Preorder (t β)] [Preorder (t γ)] : ∀ {m₁ m₂ : t β} {k : β → t γ},
     m₁ ≤ m₂ /-→ k₁ ≤ k₂-/ → bind m₁ k ≤ bind m₂ k
  --  bind_additivity : ∀ f s, bind (nondet s) f = nondet (Finset.image (fun x => bind x f) s)
@@ -155,14 +158,14 @@ where
 instance {α σ : Type} {t δ : Type → Type}
   [Check t δ σ] [Replace t δ σ] [Lin t] : [Sem α σ (t σ)] → InvSem δ α σ (t σ)
 where
-  inv_sem a inv s :=
-    bind (Check.check inv s) fun s' =>
-    bind (Replace.replace s' inv) fun s'' =>
-    bind (Sem.sem a s'') fun s''' =>
-      Check.check inv s'''
+  inv_sem a inv s := do
+    let s' ← Check.check inv s
+    let s'' ← Replace.replace s' inv
+    let s''' ← Sem.sem a s''
+    Check.check inv s'''
 
 instance {t δ : Type → Type} {α σ : Type}
-  [Preorder α] [Preorder σ] [Preorder (t σ)] --[Monad t]
+  [Preorder α] [Preorder σ] [∀ {β}, Preorder (t β)]
   [Check t δ σ] [Replace t δ σ] [Lin t] [Sem α σ (t σ)]
   [LawfulCheck t δ σ] [LawfulReplace t δ σ] [LawfulLin t]
   : [LawfulSem α σ (t σ)] → LawfulInvSem δ α σ (t σ)
@@ -175,5 +178,31 @@ where
     apply LawfulLin.bind_mono_right
     refine Pi.le_def.2 ?_ ; intros
     apply LawfulLin.bind_mono_left
+    apply LawfulSem.sem_mono
+    assumption
+
+
+instance {α σ τ : Type} {t δ : Type → Type}
+  [Check t δ σ] [Replace t δ σ] [Lin t] : [Sem α σ τ] → InvSem δ α σ (t τ)
+where
+  inv_sem a inv s := do
+    let s' ← Check.check inv s
+    let s'' ← Replace.replace s' inv
+    pure (Sem.sem a s'')
+
+instance {t δ : Type → Type} {α σ τ : Type}
+  [Preorder α] [Preorder σ] [Preorder τ] [∀ {β}, Preorder (t β)]
+  [Check t δ σ] [Replace t δ σ] [Lin t] [Sem α σ τ]
+  [LawfulCheck t δ σ] [LawfulReplace t δ σ] [LawfulLin t]
+  : [LawfulSem α σ τ] → LawfulInvSem δ α σ (t τ)
+where
+  inv_sem_mono s inv := by
+    intros a₁ a₂ hle
+    simp [inv_sem]
+    apply LawfulLin.bind_mono_right
+    refine Pi.le_def.2 ?_ ; intros
+    apply LawfulLin.bind_mono_right
+    refine Pi.le_def.2 ?_ ; intros
+    apply LawfulLin.pure_mono
     apply LawfulSem.sem_mono
     assumption

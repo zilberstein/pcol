@@ -11,13 +11,13 @@ open Classical
 open ENNReal
 
 namespace Lin
-variable {α act test l : Type}
-variable [Bot l]
-variable {δ m : Type → Type}
-variable [InvSem δ act α (m α)] [Sem test α Bool]
-variable [CompatibleProj (Invariant δ α) (Invariant δ α)]
-variable [Check m δ α] [Lin m]
-variable [∀ {α}, Preorder (m α)] [∀ {α}, OrderBot (m α)]
+variable
+  {α act test l : Type}
+  {δ m : Type → Type}
+  [Bot l] [Sem act α (m α)] [Sem test α Bool]
+  [CompatibleProj (Invariant δ α) (Invariant δ α)]
+  [Check m δ α] [Replace m δ α] [Lin m]
+  [∀ {α}, Preorder (m α)] [∀ {α}, OrderBot (m α)]
 
 -- Linearization state:
 --   * underlying state
@@ -59,8 +59,9 @@ mutual
     (a : Lpofin (Label act test)) (s : Finset Node)
     (st : State δ α) : m (State δ α) :=
     have ⟨σ, prob, step, curr_inv⟩ := st
-    if s = ∅ then
-      Check.check 𝒢 st.state >>= fun σ' => pure (σ', prob, step, curr_inv)
+    if s = ∅ then do
+      let σ' ← Check.check 𝒢 st.state
+      pure (σ', prob, step, curr_inv)
     else
       Lin.nondet fun x : next a s =>
         Lin.nondet_min
@@ -81,11 +82,11 @@ mutual
     match a.lab x with
     | Label.lab_bot => ⊥
     | Label.lab_fork => lin_rec ℛ ℐ 𝒢 a s st
-    | Label.lab_act ac =>
-      InvSem.inv_sem ac st.curr_inv st.state >>= fun σ' =>
-         lin_rec ℛ ℐ 𝒢 a s (σ', prob, step, curr_inv)
-    | Label.lab_test b =>
-      have r := Sem.sem b st.state
+    | Label.lab_act ac => do
+      let σ' ← InvSem.inv_sem ac st.curr_inv st.state
+      lin_rec ℛ ℐ 𝒢 a s (σ', prob, step, curr_inv)
+    | Label.lab_test b => do
+      let r ← InvSem.inv_sem b st.curr_inv st.state
       lin_rec ℛ ℐ 𝒢 a (filter_by_outcome a s x r) st
     termination_by (s.card, 1)
     decreasing_by
@@ -98,9 +99,9 @@ end
 
 noncomputable def lin
   (ℛ ℐ 𝒢 : Invariant δ α) (pₖ : ℕ → ENNReal)
-  (a : Lpofin (Label act test)) (init: α × ℕ) : m (α × ℕ) :=
-    (lin_rec ℛ ℐ 𝒢 a a.nodes_finset (init.1, pₖ, init.2, ℐ)) >>=
-      fun st => pure (st.state, st.step)
+  (a : Lpofin (Label act test)) (init: α × ℕ) : m (α × ℕ) := do
+    let st ← lin_rec ℛ ℐ 𝒢 a a.nodes_finset (init.1, pₖ, init.2, ℐ)
+    pure (st.state, st.step)
 
 lemma next_iso [LE l]
   {s t : Finset Node} {a b : Lpofin l}
@@ -134,9 +135,12 @@ lemma next_iso [LE l]
         exact hr y hy (hsub hc)
   }
 
+variable
+  [PartialOrder act] [PartialOrder test] [Preorder α]
+  [LawfulCheck m δ α] [LawfulReplace m δ α]
+  [LawfulSem act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
+
 lemma lin_node_mono
-  [Preorder act] [∀ {α}, Preorder (m α)] [Preorder test] [∀ {α}, OrderBot (m α)]
-  [LawfulInvSem δ act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
   {s t : Finset Node} {a b : Lpofin (Label act test)}
   {ℛ ℐ 𝒢 : Invariant δ α} {x : Node}
   (hst : s = t ∩ a.nodes_finset)
@@ -167,26 +171,31 @@ lemma lin_node_mono
       rcases lab_is_act_le hlx with ⟨a', hbx, hxle⟩; rw [hbx] ; simp
       apply le_trans
       · apply LawfulLin.bind_mono_left
+        have _ : LawfulInvSem δ act α (m α) := inferInstance
         apply LawfulInvSem.inv_sem_mono _ _ hxle
       · apply LawfulLin.bind_mono_right
-        · refine Pi.le_def.2 ?_ ; intro
-          apply hind ; all_goals try first | assumption | simp
-          intros y hin hy ; by_cases heq : y = x
-          · rw [heq] at hy ; rw [hy] at hl ; contradiction
-          · exact hbot _ hin heq hy
+        refine Pi.le_def.2 ?_ ; intro
+        apply hind ; all_goals try first | assumption | simp
+        intros y hin hy ; by_cases heq : y = x
+        · rw [heq] at hy ; rw [hy] at hl ; contradiction
+        · exact hbot _ hin heq hy
     | Label.lab_test bb =>
         have hlx := hle.lab x; unfold Lpofin.lab at *; rw [hl] at hlx
         rcases lab_is_test_le hlx with ⟨b', hbx, hxle⟩; rw [hbx]
-        apply hind
-        · sorry
-        -- Need to prove that a.form = b.form
-        · sorry
-        · sorry
-        · sorry
+        apply le_trans
+        · apply LawfulLin.bind_mono_left
+          have _ : LawfulInvSem δ test α (m Bool) := inferInstance
+          apply LawfulInvSem.inv_sem_mono _ _ hxle
+        · apply LawfulLin.bind_mono_right
+          refine Pi.le_def.2 ?_ ; intro
+          apply hind
+          · sorry
+          -- Need to prove that a.form = b.form
+          · sorry
+          · sorry
+          · sorry
 
 lemma lin_rec_mono
-  [Preorder act] [Preorder test]
-  [LawfulInvSem δ act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
   {s t : Finset Node} {a b : Lpofin (Label act test)} {ℛ ℐ 𝒢 : Invariant δ α}
   (hst : s = t ∩ a.nodes_finset)
   (hscl : a.rel.IsUpClosed s)
@@ -228,8 +237,6 @@ lemma lin_rec_mono
         sorry
 
 theorem lin_mono
-  [PartialOrder act] [PartialOrder test]
-  [LawfulInvSem δ act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
   (ℛ ℐ 𝒢 : Invariant δ α) (pₖ : ℕ → ENNReal) :
   Monotone (lin ℛ ℐ 𝒢 pₖ : Lpofin (Label act test) → (α × ℕ) → m (α × ℕ)) := by
     unfold lin ; intro α β hle
@@ -249,8 +256,6 @@ theorem lin_mono
     · simp
 
 lemma lin_rec_iso
-  [Preorder act] [Preorder test]
-  [LawfulInvSem δ act α (m α)] [LawfulSem test α Bool] [LawfulLin m]
   {ℛ ℐ 𝒢 : Invariant δ α}
   {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
   (lin_rec ℛ ℐ 𝒢 a s : State δ α →  m (State δ α)) = lin_rec ℛ ℐ 𝒢 (a.permute e) (s.image e) := by

@@ -12,6 +12,7 @@ instance : Lin C where
     , sorry ⟩
 
 instance : LawfulLin C where
+  pure_mono := sorry
   nondet_mono := sorry
   nondet_min_mono := sorry
   bind_mono_left := sorry

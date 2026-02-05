@@ -4,7 +4,7 @@ import Pcol.ConvexPowerset
 import Pcol.ConvexPowerset.Monad
 
 import Pcol.Logic.ConvexPowerset
-import Pcol.Logic.Invariant
+import Pcol.Logic.Lang
 import Pcol.Logic.Mem
 import Pcol.Logic.MinProb
 import Pcol.Semantics.Linearization
@@ -125,7 +125,7 @@ lemma par_comp_inductive_step_left
   (hind : ∀ t ⊆ s,
     ∀ (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem) (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Mem.Inv)
       (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ),
-      is_indep root ℐ 𝒢 α β s σ₁ σ₂ τ τ₁ τ₂ A B ω pₖ n₁ n₂ curr_inv)
+      is_indep root ℐ 𝒢 α β t σ₁ σ₂ τ τ₁ τ₂ A B ω pₖ n₁ n₂ curr_inv)
   :
     minProb (mar (Lin.lin_node ℐ ℐ 𝒢 (par_comp root α β) s x ⟨σ₁ ⊎ σ₂ ⊎ τ, ω, n₁ + n₂, curr_inv⟩)) (A ** B ** ℐ.2)
   ≥ minProb (mar (Lin.lin_node ℐ ℐ 𝒢 α (s ∩ α.nodes_finset) x ⟨σ₁ ⊎ τ₁, ω, n₁, curr_inv⟩)) (A ** ℐ.2) *
@@ -171,65 +171,39 @@ lemma par_comp_inductive_step_left
     apply Set.Subset.refl
   -- Case : α.lab x = test
   | lab_test b =>
-    sorry
-  /-
-  -- Case : α.lab y = act
-  | lab_act a =>
-    simp only [upcast_lab]
-    rw [union_comm_assoc hu hv]
-    refine le_trans ?_
-      (minProb_mono (Linearizable.bind_mono (upcast_mono (dsj₂₁ hu hv)) (le_refl _)))
-    rw [bind_assoc, minProb_bind, minProb_bind]
-    refine le_of_eq_of_le iInf_C_mul_minProb ?_
-    have hinv : a.has_inv inv := by
-      have h := hinv₁ x hx.2.1; simp only [hlab] at h; exact h
-    rw [inv_sem_eq hinv hτ hτ₁]
-    refine iInf₂_mono fun μ hμ ↦ ?_
-    rw [← ENNReal.tsum_mul_right]
-    refine ENNReal.tsum_le_tsum fun ⟨σ, hσ⟩ ↦ ?_
-    refine le_of_eq_of_le
-      (mul_assoc _ _ _)
-      (mul_le_mul (le_refl _) ?_ bot_le bot_le)
-    have h₂ : s ∩ β.nodes_finset = s.erase x ∩ β.nodes_finset := sorry
-    rw [← Finset.erase_inter, h₂]
-    rw [pure_bind]
-    obtain ⟨σ', τ, heq, hinv⟩ : ∃ σ' : Mem (u₁ \ v), ∃ τ : Mem v, σ = σ'.union τ (dsj₁ hv) ∧ τ ∈ inv := sorry
-    simp only [heq]; rw [union_comm_assoc hu' hv']
-    refine (hind (s.erase x) ?_ _ _ hinv hinv hτ₂)
-    exact Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1)
-  | lab_test t =>
-    simp only [upcast_lab]
-    rw [union_comm_assoc hu hv]
-    refine le_trans ?_
-      (minProb_mono (Linearizable.bind_mono (upcast_mono_test (dsj₂₁ hu hv)) (le_refl _)))
+    rw [union_comm, ←union_assoc, union_comm, union_comm τ σ₁]
+    simp only [minProb_mar, Lin.State.curr_inv, Lin.State.state]
+    refine
+      le_trans
+        ?_
+        (minProb_mono (LawfulLin.bind_mono_left (upcast_mono_test b curr_inv (σ₁ ⊎ τ) σ₂)))
     rw [minProb_bind, minProb_bind]
     refine le_of_eq_of_le iInf_C_mul_minProb ?_
-    have hinv : t.has_inv inv := by
-      have h := hinv₁ x hx.2.1; simp only [hlab] at h; exact h
-    rw [inv_sem_eq_test hinv hτ hτ₁]
-    refine iInf₂_mono fun μ hμ ↦ ?_
+    have real_hτ : τ ∈ curr_inv := by sorry
+    have real_hτ₁ : τ₁ ∈ curr_inv := by sorry
+    rw [inv_sem_eq_test b σ₁ real_hτ real_hτ₁]
+    apply iInf₂_mono
+    intros μ hμ
     rw [← ENNReal.tsum_mul_right]
-    refine ENNReal.tsum_le_tsum fun ⟨b, hb⟩ ↦ ?_
+    refine ENNReal.tsum_le_tsum fun ⟨r, hr⟩ => ?_
     refine le_of_eq_of_le
       (mul_assoc _ _ _)
       (mul_le_mul (le_refl _) ?_ bot_le bot_le)
-    have h₁ :
-        Lpo.filter_by_outcome α (s ∩ α.nodes_finset) x b =
-        (Lpo.filter_by_outcome α s x b) ∩ α.nodes_finset := by
-      unfold Lpo.filter_by_outcome
-      rw [← Finset.erase_inter]; exact (Finset.filter_inter _ _ _).symm
-    have h₂ :
-      s ∩ β.nodes_finset =
-      (Lpo.filter_by_outcome α s x b) ∩ β.nodes_finset := sorry
-    have h₃ :
-        Lpo.filter_by_outcome (par_comp α β hdn hu hr₁ hr₂) s x b =
-        Lpo.filter_by_outcome α s x b := by sorry
-    rw [h₁, h₂, h₃]
-    rw [union_comm_assoc hu' hv']
-    refine (hind _ ?_ _ _ hτ hτ₁ hτ₂)
-    refine Finset.ssubset_of_subset_of_ssubset (Finset.filter_subset _ _) ?_
-    exact (Finset.erase_ssubset (Finset.mem_of_mem_inter_left hx.1))
--/
+    rw [←minProb_mar, ←minProb_mar, ←minProb_mar] ; all_goals try simp
+    have heq₁ :
+        Lin.filter_by_outcome α (s ∩ α.nodes_finset) x r =
+          (Lin.filter_by_outcome α s x r) ∩ α.nodes_finset := by
+        simp [Lin.filter_by_outcome, Finset.filter_inter]
+    have heq₂ :
+      s ∩ β.nodes_finset = (Lin.filter_by_outcome α s x r) ∩ β.nodes_finset := by
+          sorry
+    have heq₃ :
+        Lin.filter_by_outcome (par_comp root α β) s x r = Lin.filter_by_outcome α s x r :=
+        sorry
+    rw [heq₁, heq₂, heq₃]
+    rw [←union_assoc, union_comm τ σ₂]
+    apply hind ; all_goals try assumption
+    simp [Lin.filter_by_outcome]
 
 -- Version of the previous lemma but swapped so that β is taking a step instead of α
 lemma par_comp_inductive_step_right
@@ -243,13 +217,13 @@ lemma par_comp_inductive_step_right
   (hind : ∀ t ⊆ s,
     ∀ (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem) (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Mem.Inv)
       (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ),
-      is_indep root ℐ 𝒢 α β s σ₁ σ₂ τ τ₁ τ₂ A B ω pₖ n₁ n₂ curr_inv)
+      is_indep root ℐ 𝒢 α β t σ₁ σ₂ τ τ₁ τ₂ A B ω pₖ n₁ n₂ curr_inv)
   :
     minProb (mar (Lin.lin_node ℐ ℐ 𝒢 (par_comp root α β) s x ⟨σ₁ ⊎ σ₂ ⊎ τ, ω, n₁ + n₂, curr_inv⟩)) (A ** B ** ℐ.2)
   ≥ minProb (mar (Lin.lin_rec ℐ ℐ 𝒢 α (s ∩ α.nodes_finset) ⟨σ₁ ⊎ τ₁, ω, n₁, curr_inv⟩)) (A ** ℐ.2) *
     minProb (mar (Lin.lin_node 𝒢 ℐ ℐ β (s ∩ β.nodes_finset) x ⟨σ₂ ⊎ τ₂, pₖ, n₂, curr_inv⟩)) (B ** ℐ.2)
   := by
-  rw [mul_comm, union_comm_assoc σ₁ σ₂ τ, sep_comm_assoc A B ℐ.2, par_comp_comm]
+  --rw [mul_comm, union_comm_assoc σ₁ σ₂ τ, sep_comm_assoc A B ℐ.2, par_comp_comm]
   -- TODO: this property is no longer commutative (because of rely/inv)
   -- apply par_comp_inductive_step_left root s hx σ₂ σ₁ τ τ₂ τ₁ A B ω pₖ n₁ n₂ curr_inv hτ hτ₂ hτ₁ -/
   /-intro t ht σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂; unfold is_indep
@@ -259,10 +233,7 @@ lemma par_comp_inductive_step_right
       mul_comm]
   exact hind t ht σ₂ σ₁ hτ hτ₂ hτ₁
   -/
-  · sorry
-  · sorry
-  · sorry
-  · sorry
+  sorry
 
 /-
 

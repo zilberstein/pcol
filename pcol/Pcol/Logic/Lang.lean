@@ -159,10 +159,25 @@ lemma inv_sem_eq
   := by
     sorry
 
+lemma inv_sem_eq_test
+  {τ τ' : Mem} {ℐ : Mem.Inv}
+  (b : test) (σ : Mem) (hτ : τ ∈ ℐ) (hτ' : τ' ∈ ℐ)
+  : (InvSem.inv_sem b ℐ (σ ⊎ τ) : C Bool) =
+      (InvSem.inv_sem b ℐ (σ ⊎ τ') : C Bool)
+  := by
+    sorry
+
 lemma upcast_mono
   (a : act) (ℐ : Mem.Inv) (σ₁ σ₂ : Mem)
   : (InvSem.inv_sem a ℐ σ₁ >>= (fun σ₁' => pure (σ₁' ⊎ σ₂)) : C Mem) ≤
       (InvSem.inv_sem a ℐ (σ₁ ⊎ σ₂) : C Mem)
+  := by
+    sorry
+
+lemma upcast_mono_test
+  (b : test) (ℐ : Mem.Inv) (σ₁ σ₂ : Mem)
+  : (InvSem.inv_sem b ℐ σ₁ : C Bool) ≤
+      (InvSem.inv_sem b ℐ (σ₁ ⊎ σ₂) : C Bool)
   := by
     sorry
 
