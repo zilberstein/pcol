@@ -494,3 +494,6 @@ instance : LawfulMonad C where
   bind_pure_comp := sorry
   pure_seq := sorry
   bind_map := sorry
+
+lemma bot_bind  {α β : Type} (f : α → C β) : ⊥ >>= f = ⊥ := by
+  sorry

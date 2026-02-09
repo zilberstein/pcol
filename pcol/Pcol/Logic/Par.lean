@@ -12,7 +12,6 @@ import Pcol.Semantics.Lpo.Operations.Par
 
 open Classical
 
-
 noncomputable def marginalize {α β : Type} (μ : Distr (α × β)) : Distr α :=
   ⟨ fun
     | .none => μ .none
@@ -28,8 +27,9 @@ lemma minProb_mar {α β : Type}
   minProb (mar S) A = minProb S (Set.prod A B) := by
   sorry
 
-lemma nondet_singleton {u : Finset Var} {X : Type} {x : X} {f : ↑(Set.singleton x) → C Mem} :
-    Lin.nondet f = f ⟨x, Set.mem_singleton _⟩ := sorry
+lemma nondet_singleton {ι X : Type} {A : Set ι} {f : ι → C X} :
+    ∀ x : ι, A = { x } →
+    Lin.nondet f = f x := sorry
 
 lemma minProb_nondet {u : Finset Var} {ι : Type} (f : ι → C Mem) (A : Set Mem) :
     minProb (Lin.nondet f) A =
@@ -223,43 +223,23 @@ lemma par_comp_inductive_step_right
   ≥ minProb (mar (Lin.lin_rec ℐ ℐ 𝒢 α (s ∩ α.nodes_finset) ⟨σ₁ ⊎ τ₁, ω, n₁, curr_inv⟩)) (A ** ℐ.2) *
     minProb (mar (Lin.lin_node 𝒢 ℐ ℐ β (s ∩ β.nodes_finset) x ⟨σ₂ ⊎ τ₂, pₖ, n₂, curr_inv⟩)) (B ** ℐ.2)
   := by
-  --rw [mul_comm, union_comm_assoc σ₁ σ₂ τ, sep_comm_assoc A B ℐ.2, par_comp_comm]
-  -- TODO: this property is no longer commutative (because of rely/inv)
-  -- apply par_comp_inductive_step_left root s hx σ₂ σ₁ τ τ₂ τ₁ A B ω pₖ n₁ n₂ curr_inv hτ hτ₂ hτ₁ -/
-  /-intro t ht σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂; unfold is_indep
-  rw [par_comp_comm,
-      union_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
-      sep_comm_assoc (hu.trans (Finset.union_comm _ _)) (hv.trans (Finset.inter_comm _ _)),
-      mul_comm]
-  exact hind t ht σ₂ σ₁ hτ hτ₂ hτ₁
-  -/
   sorry
-
-/-
-
--- We need this annoying lemma to make the dependent types work out
-lemma nondet_lin_node_congr {u : Finset Var} {act test : Type}
-    [Sem act (Mem u) (C (Mem u))]
-    [Sem test (Mem u) Bool]
-    (α : Lpofin (Label (WithInv act u) (WithInv test u)))
-    {i j : Set Node} {s : Finset Node} {σ : Mem u}
-    (h : i = j) (hi : i ⊆ s) :
-    (Linearizable.nondet fun x : ↑i ↦ Lpo.lin_node α s x.val (hi x.property) σ : C (Mem u)) =
-    (Linearizable.nondet fun x : ↑j ↦ Lpo.lin_node α s x.val (hi ((congrArg₂ Membership.mem h rfl).mpr x.property)) σ) := by
-  simp only [Lpo.lin_node]; rw [h]
--/
 
 -- Lemma C.3 from POPL'26
 theorem par_comp_fin
-  {ℐ 𝒢 : Mem.Inv} {α β : Lpofin (Label act test)}
-  (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Set Mem)
-  (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Mem.Inv)
-  (hτ : τ ∈ ℐ) (hτ₁ : τ₁ ∈ ℐ) (hτ₂ : τ₂ ∈ ℐ) :
+  {ℐ 𝒢 : Mem.Inv} {α β : Lpofin (Label act test)} {U₁ U₂ V : Finset Var}
+  (σ₁ σ₂ τ τ₁ τ₂ : Mem) (A B : Mems)
+  (ω pₖ : ℕ → ENNReal) (n₁ n₂ : ℕ) (curr_inv : Mem.Inv) :
+    Disjoint U₁ U₂ → Disjoint U₁ V → Disjoint U₂ V →
+    σ₁.dom = U₁ → σ₂.dom = U₂ →
+    A.1 = U₁ → B.1 = U₂ → ℐ.1 = V → 𝒢.1 ⊆ V →
+    σ₁.wf? → σ₂.wf? → A.wf? → B.wf? →
+    τ ∈ ℐ → τ₁ ∈ ℐ → τ₂ ∈ ℐ →
     minProb
       (mar (Lin.lin ℐ ℐ 𝒢 pₖ (par_comp root α β) ⟨σ₁ ⊎ σ₂ ⊎ τ, n₁ + n₂⟩))
-      (A ** B ** ℐ.2)
-  ≥ minProb (mar (Lin.lin ℐ ℐ 𝒢 ω α ⟨σ₁ ⊎ τ₁, n₁⟩)) (A ** ℐ.2) *
-    minProb (mar (Lin.lin 𝒢 ℐ ℐ ω β ⟨σ₂ ⊎ τ₂, n₂⟩)) (B ** ℐ.2) := by
+      (A.2 ** B.2 ** ℐ.2)
+  ≥ minProb (mar (Lin.lin ℐ ℐ 𝒢 ω α ⟨σ₁ ⊎ τ₁, n₁⟩)) (A.2 ** ℐ.2) *
+    minProb (mar (Lin.lin 𝒢 ℐ ℐ ω β ⟨σ₂ ⊎ τ₂, n₂⟩)) (B.2 ** ℐ.2) := by
   unfold Lin.lin
   generalize hs : (par_comp root α β).nodes_finset = s
   have h₁ : α.nodes_finset = s ∩ α.nodes_finset := sorry; rw [h₁]
@@ -267,18 +247,36 @@ theorem par_comp_fin
   clear h₁ h₂ hs; revert σ₁ σ₂ τ τ₁ τ₂
   induction s using Finset.strongInduction with
   | H s hind =>
-    intro σ₁ σ₂ τ τ₁ τ₂ hτ hτ₁ hτ₂
+    intro σ₁ σ₂ τ τ₁ τ₂
+    intro hdisj₁ hdisj₂ hdisj₂
+    intro hσ₁_dom hσ₂_dom hA_dom hB_dom hℐ_dom h𝒢_dom
+    intro hσ₁ hσ₂ hA hB
+    intro hτ hτ₁ hτ₂
     by_cases hemp : s = ∅
     -- Base Case: No more nodes to schedule
     · unfold Lin.lin_rec
       simp only [hemp, ↓reduceIte, Finset.empty_inter]
-      simp only [minProb_mar, minProb_bind, minProb_pure]
-      by_cases h₁ : σ₁ ∈ A <;> by_cases h₂ : σ₂ ∈ B
-      · sorry
-      · sorry
-      · sorry
-      · sorry
-
+      simp only [Lin.State.state, check]
+      have heq₁ : (σ₁ ⊎ σ₂ ⊎ τ).proj 𝒢.1 = τ.proj 𝒢.1 := sorry
+      have heq₂ : (σ₁ ⊎ τ₁).proj 𝒢.1 = τ₁.proj 𝒢.1 := sorry
+      have heq₃ : (σ₂ ⊎ τ₂).proj ℐ.1 = τ₂.proj ℐ.1 := sorry
+      rw [heq₁, heq₂, heq₃]
+      by_cases h : τ.proj 𝒢.1 ∈ 𝒢.2 <;> simp only [Mem.proj] at *
+      · rw [if_pos h, if_pos, if_pos]
+        -- TODO: do τ₁ and τ₂ actually belong to  based on τ ∈ 𝒢...?
+        · simp only [pure_bind, minProb_mar, minProb_pure, Lin.State.step]
+          by_cases hinσ₁ : σ₁ ∈ A <;> by_cases hinσ₂ : σ₂ ∈ B
+          · sorry
+          · sorry
+          · sorry
+          · sorry
+        · sorry
+        · sorry
+      · rw [if_neg h, if_neg, if_neg]
+        simp only [C.bot_bind, minProb_mar, minProb_bot]
+        · simp
+        · sorry
+        · sorry
 --      , minProb_pure, Mem.union_mem]
 --      by_cases h₁ : σ₁ ∈ A <;> by_cases h₂ : σ₂ ∈ B <;>
 --        simp only [h₁, h₂, Finset.mem_coe.mpr hτ, Finset.mem_coe.mpr hτ₁, Finset.mem_coe.mpr hτ₂,
@@ -286,8 +284,13 @@ theorem par_comp_fin
     -- Inductive Case
     · nth_rw 1 [Lin.lin_rec]; simp only [hemp, ↓reduceIte]
       rcases next_par α β root s with hnext | ⟨hnext, hne, hne'⟩ | ⟨hnext, hne⟩ | ⟨hnext, hne⟩
-      · simp only [Lin.lin_node]
-        sorry
+      · simp only [Lin.State.prob]
+        rw [nondet_singleton ⟨root, by simp [hnext]⟩]
+        · simp [Lin.lin_node, par_comp_lab_root]
+          -- Need to prove both operands of nondet_min are always equal...
+          sorry
+        · sorry
+        · sorry
       · sorry
       · sorry
       · sorry

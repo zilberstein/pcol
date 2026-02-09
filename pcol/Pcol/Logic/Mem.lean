@@ -23,7 +23,7 @@ namespace Mem
 
   instance : Membership Mem Inv where
     mem
-    | (_, A), mem => mem ∈ A
+    | (S, A), mem@(T, _) => S = T ∧ mem ∈ A
 
   def empty : Mem := (∅, fun _ => .none)
 
@@ -82,6 +82,10 @@ instance : Separation Mems where
   sep
   | (S, A), (T, B) =>
     (S ∪ T , A ** B)
+
+instance : Membership Mem Mems where
+  mem
+  | (S, A), mem@(T, _) => S = T ∧ mem ∈ A
 
 namespace Mems
   def wf? : Mems -> Prop
