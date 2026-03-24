@@ -316,6 +316,10 @@ lemma finapprox_convert  {l : Type} [PartialOrder l] [OrderBot l]
   · intro ⟨hle, _⟩; exact hle
   · intro hle; exact ⟨hle, α'.property⟩
 
+lemma finapprox'_mono {l : Type} [PartialOrder l] [OrderBot l] :
+    @Monotone (Lpo l) (DSet (Lpofin l)) _ _ finapprox' := by
+  intro α β hle γ hγ; exact hγ.trans hle
+
 theorem sup_finapprox_eq_self {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} :
     α = (finapprox α).dSup := by
   simp [DSet.dSup, DCPO.dSup, lpo_base_sup]; ext x y

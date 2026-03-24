@@ -56,15 +56,11 @@ def ext {l X : Type} [PartialOrder l] [OrderBot l] [DCPO X]
 def CompactType (X : Type) [DCPO X] : Prop :=
   ∀ x : X, ScottCompact x
 
-lemma iSup_combine {X Y Z : Type}
-    [LE X] [SupSet X] [Preorder Y] [CompletePartialOrder Z]
-    {d : Set X} {f : X → Set Y} {g : Y → Z}
-    (hd : DirectedOn LE.le d) (hf : ∀ x ∈ d, DirectedOn LE.le (f x)) (hg : Monotone g) :
-    (⨆ x ∈ d, ⨆ y ∈ f x, g y) = ⨆ y ∈ { y | ∃ x ∈ d, y ∈ f x }, g y := by
-  unfold iSup; sorry
-
 lemma ext_monotone {l X : Type} [PartialOrder l] [OrderBot l] [DCPO X]
-    {f : Lpofin l → X} (hf : Monotone f) : Monotone (ext f hf) := sorry
+    {f : Lpofin l → X} (hf : Monotone f) : Monotone (ext f hf) := by
+  intro α β hle; unfold ext; refine DSet.dSup_le ?_
+  intro x hx; refine DSet.le_dSup ?_
+  exact DSet.image_mono (Lpo.finapprox'_mono hle) hx
 
 theorem ext_continuous {l X : Type} [DCPO X] [DCPO l] [OrderBot l]
     {f : Lpofin l → X} (hf : Monotone f) (hc : CompactType l) :

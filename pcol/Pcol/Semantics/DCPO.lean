@@ -53,6 +53,12 @@ lemma image_mem {X Y : Type} [Preorder X] [Preorder Y] {d : DSet X} {x : X}
     {f : X → Y} {hf : Monotone f} (h : x ∈ d) : f x ∈ d.image f hf := by
   exact Set.mem_image_of_mem _ h
 
+lemma image_mono {X Y : Type} [Preorder X] [Preorder Y] {f : X → Y}
+    {hf : Monotone f} : Monotone (fun d : DSet X ↦ d.image f hf) := by
+  intro d d' hle y hy
+  obtain ⟨x, hx, rfl⟩ := (Set.mem_image _ _ _).mp hy
+  exact image_mem (hle hx)
+
 -- Is this not in Mathlib?
 lemma finite_upper_bound {X : Type} [Preorder X] {d : DSet X} {s : Set X}
     (hsub : s ⊆ d) (hfin : s.Finite) :
