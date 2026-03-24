@@ -266,7 +266,7 @@ lemma trunc_of_bounded {l : Type} [Bot l] {α : Lpo l} {n : ℕ}
     · have : α.val.form x = Form.false := form_eq_false.mp hx
       rw [this]; simp only [ite_self]
 
-lemma finapprox_directed {l : Type} [CompletePartialOrder l] [OrderBot l] (α : Lpo l) :
+lemma finapprox_directed {l : Type} [PartialOrder l] [OrderBot l] (α : Lpo l) :
     DirectedOn LE.le { β | β ≤ α ∧ β.nodes.Finite } := by
   intro β ⟨hle, hfin⟩ β' ⟨hle', hfin'⟩
   obtain ⟨n, hn, hn'⟩ : ∃ n : ℕ,
@@ -287,12 +287,38 @@ lemma finapprox_directed {l : Type} [CompletePartialOrder l] [OrderBot l] (α : 
   · refine le_of_eq_of_le (trunc_of_bounded ?_).symm (trunc_mono hle' (le_refl _))
     intro x hx; refine lt_of_le_of_lt (hn' _ hx) (ENat.coe_lt_coe.mpr (Nat.lt_succ_self _))
 
-theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {α : Lpo l} :
-    α = sSup { β | β ≤ α ∧ β.nodes.Finite } := by
-  have hne : {β | β ≤ α ∧ β.nodes.Finite}.Nonempty :=
-    ⟨α.trunc 0, trunc_le _ _, (α.trunc 0 ).property⟩
-  obtain ⟨_, heq⟩ := lpo_sup_of_directed (finapprox_directed α) hne
-  refine Eq.trans ?_ heq.symm; unfold lpo_base_sup; ext x y
+lemma finapprox_nonempty {l : Type} [Preorder l] [OrderBot l] (α : Lpo l) :
+    { β | β ≤ α ∧ β.nodes.Finite }.Nonempty :=
+  ⟨α.trunc 0, trunc_le _ _, (α.trunc 0 ).property⟩
+
+def finapprox {l : Type} [PartialOrder l] [OrderBot l] (α : Lpo l) : DSet (Lpo l) := {
+  val := { β | β ≤ α ∧ β.nodes.Finite }
+  property := ⟨finapprox_directed α, finapprox_nonempty α⟩
+}
+
+def finapprox' {l : Type} [PartialOrder l] [OrderBot l] (α : Lpo l) : DSet (Lpofin l) := {
+  val := { β : Lpofin l | β.val ≤ α }
+  property := by
+    constructor
+    · have hd := finapprox_directed α
+      intro β₁ h₁ β₂ h₂
+      obtain ⟨γ, ⟨hle, hfin⟩, hle₁, hle₂⟩ :=
+        hd β₁.val ⟨h₁, β₁.property⟩ β₂.val ⟨h₂, β₂.property⟩
+      exact ⟨⟨γ, hfin⟩, hle, hle₁, hle₂⟩
+    · obtain ⟨β, hle, hfin⟩ := finapprox_nonempty α
+      exact ⟨⟨β, hfin⟩, hle⟩
+}
+
+lemma finapprox_convert  {l : Type} [PartialOrder l] [OrderBot l]
+    {α : Lpo l} {α' : Lpofin l} :
+    α'.val ∈ α.finapprox ↔ α' ∈ α.finapprox' := by
+  constructor
+  · intro ⟨hle, _⟩; exact hle
+  · intro hle; exact ⟨hle, α'.property⟩
+
+theorem sup_finapprox_eq_self {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} :
+    α = (finapprox α).dSup := by
+  simp [DSet.dSup, DCPO.dSup, lpo_base_sup]; ext x y
   · simp only [nodes, Set.mem_setOf_eq, Set.mem_iUnion, exists_prop]
     constructor
     · intro hx; obtain ⟨n, hlev⟩ := lev_finite hx
@@ -310,17 +336,16 @@ theorem sup_finapprox_eq_self {l : Type} [CompletePartialOrder l] [OrderBot l] {
       exact (trunc_le _ _).downcl _ hy _ hxy
     · intro ⟨β, ⟨hle, _⟩, hxy⟩; exact le_rel hle hxy
   · simp only [lab, Set.mem_setOf_eq]
-    have hd := lpo_lab_directed (finapprox_directed α) x
     refine le_antisymm ?_ ?_
     · by_cases hx : x ∈ α.nodes
-      · refine hd.le_sSup (Set.mem_setOf_eq.mpr ?_)
+      · refine DSet.le_dSup (Set.mem_setOf_eq.mpr ?_)
         obtain ⟨n, hlev⟩ := lev_finite hx
         refine ⟨α.trunc (n + 1), ⟨trunc_le _ _, (α.trunc (n + 1)).property⟩, ?_⟩
         have hn : α.rel.lev x < ↑(n + 1) :=
           lt_of_eq_of_lt hlev (ENat.coe_lt_coe.mpr (Nat.lt_succ_self _))
         simp only [trunc, trunc_base, lab, hn, ↓reduceIte]
       · refine le_of_eq_of_le (α.property.lab_dom _ hx) bot_le
-    · refine hd.sSup_le ?_
+    · refine DSet.dSup_le ?_
       rintro _ ⟨β, ⟨hle, _⟩, rfl⟩; exact hle.lab x
   · simp only [form, Set.mem_setOf_eq]; constructor
     · intro hform

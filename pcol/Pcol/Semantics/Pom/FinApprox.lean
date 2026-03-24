@@ -1,6 +1,7 @@
 import Mathlib
 import Pcol.Semantics.Pom.Basic
 import Pcol.Semantics.Lpo.FinApprox
+import Pcol.Semantics.Lpo.Isomorphism
 
 def Pomfin (l : Type) [Bot l] : Type := Quotient (@Lpofin.instSetoid l _)
 
@@ -275,6 +276,9 @@ theorem pom_ge_iff_ge_fin {l : Type}
           (TreeNode.finite_branching a b)
           (TreeNode.has_infinite_path hle') with ⟨f, h₀, hsucc⟩
   let p z := (f (a.rel.lev z)).perm z
+
+  obtain ⟨e, he⟩ := permute_chain
+
   have e : a ≈ a' := by sorry -- Need a lemma for this
   refine ⟨a', b, ?_, Quotient.sound heq, rfl⟩
   unfold a'; refine (isLUB_le_iff (lpo_sup_is_lub ?_ ?_)).2 ?_
