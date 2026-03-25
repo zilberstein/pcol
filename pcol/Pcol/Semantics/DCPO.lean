@@ -1,5 +1,6 @@
 import Mathlib.Data.Set.Finite.Basic
 import Mathlib.Order.CompletePartialOrder
+import Mathlib.Order.OmegaCompletePartialOrder
 
 def DSet (X : Type) [LE X] := { s : Set X // DirectedOn LE.le s ∧ s.Nonempty }
 
@@ -89,3 +90,29 @@ def ScottCompact {X : Type} [DCPO X] (x : X) : Prop := x ≪ x
 lemma bot_compact {X : Type} [DCPO X] [OrderBot X] :
     ScottCompact (⊥ : X) := by
   intro ⟨_, _, ⟨z, hz⟩⟩ _; exact ⟨z, hz, bot_le⟩
+
+namespace Chain
+
+open OmegaCompletePartialOrder
+
+def to_dSet {X : Type} [DCPO X] (c : Chain X) : DSet X :=
+  ⟨ Set.range c, by {
+    constructor
+    · intro x hx y hy
+      obtain ⟨n, rfl⟩ := Set.mem_range.mp hx
+      obtain ⟨m, rfl⟩ := Set.mem_range.mp hy
+      refine ⟨c (max n m), Set.mem_range.mpr ⟨max n m, rfl⟩, ?_, ?_⟩
+      · exact c.monotone' le_sup_left
+      · exact c.monotone' le_sup_right
+    · exact ⟨(c 0), Set.mem_range.mpr ⟨0, rfl⟩⟩
+  } ⟩
+
+end Chain
+
+instance {X : Type} [DCPO X] : OmegaCompletePartialOrder X where
+  ωSup c := (Chain.to_dSet c).dSup
+  le_ωSup c i := DSet.le_dSup (Set.mem_range.mpr ⟨i, rfl⟩)
+  ωSup_le c x h := by
+    refine DSet.dSup_le ?_; intro d hd
+    obtain ⟨i, rfl⟩ := Set.mem_range.mp hd
+    exact h i
