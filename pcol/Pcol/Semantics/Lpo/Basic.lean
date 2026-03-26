@@ -345,6 +345,13 @@ lemma lev_finite {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes
   refine lt_of_eq_of_lt (Nat.mod_succ_eq_iff_lt.mpr ?_) hk
   linarith
 
+namespace Lpo
+
+noncomputable def lev {l : Type} [Bot l] (α : Lpo l) {x} (h : x ∈ α.nodes) : ℕ :=
+  (lev_finite h).choose
+
+end Lpo
+
 lemma lev_finite_exists_finchain {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
     (hlev : α.rel.lev x = n) :
     ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.last = x := by
