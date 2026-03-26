@@ -1,7 +1,6 @@
-import Mathlib
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
-import Pcol.Semantics.Lpo.Isomorphism
+import Pcol.Semantics.Lpo.Iso2
 
 def Pom (l : Type) [Bot l] : Type := Quotient (@Lpo.instSetoid l _)
 
@@ -54,7 +53,7 @@ instance {l : Type} [LE l] [OrderBot l] : OrderBot (Pom l) where
     · rw [← ha]; rfl
   }
 
-instance {l : Type} [Preorder l] [Bot l] : Preorder (Pom l) where
+instance {l : Type} [PartialOrder l] [OrderBot l] : Preorder (Pom l) where
   le_refl p := by
     rcases Quotient.exists_rep p with ⟨a, ha⟩
     exact ⟨a, a, le_refl a, Eq.symm ha, Eq.symm ha⟩
@@ -67,5 +66,8 @@ instance {l : Type} [Preorder l] [Bot l] : Preorder (Pom l) where
     sorry
   }
 
-instance {l : Type} [PartialOrder l] [Bot l] : PartialOrder (Pom l) where
-  le_antisymm p q hpq hqp := by sorry
+instance {l : Type} [PartialOrder l] [OrderBot l] : PartialOrder (Pom l) where
+  le_antisymm p q hpq hqp := by
+    obtain ⟨α, β, hle, rfl, rfl⟩ := hpq
+    obtain ⟨α', heq, hle'⟩ := Pom.le_iff_1.mp hqp β rfl
+    sorry

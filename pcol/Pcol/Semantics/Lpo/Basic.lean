@@ -149,7 +149,7 @@ structure IsCausalityRel {α : Type} (ord : Rel α α) (s : Set α) : Prop where
 
 end Rel
 
-structure Lpo_base (l : Type) [Bot l] where
+structure Lpo_base (l : Type) where
   nodes : Set Node
   rel : Rel Node Node
   lab : Node → l
@@ -446,3 +446,21 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
       · intro k; exact hc ⟨k, k.isLt.trans hnm⟩
   · refine succ_chain_mono c hc (Fin.val_fin_lt.mp ?_); simp only [Fin.val_last]
     exact ENat.coe_lt_coe.mp (lt_of_lt_of_eq hlt hlev)
+
+lemma form_root_true {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
+    (hr : ∀ y ∈ α.nodes, x ≠ y → α.rel x y) :
+    α.form x = Form.true := by
+  ext v; refine ⟨fun _ ↦ True.intro, fun _ ↦ ?_⟩
+  have hvars : (α.form x).vars = ∅ := by
+    ext y; refine ⟨fun hc ↦ ?_, fun hc ↦ False.elim hc⟩
+    apply (α.property.form _ hx).1 at hc
+    by_cases h : x = y
+    · subst h; exact α.property.rel.irrefl _ hc
+    · have hy := (α.property.rel_dom hc).1
+      exact h (α.property.rel.antisymm (hr _ hy h) hc)
+
+  simp [Form.vars] at hvars
+  apply le_of_eq at hvars
+
+  obtain ⟨v', hsat⟩ := (α.property.form_dom x).mpr hx
+  sorry

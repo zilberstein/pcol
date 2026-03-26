@@ -27,7 +27,7 @@ noncomputable def union {u u₁ u₂ : Finset Var} (σ : Mem u₁) (τ : Mem u�
 def emp : Mem ∅ := fun x ↦ False.elim (Finset.not_mem_empty _ x.property)
 
 def castMem {u v : Finset Var} (σ : Mem u) (h : u = v) : Mem v :=
-  cast (congrArg _ h) σ
+  λ x ↦ σ ⟨x.val, by rw [h]; exact x.property⟩
 
 noncomputable def sep {u u₁ u₂ : Finset Var} (A : Set (Mem u₁)) (B : Set (Mem u₂))
     (hu : Disjoint u₁ u₂ ∧ u = u₁ ∪ u₂) :

@@ -520,3 +520,37 @@ instance : DCPO (Lpo l) where
     unfold lpo_base_sup; constructor
     · exact le_lpo_sup d
     · intro α hα; exact lpo_sup_le d hα
+
+open OmegaCompletePartialOrder
+
+namespace Lpo
+
+lemma ωSup_nodes {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
+    (ωSup c).nodes = ⋃ i : ℕ, (c i).nodes := by
+  simp only [ωSup, Chain.to_dSet, DSet.dSup, DCPO.dSup, lpo_base_sup, Lpo.nodes]
+  ext x; simp only [Set.mem_iUnion, exists_prop]; constructor
+  · rintro ⟨α, hα, hx⟩; obtain ⟨i, rfl⟩ := Set.mem_range.mp hα; use i
+  · rintro ⟨i, hx⟩; refine ⟨c i, ?_, hx⟩
+    exact Set.mem_range.mpr ⟨i, rfl⟩
+
+lemma ωSup_rel {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
+    (ωSup c).rel = (fun x y ↦ ∃ i : ℕ, (c i).rel x y) := by
+  simp only [ωSup, Chain.to_dSet, DSet.dSup, DCPO.dSup, lpo_base_sup, Lpo.rel]
+  ext x y; constructor
+  · rintro ⟨α, hα, hrel⟩; obtain ⟨i, rfl⟩ := Set.mem_range.mp hα; use i
+  · rintro ⟨i, hx⟩; refine ⟨c i, ?_, hx⟩
+    exact Set.mem_range.mpr ⟨i, rfl⟩
+
+lemma ωSup_lab {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
+    (ωSup c).lab = fun x ↦ ((Chain.to_dSet c).image _ (lab_monotone x)).dSup := by
+  simp only [ωSup, Chain.to_dSet, DSet.dSup, DCPO.dSup, lpo_base_sup, Lpo.lab]
+
+lemma ωSup_form {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
+    (ωSup c).form = (fun x v ↦ ∃ i : ℕ, (c i).form x v) := by
+  simp only [ωSup, Chain.to_dSet, DSet.dSup, DCPO.dSup, lpo_base_sup, Lpo.form]
+  ext x y; constructor
+  · rintro ⟨α, hα, _⟩; obtain ⟨i, rfl⟩ := Set.mem_range.mp hα; use i
+  · rintro ⟨i, hx⟩; refine ⟨c i, ?_, hx⟩
+    exact Set.mem_range.mpr ⟨i, rfl⟩
+
+end Lpo

@@ -43,6 +43,7 @@ noncomputable def permute {l : Type} [Bot l] (a : Lpo l) (e : Equiv.Perm Node) :
 --        · simp [Form.vars]; intro y hy
   })
 
+
 lemma permute_refl {l : Type} [Bot l] (a : Lpo l) : a.permute (Equiv.refl Node) = a := by
   unfold permute; ext1 <;> simp [Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
 
