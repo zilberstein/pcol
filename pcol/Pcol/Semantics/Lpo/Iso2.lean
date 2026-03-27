@@ -162,6 +162,11 @@ instance instSetoid {l : Type} [Bot l] : Setoid (Lpo l) where
   r := IsIsomorphic
   iseqv := isoEquivalence
 
+lemma is_isomorphic' {l : Type} [Bot l] {a b : Lpo l} {X : Set Node}
+    {e : a.nodes ≃ X} (h : a.permute e = b) : a ≈ b := by
+  have : X = b.nodes := by rw [← h]; simp only [permute, nodes]
+  subst this; exact ⟨e, h⟩
+
 structure PermExt {X Y A B : Set Node} (e : X ≃ A) (e' : Y ≃ B) : Prop where
   dom_sub : X ⊆ Y
   extend : ∀ x : X, (e x).val = (e' ⟨x, dom_sub x.property⟩).val
