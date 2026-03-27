@@ -542,8 +542,14 @@ lemma ωSup_rel {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
     exact Set.mem_range.mpr ⟨i, rfl⟩
 
 lemma ωSup_lab {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
-    (ωSup c).lab = fun x ↦ ((Chain.to_dSet c).image _ (lab_monotone x)).dSup := by
-  simp only [ωSup, Chain.to_dSet, DSet.dSup, DCPO.dSup, lpo_base_sup, Lpo.lab]
+    (ωSup c).lab = fun x ↦ ωSup {
+      toFun n := (c n).lab x
+      monotone' _ _ hle := lab_monotone x (c.monotone' hle)
+    } := by
+  ext x
+  simp only [ωSup, Chain.to_dSet, DSet.dSup, DCPO.dSup, lpo_base_sup, Lpo.lab, DSet.image, Set.image]
+  refine congrArg _ ?_; ext ℓ; simp only [Set.mem_range, exists_exists_eq_and, Set.mem_setOf_eq]
+  refine exists_congr fun n ↦ Eq.congr rfl rfl
 
 lemma ωSup_form {l : Type} [DCPO l] [OrderBot l] {c : Chain (Lpo l)} :
     (ωSup c).form = (fun x v ↦ ∃ i : ℕ, (c i).form x v) := by

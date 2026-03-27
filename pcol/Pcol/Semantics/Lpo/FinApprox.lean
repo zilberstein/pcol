@@ -179,11 +179,6 @@ lemma permute_trunc_nodes {l : Type} [Bot l] {a : Lpo l} {n : ℕ} {X : Set Node
   ext x; refine and_congr ?_ (Iff.refl _)
   simp only [permute, nodes]
 
--- lemma trunc_permute_rel {l : Type} [Bot l] {a : Lpo l} {n : ℕ} {X : Set Node}
---     {e : (a.trunc n).nodes ≃ X} :
---     ((a.trunc n).val.permute e).rel =
---     fun x y ↦ ∃ (hx : x ∈ X) (hy : y ∈ Y),  := rfl
-
 lemma permute_lev {l : Type} [Bot l] {a : Lpo l} {X : Set Node} (e : a.nodes ≃ X)
     {x : Node} (hx : x ∈ a.nodes) :
     a.rel.lev x = (a.permute e).rel.lev (e ⟨x, hx⟩) := by
@@ -221,6 +216,7 @@ lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
     (a.trunc n).val.permute (perm_subset e (a.trunc_le n).nodes) =
     (a.permute e).trunc n := by
   ext1
+  -- Nodes
   · refine trunc_permute_nodes.trans (permute_trunc_nodes.trans ?_).symm
     ext x; simp only [Set.mem_setOf_eq, Set.mem_range, Subtype.exists]
     constructor
@@ -235,26 +231,85 @@ lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
       · simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
     · rintro ⟨x, hx, rfl⟩; refine ⟨Subtype.coe_prop _, ?_⟩
       rw [← permute_lev]; exact hx.2
-  · sorry
-  · sorry
-  · sorry
-
-  -- simp only [permute, trunc, trunc_base]; ext1
-  -- · simp only [nodes, rel]; sorry
-  -- · simp only [rel]; ext x y; constructor
-  --   · intro ⟨hx, hy, hrel, hl₁, hl₂⟩
-  --     obtain ⟨⟨x, hx', hlev⟩, rfl⟩ := Set.mem_range.mp hx
-  --     obtain ⟨⟨y, hy', hlev'⟩, rfl⟩ := Set.mem_range.mp hy
-  --     refine ⟨⟨Subtype.coe_prop _, Subtype.coe_prop _,?_⟩, ?_⟩
-  --     · simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
-  --       refine (congrArg₂ _ ?_ ?_).mp hrel
-  --       · sorry
-  --       · sorry
-  --   · intro ⟨⟨hx, hy, hrel⟩, hl₁, hl₂⟩
-  --     refine ⟨?_, ?_, ?_⟩
-  --     · refine Set.mem_range.mpr ⟨⟨e.symm ⟨x, hx⟩, ?_⟩, ?_⟩
-  --       · simp only [nodes]
-
+  -- Rel
+  · simp only [trunc, trunc_base, rel]
+    conv => lhs; simp only [permute, rel]
+    ext x y; constructor
+    · intro ⟨hx, hy, hrel, _⟩
+      obtain ⟨⟨x, hx', hxl⟩, rfl⟩ := Set.mem_range.mp hx
+      obtain ⟨⟨y, hy', hyl⟩, rfl⟩ := Set.mem_range.mp hy
+      refine ⟨?_, ?_, ?_⟩
+      · simp only [permute, Subtype.exists, exists_and_right, Subtype.coe_eta,
+          Equiv.symm_apply_apply, Subtype.coe_prop, exists_const]
+        refine (congrArg₂ _ ?_ ?_).mp hrel <;>
+          simp only [perm_subset, Equiv.coe_fn_symm_mk,
+            Subtype.coe_eta, Equiv.symm_apply_apply]
+      · exact le_of_eq_of_le (permute_lev _ hx').symm hxl
+      · exact le_of_eq_of_le (permute_lev _ hy').symm hyl
+    · intro ⟨hrel, hxl, hyl⟩
+      obtain ⟨hx, hy⟩ := (a.permute e).property.rel_dom hrel
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · refine Set.mem_range.mpr ⟨⟨e.symm ⟨x, ?_⟩, ?_, ?_⟩, ?_⟩
+        · simp only [permute, nodes] at hx; exact hx
+        · exact Subtype.coe_prop _
+        · refine le_of_eq_of_le ?_ hxl
+          refine (permute_lev e (Subtype.coe_prop _)).trans ?_
+          simp only [Subtype.coe_eta, Equiv.apply_symm_apply]; rfl
+        · simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+      · refine Set.mem_range.mpr ⟨⟨e.symm ⟨y, ?_⟩, ?_, ?_⟩, ?_⟩
+        · simp only [permute, nodes] at hy; exact hy
+        · exact Subtype.coe_prop _
+        · refine le_of_eq_of_le ?_ hyl
+          refine (permute_lev e (Subtype.coe_prop _)).trans ?_
+          simp only [Subtype.coe_eta, Equiv.apply_symm_apply]; rfl
+        · simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+      · simp only [perm_subset, Equiv.coe_fn_symm_mk]
+        exact hrel.2.2
+      · refine le_of_eq_of_le ?_ hxl
+        simp only [perm_subset, Equiv.coe_fn_symm_mk]
+        refine (permute_lev e (Subtype.coe_prop _)).trans ?_
+        simp only [Subtype.coe_eta, Equiv.apply_symm_apply]; rfl
+      · refine le_of_eq_of_le ?_ hyl
+        simp only [perm_subset, Equiv.coe_fn_symm_mk]
+        refine (permute_lev e (Subtype.coe_prop _)).trans ?_
+        simp only [Subtype.coe_eta, Equiv.apply_symm_apply]; rfl
+  -- Label
+  · simp only [trunc, trunc_base, lab]
+    conv => lhs; simp only [permute, perm_subset, Equiv.coe_fn_symm_mk, Set.mem_range,
+      Subtype.exists, lab, exists_and_right]
+    ext x; by_cases hx : x ∈ X
+    · by_cases hlev : a.rel.lev (e.symm ⟨x, hx⟩) ≤ n
+      · refine (dif_pos ?_).trans ?_
+        · refine Set.mem_range.mpr ⟨⟨e.symm ⟨x, hx⟩, ?_, hlev⟩, ?_⟩
+          · exact Subtype.coe_prop _
+          · simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+        · refine if_congr ?_ ?_ rfl
+          · refine Iff.of_eq (congrArg₂ LT.lt ?_ rfl)
+            refine (permute_lev e (Subtype.coe_prop _)).trans ?_
+            simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+          · simp only [permute, lab, dif_pos hx]
+      · refine (dif_neg ?_).trans ((dif_neg ?_).trans (Eq.refl ⊥)).symm
+        · refine Set.mem_range.mp.mt ?_
+          simp only [nodes, Set.coe_setOf, Set.mem_setOf_eq, Subtype.exists, not_exists]
+          intro y ⟨hy, hlevy⟩ hc; apply hlev
+          have : ⟨x, hx⟩ = e ⟨y, hy⟩ := by ext; exact hc.symm
+          rw [this]; simp only [Equiv.symm_apply_apply]; exact hlevy
+        · intro hc; apply hlev; refine le_of_eq_of_le ?_ (le_of_lt hc)
+          refine (permute_lev e (Subtype.coe_prop _)).trans ?_
+          simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+    · refine Eq.trans ?_ ?_ (b := ⊥)
+      · refine dif_neg ?_
+        refine Set.mem_range.mp.mt ?_
+        simp only [nodes, Set.coe_setOf, Set.mem_setOf_eq, Subtype.exists, not_exists]
+        rintro y ⟨hy, hlev⟩ rfl; exact hx (Subtype.coe_prop _)
+      · refine ((if_congr (Iff.refl _) ?_ rfl).trans (ite_id ⊥)).symm
+        exact (a.permute e).property.lab_dom _ hx
+  -- Formula
+  · simp only [form, trunc, trunc_base]
+    conv => lhs; simp only [permute, form]
+    ext x v; constructor
+    · intro ⟨hx, hh⟩; sorry
+    · sorry
 
 lemma trunc_equiv {l : Type} [Preorder l] [OrderBot l] {a b : Lpo l} {n : ℕ}
     (heq : a ≈ b) : trunc a n ≈ trunc b n := by
@@ -262,36 +317,6 @@ lemma trunc_equiv {l : Type} [Preorder l] [OrderBot l] {a b : Lpo l} {n : ℕ}
   refine is_isomorphic' (e := perm_subset e (a.trunc_le n).nodes) ?_
   conv => rhs; rw [← h]
   exact trunc_permute
-
-  -- obtain ⟨hnode, hrel, hlab, hform⟩ := lpo_eq_iff.mp h
-  -- clear h
-  -- simp only [nodes, permute, rel, lab, form, trunc, trunc_base] at *
-  -- have hlev : ∀ x, a.val.rel.lev (e.symm x) = b.val.rel.lev x := by
-  --   intro x; refine congrArg sSup ?_; ext _; simp only [Set.mem_setOf_eq]
-  --   refine exists_congr fun k ↦ and_congr_right ?_; rintro rfl
-  --   constructor
-  --   · intro ⟨c, hc, hl⟩
-  --     refine ⟨fun i ↦ e (c i), ?_, ?_⟩
-  --     · intro i; rw [← hrel]; simp only [Equiv.symm_apply_apply, hc i]
-  --     · simp only [FinChain.last] at *; rw [hl]; exact Equiv.apply_symm_apply _ _
-  --   · rintro ⟨c, hc, rfl⟩
-  --     refine ⟨fun i ↦ e.symm (c i), ?_, ?_⟩
-  --     · intro i; exact (congrFun₂ hrel _ _).mpr (hc i)
-  --     · simp only [FinChain.last]
-
-  -- ext x y
-  -- · simp only [nodes, Set.mem_image_equiv, Set.mem_setOf_eq]
-  --   refine and_congr ?_ ?_
-  --   · rw [← hnode]; exact Set.mem_image_equiv.symm
-  --   · rw [hlev]
-  -- · simp only [rel]; refine and_congr ?_ ?_
-  --   · rw [← hrel]
-  --   · refine and_congr ?_ ?_ <;> rw [hlev]
-  -- · simp only [lab]; rw [hlev, ← hlab]
-  -- · simp only [form]; rw [hlev]
-  --   by_cases h : b.val.rel.lev x ≤ n <;> simp only [h, ↓reduceIte]
-  --   · rw [← hform]
-  --   · exact Iff.refl _
 
 lemma trunc_mono {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {n m : ℕ}
     (hab : a ≤ b) (hnm : n ≤ m) : a.trunc n ≤ b.trunc m := by
@@ -475,6 +500,36 @@ theorem sup_finapprox_eq_self {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} :
 
 open OmegaCompletePartialOrder
 
+noncomputable def trunc_chain {l : Type} [PartialOrder l] [OrderBot l] (α : Lpo l) :
+    Chain (Lpo l) := {
+  toFun n := α.trunc n
+  monotone' := by
+    intro n m hle; exact trunc_mono (le_refl _) hle
+}
+
+lemma trunc_chain_sup {l : Type} [DCPO l] [OrderBot l] (α : Lpo l) :
+    α = ωSup α.trunc_chain := by
+  sorry
+  -- ext1
+  -- · rw [ωSup_nodes]; simp only [trunc_chain]
+
+-- lemma permute_inv {l : Type} [DCPO l] [OrderBot l]
+--     {X X' Y Y' : Set Node}
+--     (e₁ : X ≃ Y) (e₂ : X' ≃ Y')
+--     (he : PermExt e₁ e₂) :
+--     ∀ x {hx}, (e₁.symm ⟨e₂ x, hx⟩).val = x.val := by
+--   intro x hx; by_cases h : n ≤ m
+--   · refine ((he h).symm.extend _).trans ?_
+--     simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
+--   · have h := (not_le.mp h).le
+--     have hex := (he h).extend x
+--     have hx' := (c₁.monotone' h).nodes x.property
+--     have :
+--         (⟨↑((en m) x), hx⟩ : (c₂ n).nodes) =
+--         ⟨↑((en n) ⟨x, hx'⟩), Subtype.coe_prop _⟩ := by
+--       ext; exact hex
+--     rw [this]; simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
+
 lemma permute_inv {l : Type} [DCPO l] [OrderBot l]
     (c₁ c₂ : Chain (Lpo l))
     (en : (n : ℕ) → (c₁ n).nodes ≃ (c₂ n).nodes)
@@ -491,13 +546,6 @@ lemma permute_inv {l : Type} [DCPO l] [OrderBot l]
         ⟨↑((en n) ⟨x, hx'⟩), Subtype.coe_prop _⟩ := by
       ext; exact hex
     rw [this]; simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
-
-noncomputable def trunc_chain {l : Type} [PartialOrder l] [OrderBot l] (α : Lpo l) :
-    Chain (Lpo l) := {
-  toFun n := α.trunc n
-  monotone' := by
-    intro n m hle; exact trunc_mono (le_refl _) hle
-}
 
 lemma permute_inv_1 {l : Type} [DCPO l] [OrderBot l]
     {α : Lpo l} {c : Chain (Lpo l)}
@@ -519,43 +567,128 @@ lemma permute_inv_2 {l : Type} [DCPO l] [OrderBot l]
       n
 
 -- Construct the supremum of a chain of permutations
+-- noncomputable def permute_sup {l : Type} [DCPO l] [OrderBot l]
+--     {α : Lpo l} {c : Chain (Lpo l)}
+--     {en : (n : ℕ) → (α.trunc n).nodes ≃ (c n).nodes}
+--     (he : ∀ {i j}, i ≤ j → PermExt (en i) (en j)) :
+--     α.nodes ≃ (ωSup c).nodes := {
+--   toFun x := by
+--     let n := α.lev x.property
+--     refine ⟨en n ⟨x, ?_⟩, ?_⟩
+--     · rw [trunc_nodes]; simp only [Set.mem_setOf_eq, Subtype.coe_prop, true_and, n]
+--       exact le_of_eq (Exists.choose_spec (lev_finite x.property))
+--     · exact (le_ωSup c n).nodes (Subtype.coe_prop _)
+--   invFun y := by
+--     have hy := y.property; simp only [ωSup_nodes, Set.mem_iUnion] at hy
+--     let n := hy.choose
+--     refine ⟨(en n).symm ⟨y, ?_⟩, ?_⟩
+--     · exact hy.choose_spec
+--     · exact (trunc_le α n).nodes (Subtype.coe_prop _)
+--   left_inv := by
+--     intro x; ext; exact permute_inv_1 he _ _ _
+--   right_inv := by
+--     intro y; ext; exact permute_inv_2 he _ _ _
+-- }
+
+
+-- Construct the supremum of a chain of permutations
 noncomputable def permute_sup {l : Type} [DCPO l] [OrderBot l]
-    {α : Lpo l} {c : Chain (Lpo l)}
-    {en : (n : ℕ) → (α.trunc n).nodes ≃ (c n).nodes}
+    (c₁ c₂ : Chain (Lpo l))
+    {en : (n : ℕ) → (c₁ n).nodes ≃ (c₂ n).nodes}
     (he : ∀ {i j}, i ≤ j → PermExt (en i) (en j)) :
-    α.nodes ≃ (ωSup c).nodes := {
+    (ωSup c₁).nodes ≃ (ωSup c₂).nodes := {
   toFun x := by
-    let n := α.lev x.property
-    refine ⟨en n ⟨x, ?_⟩, ?_⟩
-    · rw [trunc_nodes]; simp only [Set.mem_setOf_eq, Subtype.coe_prop, true_and, n]
-      exact le_of_eq (Exists.choose_spec (lev_finite x.property))
-    · exact (le_ωSup c n).nodes (Subtype.coe_prop _)
+    obtain ⟨x, hx⟩ := x
+    simp only [ωSup_nodes, Set.mem_iUnion] at hx
+    let n := hx.choose
+    refine ⟨en hx.choose ⟨x, hx.choose_spec⟩, ?_⟩
+    exact (le_ωSup c₂ n).nodes (Subtype.coe_prop _)
   invFun y := by
-    have hy := y.property; simp only [ωSup_nodes, Set.mem_iUnion] at hy
+    obtain ⟨y, hy⟩ := y
+    simp only [ωSup_nodes, Set.mem_iUnion] at hy
     let n := hy.choose
-    refine ⟨(en n).symm ⟨y, ?_⟩, ?_⟩
-    · exact hy.choose_spec
-    · exact (trunc_le α n).nodes (Subtype.coe_prop _)
-  left_inv := by
-    intro x; ext; exact permute_inv_1 he _ _ _
-  right_inv := by
-    intro y; ext; exact permute_inv_2 he _ _ _
+    refine ⟨(en n).symm ⟨y, hy.choose_spec⟩, ?_⟩
+    exact (le_ωSup c₁ n).nodes (Subtype.coe_prop _)
+  left_inv := by sorry
+    -- intro x; ext; simp only [eq_mp_eq_cast]; sorry
+    -- exact permute_inv_1 he _ _ _
+  right_inv := by sorry
+--    intro y; ext; exact permute_inv_2 he _ _ _
 }
 
 lemma le_permute_sup {l : Type} [DCPO l] [OrderBot l]
-    {α : Lpo l} {c : Chain (Lpo l)}
-    {en : (n : ℕ) → (α.trunc n).nodes ≃ (c n).nodes}
+    {c₁ c₂ : Chain (Lpo l)}
+    {en : (n : ℕ) → (c₁ n).nodes ≃ (c₂ n).nodes}
     (he : ∀ {i j}, i ≤ j → PermExt (en i) (en j)) :
-    ∀ i, PermExt (en i) (permute_sup he) := by
+    ∀ i, PermExt (en i) (permute_sup c₁ c₂ he) := by
   intro i; constructor
   · intro x; simp only [permute_sup, Equiv.coe_fn_mk]
-    have hx := (α.trunc_le _).nodes x.property
-    by_cases h : α.lev hx ≤ i
-    · exact ((he h).extend ⟨x.val, _⟩).symm
-    · exfalso; apply h; have hlev := x.property.2
-      refine ENat.coe_le_coe.mp (le_of_eq_of_le ?_ hlev)
-      exact (Exists.choose_spec (lev_finite hx)).symm
-  · exact (α.trunc_le i).nodes
+    have {j hj} : ((en i) x).val = ((en j) ⟨x, hj⟩).val := by
+      by_cases h : i ≤ j
+      · exact ((he h).extend ⟨x.val, _⟩)
+      · refine ((@he j i ?_).extend ⟨x.val, _⟩).symm
+        linarith
+    exact this
+  · exact (le_ωSup c₁ i).nodes
+
+lemma permute_continuous {l : Type} [DCPO l] [OrderBot l]
+    {c₁ c₂ : Chain (Lpo l)}
+    {en : (n : ℕ) → (c₁ n).nodes ≃ (c₂ n).nodes}
+    (hp : ∀ i, (c₁ i).permute (en i) = c₂ i)
+    (he : ∀ {i j}, i ≤ j → PermExt (en i) (en j)) :
+    (ωSup c₁).permute (permute_sup c₁ c₂ he) = ωSup c₂ := by
+  ext1
+  -- NODES
+  · conv => lhs; simp only [permute, nodes]
+    rfl
+  -- REL
+  · conv => lhs; simp only [permute, rel]
+    conv => rhs; exact ωSup_rel
+    ext x y; constructor
+    · intro ⟨_, _, hrel⟩
+      have ⟨i, hrel⟩ := (congrFun (congrFun ωSup_rel _) _).mp hrel
+      use i; rw [← hp i]; simp only [permute, rel]
+      obtain ⟨hx, hy⟩ := (c₁ i).property.rel_dom hrel
+      refine ⟨?_, ?_, ?_⟩
+      · refine (congrArg₂ (· ∈ ·) ?_ rfl).mp (en i ⟨_, hx⟩).property
+        refine ((le_permute_sup he i).extend _).trans ?_
+        simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+      · refine (congrArg₂ (· ∈ ·) ?_ rfl).mp (en i ⟨_, hy⟩).property
+        refine ((le_permute_sup he i).extend _).trans ?_
+        simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+      · refine (congrArg₂ _ ?_ ?_).mp hrel
+        · symm; exact (le_permute_sup he i).symm.extend ⟨x, _⟩
+        · symm; exact (le_permute_sup he i).symm.extend ⟨y, _⟩
+    · intro ⟨i, hrel⟩; rw [← hp i] at hrel
+      simp only [permute, rel] at hrel
+      obtain ⟨hx, hy, hrel⟩ := hrel
+      refine ⟨(le_ωSup c₂ i).nodes hx, (le_ωSup c₂ i).nodes hy, ?_⟩
+      refine le_rel (le_ωSup c₁ i) ?_; refine (congrArg₂ _ ?_ ?_).mp hrel
+      · exact (le_permute_sup he i).symm.extend ⟨x, _⟩
+      · exact (le_permute_sup he i).symm.extend ⟨y, _⟩
+  -- LABEL
+  · conv => lhs; simp only [permute, lab]
+    conv => rhs; exact ωSup_lab
+    ext x; by_cases hx : x ∈ (ωSup c₂).nodes
+    · conv => lhs; exact dif_pos hx
+      refine (congrFun ωSup_lab _).trans (congrArg _ ?_)
+      ext i; simp only [OrderHom.coe_mk]
+      rw [← hp i]; simp only [permute, lab]
+      by_cases hx : x ∈ (c₂ i).nodes
+      · conv => rhs; exact dif_pos hx
+        refine congrArg _ ?_
+        symm; exact (le_permute_sup he i).symm.extend ⟨x, _⟩
+      · conv => rhs; exact dif_neg hx
+        refine (c₁ i).property.lab_dom _ fun hcn ↦ hx ?_
+        refine (congrArg₂ (· ∈ ·) ?_ rfl).mp (en i ⟨_, hcn⟩).property
+        refine ((le_permute_sup he i).extend _).trans ?_
+        simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+    · conv => lhs; exact dif_neg hx
+      symm; refine bot_unique (ωSup_le _ _ fun i ↦ le_bot_iff.mpr ?_)
+      refine (c₂ i).property.lab_dom _ fun c ↦ hx ?_
+      exact (le_ωSup c₂ i).nodes c
+  -- FORMULA
+  · sorry
 
 lemma permute_chain {l : Type} [DCPO l] [OrderBot l]
     {α : Lpo l} {c : Chain (Lpo l)}
@@ -563,58 +696,66 @@ lemma permute_chain {l : Type} [DCPO l] [OrderBot l]
     (hc : ∀ i, c i = (α.trunc i).permute (en i))
     (he : ∀ {i j}, i ≤ j → PermExt (en i) (en j)) :
     α ≈ ωSup c := by
-  use permute_sup he; ext1
-  · rfl
-  · rw [Lpo.ωSup_rel]; simp only [permute, rel]; ext x y; constructor
-    · rintro ⟨hx, hy, hrel⟩;
-      simp only [ωSup_nodes, Set.mem_iUnion] at hx
-      simp only [ωSup_nodes, Set.mem_iUnion] at hy
-      obtain ⟨i, hx⟩ := hx; obtain ⟨j, hy⟩ := hy
-      use (max i j)
-      rw [hc (max i j)]
-      simp only [Lpofin.permute, permute]
-      refine ⟨?_, ?_, ?_⟩
-      · exact (c.monotone' le_sup_left).nodes hx
-      · exact (c.monotone' le_sup_right).nodes hy
-      · refine ((α.trunc_le _).rel _ ?_ _ ?_).mpr ?_
-        · exact Subtype.coe_prop _
-        · exact Subtype.coe_prop _
-        · refine (congrArg₂ _ ?_ ?_).mp hrel
-          · exact ((le_permute_sup he _).symm.extend ⟨x, _⟩).symm
-          · exact ((le_permute_sup he _).symm.extend ⟨y, _⟩).symm
-    · rintro ⟨i, hrel⟩
-      rw [hc i] at hrel
-      simp only [Lpofin.permute, permute] at hrel
-      obtain ⟨hx, hy, hrel⟩ := hrel
-      refine ⟨(le_ωSup c i).nodes hx, (le_ωSup c i).nodes hy, ?_⟩
-      have hx' := ((le_permute_sup he i).symm.extend ⟨x, hx⟩).symm
-      have hy' := ((le_permute_sup he i).symm.extend ⟨y, hy⟩).symm
-      refine ((α.trunc_le i).rel _ ?_ _ ?_).mp ?_
-      · rw [hx']; exact Subtype.coe_prop _
-      · rw [hy']; exact Subtype.coe_prop _
-      · refine (congrArg₂ _ hx'.symm hy'.symm).mp hrel
-  · rw [Lpo.ωSup_lab]; sorry
-  · rw [Lpo.ωSup_form]; simp only [permute, form]
-    ext x v; constructor
-    · intro ⟨hx, hform⟩; simp only [ωSup_nodes, Set.mem_iUnion] at hx
-      obtain ⟨i, hx⟩ := hx
-      use i; rw [hc i]; simp only [Lpofin.permute, permute]
-      refine ⟨hx, (congr ?_ ?_).mp hform⟩
-      · have hx' := ((le_permute_sup he i).symm.extend ⟨x, hx⟩).symm
-        refine ((α.trunc_le i).form _ ?_).symm.trans ?_
-        · rw [hx']; exact Subtype.coe_prop _
-        · exact congrArg _ hx'
-      · ext y; simp only [Subtype.exists, exists_and_right, Set.mem_setOf_eq]
-        constructor
-        · rintro ⟨z, ⟨hz, rfl⟩, hv⟩
-          refine ⟨z, ⟨?_, ?_⟩, hv⟩
-          · sorry
-          · sorry
-        · sorry
-    · intro ⟨i, hform⟩
-      rw [hc i] at hform; simp only [Lpofin.permute, permute] at hform
-      obtain ⟨hx, hform⟩ := hform
-      use (le_ωSup c i).nodes hx
-      sorry
+  rw [α.trunc_chain_sup]
+  use permute_sup α.trunc_chain c he
+  refine permute_continuous ?_ he
+  intro i; simp only [trunc_chain]; exact (hc i).symm
+
+  -- ; ext1
+  -- · rfl
+  -- · rw [Lpo.ωSup_rel]; simp only [permute, rel]; ext x y; constructor
+  --   · rintro ⟨hx, hy, hrel⟩;
+  --     simp only [ωSup_nodes, Set.mem_iUnion] at hx
+  --     simp only [ωSup_nodes, Set.mem_iUnion] at hy
+  --     obtain ⟨i, hx⟩ := hx; obtain ⟨j, hy⟩ := hy
+  --     use (max i j)
+  --     rw [hc (max i j)]
+  --     simp only [Lpofin.permute, permute]
+  --     refine ⟨?_, ?_, ?_⟩
+  --     · exact (c.monotone' le_sup_left).nodes hx
+  --     · exact (c.monotone' le_sup_right).nodes hy
+  --     · refine ((α.trunc_le _).rel _ ?_ _ ?_).mpr ?_
+  --       · exact Subtype.coe_prop _
+  --       · exact Subtype.coe_prop _
+  --       · refine (congrArg₂ _ ?_ ?_).mp hrel
+  --         · exact ((le_permute_sup he _).symm.extend ⟨x, _⟩).symm
+  --         · exact ((le_permute_sup he _).symm.extend ⟨y, _⟩).symm
+  --   · rintro ⟨i, hrel⟩
+  --     rw [hc i] at hrel
+  --     simp only [Lpofin.permute, permute] at hrel
+  --     obtain ⟨hx, hy, hrel⟩ := hrel
+  --     refine ⟨(le_ωSup c i).nodes hx, (le_ωSup c i).nodes hy, ?_⟩
+  --     have hx' := ((le_permute_sup he i).symm.extend ⟨x, hx⟩).symm
+  --     have hy' := ((le_permute_sup he i).symm.extend ⟨y, hy⟩).symm
+  --     refine ((α.trunc_le i).rel _ ?_ _ ?_).mp ?_
+  --     · rw [hx']; exact Subtype.coe_prop _
+  --     · rw [hy']; exact Subtype.coe_prop _
+  --     · refine (congrArg₂ _ hx'.symm hy'.symm).mp hrel
+  -- · rw [Lpo.ωSup_lab]; ext x
+
+
+  --   · refine le_ωSup ?_
+  -- · rw [Lpo.ωSup_form]; simp only [permute, form]
+  --   ext x v; constructor
+  --   · intro ⟨hx, hform⟩; simp only [ωSup_nodes, Set.mem_iUnion] at hx
+  --     obtain ⟨i, hx⟩ := hx
+  --     use i; rw [hc i]; simp only [Lpofin.permute, permute]
+  --     refine ⟨hx, (congr ?_ ?_).mp hform⟩
+  --     · have hx' := ((le_permute_sup he i).symm.extend ⟨x, hx⟩).symm
+  --       refine ((α.trunc_le i).form _ ?_).symm.trans ?_
+  --       · rw [hx']; exact Subtype.coe_prop _
+  --       · exact congrArg _ hx'
+  --     · ext y; simp only [Subtype.exists, exists_and_right, Set.mem_setOf_eq]
+  --       constructor
+  --       · rintro ⟨z, ⟨hz, rfl⟩, hv⟩
+  --         refine ⟨z, ⟨?_, ?_⟩, hv⟩
+  --         · sorry
+  --         · sorry
+  --       · sorry
+  --   · intro ⟨i, hform⟩
+  --     rw [hc i] at hform; simp only [Lpofin.permute, permute] at hform
+  --     obtain ⟨hx, hform⟩ := hform
+  --     use (le_ωSup c i).nodes hx
+  --     sorry
 
 end Lpo

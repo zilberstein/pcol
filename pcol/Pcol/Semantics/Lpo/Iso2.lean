@@ -101,6 +101,21 @@ lemma permute'_eq {l : Type} [Bot l] {X : Set Node} {a b : Lpo l}
     · simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
     · simp only [Subtype.exists, Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
 
+lemma permute_convert {l : Type} [Bot l] {X : Set Node} (a b : Lpo l)
+    {e : a.nodes ≃ X} (h : a = b) :
+    ∃ e' : b.nodes ≃ X, a.permute e = b.permute e' := by
+  use {
+    toFun x := e ⟨x, by rw [h]; exact x.property⟩
+    invFun y := ⟨e.symm y, by rw [← h]; exact Subtype.coe_prop _⟩
+    left_inv := by intro x; simp only [Equiv.symm_apply_apply, Subtype.coe_eta]
+    right_inv := by intro x; simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+  }
+  ext1
+  · simp only [permute, nodes]
+  · simp only [permute, rel]; sorry
+  · sorry
+  · sorry
+
 lemma permute_refl {l : Type} [Bot l] (a : Lpo l) :
     a.permute (Equiv.refl a.nodes) = a := by
   unfold permute; ext1 <;> simp [Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
