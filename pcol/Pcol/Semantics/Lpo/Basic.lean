@@ -18,6 +18,8 @@ instance : Inhabited Node where
   default := (0 : ℕ)
 
 instance : DecidableEq Node := instDecidableEqNat
+instance : Countable Node := instCountableNat
+instance : Infinite Node := instInfiniteNat
 
 def Form (α : Type) := Set α → Prop
 

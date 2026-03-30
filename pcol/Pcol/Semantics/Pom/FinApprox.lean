@@ -1,5 +1,6 @@
 import Mathlib.Data.Finite.Prod
 import Mathlib.Data.Fintype.Lattice
+import Mathlib.Data.Prod.Basic
 import Mathlib.Order.Atoms
 import Mathlib.Order.KonigLemma
 
@@ -15,7 +16,7 @@ instance {l : Type} [Bot l] : Coe (Pomfin l) (Pom l) where
 
 namespace Pom
 
-noncomputable def trunc {l : Type} [Bot l] (p : Pom l) (n : ℕ) : Pomfin l :=
+noncomputable def trunc {l : Type} [Preorder l] [OrderBot l] (p : Pom l) (n : ℕ) : Pomfin l :=
   p.lift
     (fun (a : Lpo l) ↦ Quotient.mk (@Lpofin.instSetoid l _) (a.trunc n))
     (fun _ _ h ↦ Quotient.eq_iff_equiv.2 (Lpo.trunc_equiv h))
@@ -267,13 +268,13 @@ open OmegaCompletePartialOrder
 
 theorem pom_ge_iff_ge_fin {l : Type} [DCPO l] [OrderBot l] {p q : Pom l}
     (hle : ∀ n, p.trunc n ≤ q) : p ≤ q := by {
-  -- Start with any arbitrary representatins of p and q
+  -- Start with any arbitrary representations of p and q
   obtain ⟨a, rfl⟩ := Quotient.exists_rep p
   obtain ⟨b, rfl⟩ := Quotient.exists_rep q
   unfold Pom.trunc at hle; simp only [Quotient.lift_mk] at hle
   have hle' : ∀ n, ∃ X : Set Node, ∃ e : (a.trunc n).val.nodes ≃ X,
       (a.trunc n).val.permute e ≤ b := by
-    intro n; have ⟨a', ha', hlea⟩ := Pom.le_iff_2.mp (hle n) b rfl
+    intro n; have ⟨a', ha', hlea⟩ := Pom.ge_lpo (hle n)
     have ⟨e, he⟩ := Quotient.exact ha'
     refine ⟨a'.nodes, e, ?_⟩; rw [he]; exact hlea
   -- Invoke Konig's lemma to show that there is an infinitely increasing
@@ -310,61 +311,148 @@ theorem pom_ge_iff_ge_fin {l : Type} [DCPO l] [OrderBot l] {p q : Pom l}
   }
   -- Witness that p ≤ q using the supremum of the new chain c as the
   -- representative lpo of p
-  refine ⟨ωSup c, b, ?_, ?_, rfl⟩
-  -- sup c is smaller than b, since every element of c is smaller than b
-  · refine ωSup_le _ _ ?_; intro n; unfold c
-    refine le_of_eq_of_le ?_ (f n).le_b
-    refine (Lpo.permute'_eq ?_).symm; rw [hn n]
+  refine ⟨ωSup c, ?_, b, rfl, ?_⟩
   -- a ≈ sup c
   · refine Quotient.eq_iff_equiv.mpr ?_
     refine Lpo.permute_chain ?_ ?_ (en := fun n ↦ Lpo.cast_perm (f n).perm ?_)
     · rw [hn n]
     · intro i; rfl
     · intro i j hle; exact hext hle
+  -- sup c is smaller than b, since every element of c is smaller than b
+  · refine ωSup_le _ _ ?_; intro n; unfold c
+    refine le_of_eq_of_le ?_ (f n).le_b
+    refine (Lpo.permute'_eq ?_).symm; rw [hn n]
   }
 
+open Cardinal
 
-noncomputable def pom_chain_to_lpo_chain {l : Type} [PartialOrder l] [OrderBot l]
-    (c : Chain (Pom l)) : Chain (Lpo l) := {
-  toFun n :=
-    let rec go n : { α : Lpo l | c n = Quotient.mk' α } := match n with
-    | Nat.zero => ⟨(c 0).out, (Quotient.out_eq _).symm⟩
-    | Nat.succ n => by {
-        have hle := c.monotone' (Nat.le_succ n)
-        obtain ⟨α, h⟩ := go n
-        have hex := Pom.le_iff_1.mp hle α h
-        refine ⟨hex.choose, (Exists.choose_spec hex).1⟩
+def LpoChain (l : Type) [PartialOrder l] [OrderBot l] (c : Chain (Pom l)) (n : ℕ) :=
+  { f : Fin n → Lpo l //
+    Monotone f ∧ ∀ k, (f k).nodes.compl.Infinite ∧ f k ∈ c k }
+
+namespace LpoChain
+
+lemma exists_extensible_perm {X Y : Set Node} (hinf : X.compl.Infinite) (hsub : X ⊆ Y) :
+    ∃ Z : Set Node, ∃ e : Y ≃ Z, Z.compl.Infinite ∧ Lpo.PermExt (Equiv.refl X) e := by
+  have hc : Cardinal.mk X.compl = Cardinal.mk (Bool × Node) := by
+    refine Eq.trans ?_ (Eq.symm ?_) (b := ℵ₀)
+    · exact @Cardinal.mk_eq_aleph0 _ _ hinf.to_subtype
+    · exact Cardinal.mk_eq_aleph0 _
+  have ⟨e⟩ := Cardinal.eq.mp hc
+  -- U witnesses the permutation of the remaining available nodes into two countably infinite
+  -- sets of nodes, one which can be used now and the other to be left available
+  let U i : Set Node := Subtype.val ∘ e.symm '' Set.prod {i} Set.univ
+  have hU i : (U i).Infinite := by
+    unfold U; refine Set.Infinite.image ?_ ?_
+    · exact Set.injOn_of_injective (Subtype.val_injective.comp e.symm.injective)
+    · exact Set.Infinite.prod_right Set.infinite_univ (Set.singleton_nonempty _)
+  have hd i : Disjoint X (U i) := by
+    refine Set.subset_compl_iff_disjoint_left.mp ?_
+    unfold U; simp only [Set.image, Function.comp]
+    rintro _ ⟨x, _, rfl⟩; exact Subtype.coe_prop _
+  have hc : Cardinal.mk ↑(Y \ X) ≤ Cardinal.mk (U true) := by
+    refine le_of_le_of_eq Cardinal.mk_le_aleph0 ?_
+    exact (@Cardinal.mk_eq_aleph0 _ _ (hU _).to_subtype).symm
+  obtain ⟨Z, hZ, e', hext⟩ :=
+    Lpo.perm_extend_to (U true) (Equiv.refl X) hsub (hd true) hc
+  refine ⟨X ∪ Z, e', ?_, hext⟩
+  refine Set.Infinite.mono ?_ (hU false)
+  refine Set.subset_compl_iff_disjoint_left.mpr (Disjoint.union_left ?_ ?_)
+  · exact hd false
+  · refine Disjoint.mono_left hZ ?_
+    refine (Set.disjoint_image_iff ?_).mpr ?_
+    · exact Subtype.val_injective.comp e.symm.injective
+    · refine Set.disjoint_prod.mpr (Or.inl ?_)
+      refine Set.disjoint_singleton.mpr ?_
+      simp only [ne_eq, Bool.true_eq_false, not_false_eq_true]
+
+lemma exists_extension {l : Type} [PartialOrder l] [OrderBot l] (c : Chain (Pom l)) (n : ℕ)
+    (lc : LpoChain l c n) : ∃ lc' : LpoChain l c (n + 1), ∀ k : Fin n, lc.val k = lc'.val k := by
+  match n with
+  | Nat.zero =>
+    have ⟨α, heq⟩ := (c 0).exists_rep
+    obtain ⟨Y, e, hY, he⟩ :=
+      exists_extensible_perm Set.finite_empty.infinite_compl bot_le (Y := α.nodes)
+    use {
+      val := fun _ ↦ α.permute e
+      property := by
+        refine ⟨?_, fun n ↦ ⟨?_, ?_⟩⟩
+        · intro _ _ _; exact le_refl _
+        · simp only [Lpo.permute, Lpo.nodes]; exact hY
+        · have := n.fin_one_eq_zero; subst this
+          exact heq.symm.trans (Quotient.eq_iff_equiv.mpr ⟨e, rfl⟩)
     }
-    (go n).val
-  monotone' := by
-    intro i j hle
-    generalize hk : j - i = k
-    have hj : j = i + k := by sorry
-    subst hj; induction k with
-    | zero => exact le_refl _
-    | succ k ih =>
-        refine (ih ?_ ?_).trans ?_
-        · simp only [le_add_iff_nonneg_right, zero_le]
-        · simp only [add_tsub_cancel_left]
-        · have : i + (k + 1) = Nat.succ (i + k) := by sorry
-          rw [this]; simp; sorry
+    intro n; exact Fin.elim0 n
+  | Nat.succ n =>
+    have hle := c.monotone' (Nat.le_succ n)
+    have ⟨hinf, hc⟩ := lc.property.2 ⟨n, Nat.lt_succ_self _⟩
+    have ⟨β, hβ, hle⟩ := Pom.le_lpo hinf (le_of_eq_of_le hc.symm hle)
+    obtain ⟨Y, e, hY, he⟩ :=
+      exists_extensible_perm hinf hle.nodes
+    use {
+      val := fun k ↦ if hk : k.val < n.succ then lc.val ⟨k.val, hk⟩ else β.permute e
+      property := by
+        refine ⟨fun i j hij ↦ ?_, fun j ↦ ⟨?_, ?_⟩⟩ <;>
+          by_cases hj : j.val < n.succ <;> simp only [hj, ↓reduceDIte]
+        · have hi := lt_of_le_of_lt (Fin.val_fin_le.mpr hij) hj
+          rw [dif_pos hi]; exact lc.property.1 hij
+        · by_cases hi : i.val < n.succ
+          · rw [dif_pos hi]
+            have := le_of_eq_of_le (Lpo.permute_refl _).symm (Lpo.permute_monotone hle he)
+            refine (lc.property.1 ?_).trans this
+            simp only [Nat.succ_eq_add_one, Fin.mk_le_mk, Nat.le_of_lt_succ hi]
+          · rw [dif_neg hi]
+        · exact (lc.property.2 ⟨j, hj⟩).1
+        · exact hY
+        · exact (lc.property.2 ⟨j, hj⟩).2
+        · have := eq_of_le_of_not_lt (Nat.le_of_lt_succ j.isLt) hj; rw [this]
+          exact hβ.trans (Quotient.eq_iff_equiv.mpr ⟨e, rfl⟩)
+    }
+    intro k; simp only [Nat.succ_eq_add_one, Fin.coe_eq_castSucc, Fin.coe_castSucc, Fin.is_lt,
+      ↓reduceDIte, Fin.eta]
+
+def empty {l : Type} [PartialOrder l] [OrderBot l] {c : Chain (Pom l)} : LpoChain l c 0 := {
+  val := Fin.elim0
+  property := by refine ⟨?_, ?_⟩; all_goals { intro n ; exfalso ; exact Fin.elim0 n }
 }
 
-lemma pom_chain_to_lpo_chain_mem {l : Type} [DCPO l] [OrderBot l]
-    (c : Chain (Pom l)) (i : ℕ) :
-    c i = Quotient.mk' (pom_chain_to_lpo_chain c i) :=
-  (pom_chain_to_lpo_chain.go c i).property
+lemma monotone {l : Type} [PartialOrder l] [OrderBot l] {c : Chain (Pom l)} {n : ℕ}
+    {i j : Fin n} {lc : LpoChain l c n} (hle : i ≤ j) : lc.val i ≤ lc.val j := lc.property.1 hle
+
+lemma mem_pom {l : Type} [PartialOrder l] [OrderBot l] {c : Chain (Pom l)} {n : ℕ}
+    (i : Fin n) {lc : LpoChain l c n} : lc.val i ∈ c i := (lc.property.2 i).2
+
+end LpoChain
+
+lemma exists_lpo_chain_of_pom_chain {l : Type} [PartialOrder l] [OrderBot l] (c : Chain (Pom l)) :
+    ∃ c' : Chain (Lpo l), ∀ i, c' i ∈ c i := by
+  choose f hf using LpoChain.exists_extension c
+  let ch n : LpoChain l c n := Nat.rec LpoChain.empty f n
+  use {
+    toFun n := (ch (n+1)).val ⟨n, Nat.lt_succ_self _⟩
+    monotone' := by
+      refine monotone_nat_of_le_succ ?_
+      intro n; unfold ch
+      refine le_of_eq_of_le (hf _ _ _) (LpoChain.monotone ?_)
+      refine Fin.le_iff_val_le_val.mpr ?_; simp only [Fin.val_natCast]
+      refine le_of_eq_of_le (Nat.mod_eq_of_lt ?_) (Nat.le_succ _)
+      linarith
+  }
+  intro n
+  simp only [ch, DFunLike.coe]
+  exact LpoChain.mem_pom (l := l) ⟨n, Nat.lt_succ_self _⟩
 
 -- Inspired by Lemma D.4 from CONCUR'25
 lemma lpo_chain_pom_chain_lub {l : Type} [DCPO l] [OrderBot l]
     {cl : Chain (Lpo l)} {cp : Chain (Pom l)}
-    (h : ∀ i, cp i = Quotient.mk' (cl i)) (hc : ∀ x : l, ScottCompact x) :
+    (h : ∀ i, cl i ∈ cp i) (hc : ∀ x : l, ScottCompact x) :
     IsLUB (Set.range cp) (Quotient.mk' (ωSup cl)) := by
   constructor
   · intro p hp; obtain ⟨i, rfl⟩ := Set.mem_range.mpr hp
-    exact ⟨cl i, ωSup cl, le_ωSup _ _, h i, rfl⟩
+    exact ⟨cl i, h i, ωSup cl, rfl, le_ωSup _ _⟩
   · simp only [lowerBounds, upperBounds, Set.mem_range, forall_exists_index,
       forall_apply_eq_imp_iff, Set.mem_setOf_eq]; intro p hp
+    refine pom_ge_iff_ge_fin ?_; intro n
     have h : ∀ n, ∃ β : Lpo l, (ωSup cl).trunc n ≤ β ∧ p = Quotient.mk _ β := by
       intro n
       let α := ωSup cl
@@ -392,7 +480,7 @@ lemma lpo_chain_pom_chain_lub {l : Type} [DCPO l] [OrderBot l]
         obtain ⟨r, hr, hrl⟩ := α.property.rel.single_rooted
         refine ⟨r, hr, ?_⟩; exact le_of_eq_of_le (lev_root hr hrl) bot_le
       obtain ⟨k, hk⟩ := @Finite.exists_max _ _ hN hne _ f
-      obtain ⟨β, rfl, hle⟩ := Pom.le_iff_1.1 (hp (f k)) (cl (f k)) (h _)
+      obtain ⟨β, rfl, hle⟩ := Pom.le_lpo sorry (le_of_eq_of_le (h (f k)).symm (hp (f k)))
       refine ⟨β, le_trans ?_ hle, rfl⟩
       have htr := α.trunc_le n
       have hno : N = (α.trunc n).nodes := sorry
@@ -405,19 +493,19 @@ lemma lpo_chain_pom_chain_lub {l : Type} [DCPO l] [OrderBot l]
       · intro x hx; sorry
     choose f hf using h
     refine pom_ge_iff_ge_fin ?_
-    intro n; refine ⟨(ωSup cl).trunc n, f n, (hf n).1, ?_, (hf n).2⟩
+    intro n; refine ⟨(ωSup cl).trunc n, ?_, f n, (hf n).2, (hf n).1⟩
     simp only [Pom.trunc, Quotient.lift_mk]
     sorry
 
-lemma pom_chain_to_lpo_chain_lub {l : Type} [DCPO l] [OrderBot l]
-    (c : Chain (Pom l)) (hc : ∀ x : l, ScottCompact x) :
-    IsLUB (Set.range c) (Quotient.mk' (ωSup (pom_chain_to_lpo_chain c))) :=
-  lpo_chain_pom_chain_lub (pom_chain_to_lpo_chain_mem c) hc
+-- lemma pom_chain_to_lpo_chain_lub {l : Type} [DCPO l] [OrderBot l]
+--     (c : Chain (Pom l)) (hc : ∀ x : l, ScottCompact x) :
+--     IsLUB (Set.range c) (Quotient.mk' (ωSup (pom_chain_to_lpo_chain c))) :=
+--   lpo_chain_pom_chain_lub (pom_chain_to_lpo_chain_mem c) hc
 
 def lpo_chain_to_pom {l : Type} [PartialOrder l] [OrderBot l] (c : Chain (Lpo l)) :
     Chain (Pom l) := {
   toFun n := Quotient.mk _ (c n)
-  monotone' i j hle := ⟨c i, c j, c.monotone' hle, rfl, rfl⟩
+  monotone' i j hle := ⟨c i, rfl, c j, rfl, c.monotone' hle⟩
 }
 lemma lpo_chain_to_pom_lub {l : Type} [DCPO l] [OrderBot l]
     (c : Chain (Lpo l)) (h : ∀ x : l, ScottCompact x) :
@@ -426,12 +514,12 @@ lemma lpo_chain_to_pom_lub {l : Type} [DCPO l] [OrderBot l]
 
 instance {l : Type} [DCPO l] [OrderBot l] (hc : ∀ x : l, ScottCompact x) :
     OmegaCompletePartialOrder (Pom l) where
-  ωSup c := Quotient.mk' (ωSup (pom_chain_to_lpo_chain c))
+  ωSup c := Quotient.mk' (ωSup (exists_lpo_chain_of_pom_chain c).choose)
   le_ωSup c i := by
-    refine (pom_chain_to_lpo_chain_lub c hc).1 ?_
+    refine (lpo_chain_pom_chain_lub (exists_lpo_chain_of_pom_chain c).choose_spec hc).1 ?_
     exact Set.mem_range.mpr ⟨i, rfl⟩
   ωSup_le c p h := by
-    refine (pom_chain_to_lpo_chain_lub c hc).2 ?_
+    refine (lpo_chain_pom_chain_lub (exists_lpo_chain_of_pom_chain c).choose_spec hc).2 ?_
     intro q hq; obtain ⟨i, rfl⟩ := Set.mem_range.mpr hq; exact h i
 
 -- lemma dset_to_chain {l : Type} [LE l] (d : DSet (Pom l)) :

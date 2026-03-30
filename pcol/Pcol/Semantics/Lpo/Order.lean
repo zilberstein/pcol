@@ -1,5 +1,3 @@
---import Mathlib.Order.CompletePartialOrder
-
 import Pcol.Semantics.DCPO
 import Pcol.Semantics.Lpo.Basic
 
