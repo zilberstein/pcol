@@ -80,93 +80,193 @@ instance {l : Type} [PartialOrder l] [OrderBot l] : Preorder (Pom l) where
     obtain ⟨α, rfl, hle₁⟩ := Pom.ge_lpo hle
     refine ⟨α, rfl, γ, rfl, hle₁.trans hle₂⟩
 
-
-lemma permute_le_self_nodes_fin {l : Type} [PartialOrder l] [OrderBot l] {α : Lpofin l} {X : Set Node}
-    {e : α.nodes ≃ X} (h : α.permute e ≤ α) : α.nodes = (α.permute e).nodes := by
-  symm; refine α.property.eq_of_subset_of_card_le ?_ ?_
-  · exact h.nodes
-  · obtain ⟨n, ⟨e'⟩⟩ := finite_iff_exists_equiv_fin.mp α.property
-    refine le_of_eq (Eq.trans (b := n) ?_ (Eq.symm ?_)) <;>
-      refine Nat.card_eq_of_equiv_fin ?_
-    · exact e'
-    · simp only [Lpofin.permute, Lpo.permute, Lpofin.nodes, Lpo.nodes]
-      exact e.symm.trans e'
-
 lemma permute_le_lev_nodes {l : Type} [LE l] [Bot l] {α : Lpo l} {X : Set Node}
     {e : α.nodes ≃ X} {n : ℕ} (h : α.permute e ≤ α) :
     { x ∈ α.nodes | α.rel.lev x = n} =
-    { x ∈ (α.permute e).nodes | (α.permute e).rel.lev x = n } := by sorry
-  -- induction n with
-  -- | zero => sorry
-  -- | succ k ih =>
+    { x ∈ (α.permute e).nodes | (α.permute e).rel.lev x = n } := by
+  symm; refine Set.Finite.eq_of_subset_of_card_le ?_ ?_ ?_
+  · exact α.property.rel.fin_lev n
+  · intro x ⟨hx, hlev⟩; refine ⟨h.nodes hx, Eq.trans ?_ hlev⟩
+    refine (lev_isotone h hx).symm
+  · obtain ⟨k, ⟨efin⟩⟩ := (α.property.rel.fin_lev n).exists_equiv_fin
+    let e' :
+        { x | x ∈ α.nodes ∧ α.rel.lev x = n } ≃
+        { x | x ∈ (α.permute e).nodes ∧ (α.permute e).rel.lev x = n } := {
+      toFun x := ⟨e ⟨x, x.property.1⟩, ⟨Subtype.coe_prop _, Eq.trans (Lpo.permute_lev _ _).symm x.property.2⟩⟩
+      invFun y := ⟨e.symm ⟨y, y.property.1⟩, by {
+        refine ⟨Subtype.coe_prop _, Eq.trans ?_ y.property.2⟩
+        refine (Lpo.permute_lev e (Subtype.coe_prop _)).trans ?_
+        simp only [Set.mem_setOf_eq, Subtype.coe_eta, Equiv.apply_symm_apply]
+      }⟩
+      left_inv _ := by simp only [Set.coe_setOf, Set.mem_setOf_eq, Subtype.coe_eta,
+        Equiv.symm_apply_apply, Set.sep_subset, Set.coe_inclusion]
+      right_inv _ := by simp only [Set.coe_setOf, Set.mem_setOf_eq, Subtype.coe_eta,
+        Equiv.apply_symm_apply]
+    }
+    refine le_of_eq (Eq.trans (b := k) ?_ (Eq.symm ?_)) <;> refine Nat.card_eq_of_equiv_fin ?_
+    · exact efin
+    · exact e'.symm.trans efin
 
-  -- obtain ⟨k, ⟨e'⟩⟩ := (α.property.rel.fin_lev n).exists_equiv_fin
-  -- refine Set.symmDiff_eq_empty.mp ?_
-
-
-  -- induction k with
-
-  -- let e' := Lpo.perm_subset e fun x (hx : x ∈ α.nodes ∧ α.rel.lev x = n) ↦ hx.1
-  -- symm; refine Set.Finite.eq_of_subset_of_card_le ?_ ?_ ?_
-  -- · exact α.property.rel.fin_lev n
-  -- · intro x ⟨hx, hlev⟩; refine ⟨h.nodes hx, Eq.trans ?_ hlev⟩
-  --   have hh := Lpo.permute_lev e (h.nodes hx)
-
-  -- ·
-
-
-lemma permute_le_self_nodes {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} {X : Set Node}
+lemma permute_le_self_nodes {l : Type} [LE l] [Bot l] {α : Lpo l} {X : Set Node}
     {e : α.nodes ≃ X} (h : α.permute e ≤ α) : α.nodes = (α.permute e).nodes := by
-  -- have {β : Lpo l} : β.nodes = ⋃ n : ℕ, { x ∈ β.nodes | β.rel.lev x = n } := by
-  --   ext x; simp only [Set.mem_iUnion, Set.mem_setOf_eq, exists_and_left, iff_self_and]
-  --   exact lev_finite
-  -- refine this.trans (this.trans ?_).symm; refine iSup_congr fun i ↦ ?_
-  -- refine Set.Finite.eq_of_subset_of_card_le ?_ ?_ ?_
-  -- · exact α.property.rel.fin_lev i
-  -- · intro x ⟨hx, hlev⟩; refine ⟨h.nodes hx, Eq.trans ?_ hlev⟩
-  --   have hh := Lpo.permute_lev e (h.nodes hx)
-  conv => lhs; exact congrArg Lpo.nodes (Lpo.trunc_chain_sup _)
-  conv => rhs; exact congrArg Lpo.nodes (Lpo.trunc_chain_sup _)
-  rw [Lpo.ωSup_nodes, Lpo.ωSup_nodes]; refine iSup_congr fun i ↦ ?_
-  simp only [Lpo.trunc_chain, ← Lpo.trunc_permute]
-  refine permute_le_self_nodes_fin ?_
-  refine le_of_eq_of_le ?_ (Lpo.trunc_mono h (le_refl i))
-  exact Subtype.ext Lpo.trunc_permute
+  have {β : Lpo l} : β.nodes = ⋃ n : ℕ, { x ∈ β.nodes | β.rel.lev x = n } := by
+    ext x; simp only [Set.mem_iUnion, Set.mem_setOf_eq, exists_and_left, iff_self_and]
+    exact lev_finite
+  refine this.trans (this.trans ?_).symm; refine iSup_congr fun i ↦ ?_
+  symm; exact permute_le_lev_nodes h
 
-lemma permute_le_self {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} {X : Set Node}
+-- The reverse inequality is immediate, but this direction requires us to show that
+-- there is a finite chain of permutations from x -> e x -> e (e x) -> .. -> e.symm x
+-- such that the labels are monotonically increasing in the chain. Such a chain must
+-- exist because permuting a node keeps it within the same (finite) level, therefore
+-- eventually the permutations must either reach e.symm x, or form a cycle. In the
+-- case of a cycle, we must have some node z such that e z = x and lab (e z) ≤ lab x,
+-- therefore z = e.symm x, so it is also reached
+lemma permute_le_self_lab {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l}
+    {e : α.nodes ≃ α.nodes} (hle : α.permute e ≤ α) {x : Node} (hx : x ∈ α.nodes) :
+    α.lab x ≤ (α.permute e).lab x := by
+  obtain ⟨i, hlev⟩ := lev_finite hx
+  obtain ⟨n, ⟨e'⟩⟩ := (α.property.rel.fin_lev i).exists_equiv_fin
+  have hlab {z} (hz : z ∈ α.nodes) := hle.lab (e ⟨_, hz⟩)
+  simp only [Lpo.lab, Lpo.permute, Subtype.exists, exists_and_right, Subtype.coe_prop,
+    ↓reduceDIte, Subtype.coe_eta, Equiv.symm_apply_apply] at hlab
+  simp only [Lpo.permute, Lpo.lab, dif_pos hx]
+  have hn : 1 ≤ n := by
+    refine Nat.succ_le_of_lt ?_
+    exact lt_of_le_of_lt bot_le ((e' ⟨x, hx, hlev⟩).isLt)
+  have hxl : α.rel.lev (e.symm ⟨x, hx⟩) = i := by
+    refine (Lpo.permute_lev e (Subtype.coe_prop _)).trans
+      (Eq.trans ?_
+        ((Set.ext_iff.mp (permute_le_lev_nodes hle (n := i)) x).mp ⟨hx, hlev⟩).2)
+    simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+  have build_chain (k : ℕ)
+      (f : FinChain (n - k - 1) { x : Node // x ∈ α.nodes ∧ α.rel.lev x = i})
+      (hfirst : f.first.val = x)
+      (mono : ∀ {i j}, i ≤ j → α.lab (f i) ≤ α.lab (f j))
+      (next : Rel.is_succ_chain (fun y z ↦ z.val = (e ⟨y.val, y.property.1⟩).val) f)
+      (inj : Function.Injective f) :
+      α.lab x ≤ α.lab (e.symm ⟨x, hx⟩).val := by
+    revert f; induction k with
+    | zero =>
+      simp only [Nat.sub_zero]; intro f first mono _ inj
+      -- e.symm x must be in the chain since there are n unique elements
+      conv at e' => rhs; rw [← Nat.sub_add_cancel hn]
+      subst first
+      -- k is the index of e.symm x
+      obtain ⟨k, hk⟩ :=
+        (Finite.injective_iff_surjective_of_equiv e'.symm).mp inj
+          ⟨e.symm ⟨_, hx⟩, Subtype.coe_prop _, hxl⟩
+      have hk := congrArg Subtype.val hk; simp only at hk
+      rw [← hk]; exact mono (Fin.zero_le _)
+    | succ k ih =>
+      intro f first mono next inj
+      let z := e ⟨_, f.last.property.1⟩
+      by_cases hzf : z = f.first.val
+      · subst first
+        refine le_of_le_of_eq (mono (Fin.zero_le _)) (congrArg _ ?_) (b := α.lab f.last.val)
+        have : f.last.val = (Subtype.mk _ f.last.property.1).val := rfl; rw [this]
+        refine congrArg _ ((e.symm_apply_apply _).symm.trans ?_)
+        refine congrArg _ (Subtype.ext ?_); simp only; rw [← hzf]
+      · have hzl : α.rel.lev z = i := by
+          refine ((Set.ext_iff.mp (permute_le_lev_nodes hle) _).mpr ⟨z.property, ?_⟩).2
+          exact ((Lpo.permute_lev e f.last.property.1).symm.trans (f.last.property.2))
+        have hz : ∀ j, f j ≠ ⟨z, z.property, hzl⟩ := by
+          intro j hj; by_cases h0 : j = 0
+          · subst h0; refine hzf (Eq.trans ?_ (congrArg _ hj).symm); simp only
+          · have hj1 : 1 ≤ j.val := by
+              refine (Nat.one_le_iff_ne_zero.mpr ?_); intro h; exact h0 (Fin.val_inj.mp h)
+            have := next ⟨j.val - 1, by {
+              refine Nat.pred_lt_pred ?_ ?_
+              · simp only [Nat.sub_eq, tsub_zero, ne_eq]; intro h; exact h0 (Fin.val_inj.mp h)
+              · simp only [Nat.sub_eq, tsub_zero]; refine lt_of_lt_of_eq j.isLt ?_
+                refine Nat.sub_add_cancel ?_; sorry
+            }⟩; simp only [Fin.eta] at this
+            have hj' {h} : ⟨j.val - 1 + 1, h⟩ = j := by
+              ext; simp; refine Nat.sub_add_cancel hj1
+            rw [hj', hj] at this; simp only [z] at this
+            have := Subtype.val_inj.mpr (e.injective (Subtype.ext this)); simp only [FinChain.last, Fin.last] at this
+            have := Fin.val_inj.mpr (inj (Subtype.ext this)); simp only at this
+            refine ne_of_lt (Nat.succ_lt_succ_iff.mp ?_) this.symm
+            refine lt_of_eq_of_lt ?_ j.isLt; simp only [Nat.succ_eq_add_one]; refine Nat.sub_add_cancel hj1
+        refine
+          ih
+            (fun j ↦ if hj : j.val < n - (k + 1) - 1 + 1 then f ⟨j.val, hj⟩ else ⟨z, z.property, hzl⟩)
+            ?_ ?_ ?_ ?_
+        · refine (congrArg _ ?_).trans first
+          simp only [FinChain.first, lt_add_iff_pos_left, add_pos_iff, tsub_pos_iff_lt,
+            Nat.lt_one_iff, pos_of_gt, or_true, ↓reduceDIte, Fin.zero_eta]
+        · intro i j hle; simp only [z]
+          by_cases hj : j.val < n - (k + 1) - 1 + 1
+          · rw [dif_pos hj];
+            have hi : i.val < n - (k + 1) - 1 + 1 :=
+              lt_of_le_of_lt (Fin.val_fin_le.mpr hle) hj
+            rw [dif_pos hi]; exact mono hle
+          · rw [dif_neg hj]
+            by_cases hi : i.val < n - (k + 1) - 1 + 1
+            · rw [dif_pos hi]; refine le_trans ?_ (hlab f.last.property.1)
+              exact mono (Fin.le_last _)
+            · rw [dif_neg hi]
+        · intro j; simp only [add_lt_add_iff_right, z]
+          by_cases hj : j.val < n - (k + 1) - 1
+          · rw [dif_pos hj]
+            refine (next ⟨j.val, hj⟩).trans ?_
+            refine congrArg _ (congrArg _ (Subtype.ext ?_)); simp only
+            refine congrArg _ (Eq.trans ?_ (dif_pos ?_).symm)
+            · rfl
+            · exact hj.trans (Nat.lt_succ_self _)
+          · rw [dif_neg hj]; simp only [z]
+            refine congrArg _ (congrArg _ (Subtype.ext ?_)); simp only
+            refine congrArg _ (Eq.trans ?_ (dif_pos ?_).symm)
+            · refine congrArg f ?_; sorry
+            · refine j.isLt.trans ?_; sorry
+        · intro i j hij; simp only at hij
+          by_cases hi : i.val < n - (k + 1) - 1 + 1
+          · rw [dif_pos hi] at hij
+            by_cases hj : j.val < n - (k + 1) - 1 + 1
+            · rw [dif_pos hj] at hij
+              have := Fin.val_inj.mpr (inj hij); simp only at this
+              exact Fin.val_inj.mp this
+            · rw [dif_neg hj] at hij; exfalso; exact hz ⟨i.val, hi⟩ hij
+          · rw [dif_neg hi] at hij
+            by_cases hj : j.val < n - (k + 1) - 1 + 1
+            · rw [dif_pos hj] at hij; exfalso; exact hz ⟨j.val, hj⟩ hij.symm
+            · refine Fin.val_inj.mp ?_
+              refine Eq.trans ?_ (Eq.symm ?_) (b := n - k - 1)
+              · refine eq_of_le_of_not_lt (Nat.le_of_lt_succ i.isLt) ?_
+                intro h; apply hi; sorry
+              · sorry
+  refine build_chain n (fun _ ↦ ⟨x, hx, hlev⟩) rfl ?_ ?_ ?_
+  · intro _ _ _; exact le_refl _
+  · intro i; simp only [tsub_self, zero_le, Nat.sub_eq_zero_of_le] at i; exact Fin.elim0 i
+  · intro i j _;
+    have := (Fin.eq_zero i).trans (Fin.eq_zero j).symm
+    sorry
+
+lemma permute_le_self {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l} {X : Set Node}
     {e : α.nodes ≃ X} (hle : α.permute e ≤ α) : α.permute e = α := by
   have hn : α.val.nodes = (α.permute e).val.nodes :=
     permute_le_self_nodes hle
+  simp [Lpo.permute] at hn; subst hn
   ext1
-  · exact hn.symm
+  · simp only [Lpo.permute, Lpo.nodes]
   · ext x y; constructor <;> intro hrel
     · exact le_rel hle hrel
     · obtain ⟨hx, hy⟩ := α.property.rel_dom hrel
-      rw [hn] at *; exact (hle.rel _ hx _ hy).mpr hrel
+      exact (hle.rel _ hx _ hy).mpr hrel
   · ext x; by_cases hx : x ∈ α.val.nodes
     · refine le_antisymm (hle.lab x) ?_
-      obtain ⟨i, hlev⟩ := lev_finite hx
-      obtain ⟨n, ⟨e'⟩⟩ := (α.property.rel.fin_lev i).exists_equiv_fin
-      -- have : ∃ k : ℕ, ∃ c : FinChain k Node,
-      --   ∀ j : Fin k, α.lab (c j)
-      have hlab := hle.lab (e ⟨_, hx⟩)
-      simp only [Lpo.lab, Lpo.permute, Subtype.exists, exists_and_right, Subtype.coe_prop,
-        ↓reduceDIte, Subtype.coe_eta, Equiv.symm_apply_apply] at hlab
-      refine hlab.trans ?_
-      simp [Lpo.permute, Lpo.lab]
-      sorry
+      exact permute_le_self_lab hle hx
     · conv => rhs; exact α.property.lab_dom _ hx
-      rw [hn] at hx; exact (α.permute e).property.lab_dom _ hx
+      exact (α.permute e).property.lab_dom _ hx
   · ext1 x; by_cases hx : x ∈ α.val.nodes
-    · rw [hn] at hx; exact hle.form _ hx
+    · exact hle.form _ hx
     · ext v; constructor; all_goals {
         intro hform; exfalso
         refine ((Subtype.property _ : is_valid_lpo _).form_dom x).mp.mt ?_ ⟨_, hform⟩
-        try exact hx
-        try rw [hn] at hx; exact hx
+        exact hx
       }
 
-instance {l : Type} [DCPO l] [OrderBot l] : PartialOrder (Pom l) where
+instance {l : Type} [PartialOrder l] [OrderBot l] : PartialOrder (Pom l) where
   le_antisymm p q hpq hqp := by
     obtain ⟨α, rfl, β, rfl, hle⟩ := hpq
     obtain ⟨β', heq, hle'⟩ := Pom.ge_lpo hqp
