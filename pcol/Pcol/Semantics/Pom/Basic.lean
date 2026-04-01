@@ -179,7 +179,9 @@ lemma permute_le_self_lab {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l}
               refine Nat.pred_lt_pred ?_ ?_
               · simp only [Nat.sub_eq, tsub_zero, ne_eq]; intro h; exact h0 (Fin.val_inj.mp h)
               · simp only [Nat.sub_eq, tsub_zero]; refine lt_of_lt_of_eq j.isLt ?_
-                refine Nat.sub_add_cancel ?_; sorry
+                refine Nat.sub_add_cancel ?_
+                refine (Nat.le_of_lt_succ (lt_of_le_of_lt hj1 j.isLt)).trans ?_
+                simp only [tsub_le_iff_right, le_add_iff_nonneg_right, zero_le]
             }⟩; simp only [Fin.eta] at this
             have hj' {h} : ⟨j.val - 1 + 1, h⟩ = j := by
               ext; simp; refine Nat.sub_add_cancel hj1
@@ -216,9 +218,16 @@ lemma permute_le_self_lab {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l}
             · exact hj.trans (Nat.lt_succ_self _)
           · rw [dif_neg hj]; simp only [z]
             refine congrArg _ (congrArg _ (Subtype.ext ?_)); simp only
+            have : j.val ≤ n - (k + 1) - 1 := by
+              refine le_of_le_of_eq (Nat.le_pred_of_lt j.isLt) ?_
+              refine congrArg Nat.pred ?_; simp only [Nat.sub_eq, tsub_zero]
+              exact (Nat.sub_add_eq _ _ _).symm
             refine congrArg _ (Eq.trans ?_ (dif_pos ?_).symm)
-            · refine congrArg f ?_; sorry
-            · refine j.isLt.trans ?_; sorry
+            · refine congrArg f (Fin.val_inj.mp ?_); simp only [Fin.last]
+              exact (eq_of_le_of_not_lt this hj).symm
+            · refine Nat.lt_of_le_pred ?_ ?_
+              · exact Nat.zero_lt_succ _
+              · exact this
         · intro i j hij; simp only at hij
           by_cases hi : i.val < n - (k + 1) - 1 + 1
           · rw [dif_pos hi] at hij
@@ -231,16 +240,19 @@ lemma permute_le_self_lab {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l}
             by_cases hj : j.val < n - (k + 1) - 1 + 1
             · rw [dif_pos hj] at hij; exfalso; exact hz ⟨j.val, hj⟩ hij.symm
             · refine Fin.val_inj.mp ?_
-              refine Eq.trans ?_ (Eq.symm ?_) (b := n - k - 1)
-              · refine eq_of_le_of_not_lt (Nat.le_of_lt_succ i.isLt) ?_
-                intro h; apply hi; sorry
-              · sorry
+              refine Eq.trans ?_ (Eq.symm ?_) (b := n - k - 1) <;>
+                refine le_antisymm (Nat.le_of_lt_succ ?_) ?_
+              · exact i.isLt
+              · exact le_of_eq_of_le (Nat.sub_add_eq _ _ _).symm (le_trans le_tsub_add (le_of_not_gt hi))
+              · exact j.isLt
+              · exact le_of_eq_of_le (Nat.sub_add_eq _ _ _).symm (le_trans le_tsub_add (le_of_not_gt hj))
   refine build_chain n (fun _ ↦ ⟨x, hx, hlev⟩) rfl ?_ ?_ ?_
   · intro _ _ _; exact le_refl _
   · intro i; simp only [tsub_self, zero_le, Nat.sub_eq_zero_of_le] at i; exact Fin.elim0 i
-  · intro i j _;
-    have := (Fin.eq_zero i).trans (Fin.eq_zero j).symm
-    sorry
+  · intro i j _; ext;
+    have hi := i.isLt; have hj := j.isLt;
+    simp only [tsub_self, zero_le, Nat.sub_eq_zero_of_le, zero_add, Nat.lt_one_iff] at hi hj
+    rw [hi, hj]
 
 lemma permute_le_self {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l} {X : Set Node}
     {e : α.nodes ≃ X} (hle : α.permute e ≤ α) : α.permute e = α := by
