@@ -4,7 +4,7 @@ import Mathlib.Data.Prod.Basic
 import Mathlib.Order.Atoms
 import Mathlib.Order.KonigLemma
 
-import Pcol.Semantics.Pom.Basic
+import Pcol.Semantics.Pom.Order
 import Pcol.Semantics.Lpo.FinApprox
 
 def Pomfin (l : Type) [Bot l] : Type := Quotient (@Lpofin.instSetoid l _)
@@ -442,10 +442,63 @@ lemma exists_lpo_chain_of_pom_chain {l : Type} [PartialOrder l] [OrderBot l] (c 
   simp only [ch, DFunLike.coe]
   exact LpoChain.mem_pom (l := l) ⟨n, Nat.lt_succ_self _⟩
 
+variable {l : Type} [DCPO l] [OrderBot l] [ScottCompact l]
+
+lemma upper_bound_of_compact (c : Chain (Lpo l)) (n : ℕ) :
+    ∃ i, (ωSup c).trunc n ≤ c i := by
+  let X := ((ωSup c).trunc n).nodes
+  have h : ∀ x : ↑X, ∃ i : ℕ,
+      x.val ∈ (c i).nodes ∧ ((ωSup c).trunc n).lab x ≤ (c i).lab x := by
+    intro ⟨x, hx, hlev⟩
+    simp only [Lpo.ωSup_nodes, Set.mem_iUnion] at hx
+    obtain ⟨i, hx⟩ := hx
+    have ⟨ℓ, h, hlab⟩ :=
+      ScottCompact.scottCompact ((ωSup c).lab x)
+        ((Chain.to_dSet c).image _ (lab_monotone x))
+        (by refine le_of_eq ?_; rfl)
+    obtain ⟨β, hβ, rfl⟩ := (Set.mem_image _ _ _).mp h
+    obtain ⟨j, rfl⟩ := Set.mem_range.mp hβ
+    refine ⟨max i j, ?_, ?_⟩
+    · exact (c.monotone' le_sup_left).nodes hx
+    · exact
+        ((Lpo.trunc_le _ _).lab _).trans
+          (hlab.trans
+            ((c.monotone' le_sup_right).lab _))
+  choose f hf using h
+  have hne : Nonempty ↑X := by
+    obtain ⟨r, hr, hrl⟩ := (ωSup c).property.rel.single_rooted
+    refine ⟨r, hr, ?_⟩; exact le_of_eq_of_le (lev_root hr hrl) bot_le
+  obtain ⟨k, hk⟩ := @Finite.exists_max _ _ ((ωSup c).trunc n).property hne _ f
+  refine ⟨f k, ?_⟩
+  have hnodes : X ⊆ (c (f k)).nodes := by
+    intro x hx; exact (c.monotone' (hk _)).nodes (hf ⟨x, hx⟩).1
+  constructor
+  · exact hnodes
+  · intro x hx y hrel; refine (Lpo.trunc_le _ _).downcl x hx y ?_
+    exact le_rel (le_ωSup _ _) hrel
+  · intro x hx y hy
+    exact
+      ((Lpo.trunc_le _ _).rel _ hx _ hy).trans
+        ((le_ωSup c _).rel _ (hnodes hx) _ (hnodes hy)).symm
+  · intro x; by_cases hx : x ∈ X
+    · exact (hf ⟨x, hx⟩).2.trans ((c.monotone' (hk ⟨x, hx⟩)).lab x)
+    · refine le_of_eq_of_le ?_ bot_le
+      exact ((ωSup c).trunc n).val.property.lab_dom _ hx
+  · intro x hx;
+    refine ((Lpo.trunc_le (ωSup c) n).form x hx).trans ?_
+    exact ((le_ωSup c _).form _ (hnodes hx)).symm
+  · intro x hx
+    rcases (Lpo.trunc_le _ n).succ _ ((le_ωSup c _).nodes hx) with
+        hx' | ⟨z, hbot, hrel⟩
+    · left; exact hx'
+    · right; refine ⟨z, hbot, ?_⟩
+      refine ((le_ωSup c _).rel _ ?_ _ hx).mpr hrel
+      exact (le_ωSup c _).downcl _ hx _ hrel
+
 -- Inspired by Lemma D.4 from CONCUR'25
-lemma lpo_chain_pom_chain_lub {l : Type} [DCPO l] [OrderBot l]
+lemma lpo_chain_pom_chain_lub
     {cl : Chain (Lpo l)} {cp : Chain (Pom l)}
-    (h : ∀ i, cl i ∈ cp i) (hc : ∀ x : l, ScottCompact x) :
+    (h : ∀ i, cl i ∈ cp i) :
     IsLUB (Set.range cp) (Quotient.mk' (ωSup cl)) := by
   constructor
   · intro p hp; obtain ⟨i, rfl⟩ := Set.mem_range.mpr hp
@@ -453,84 +506,28 @@ lemma lpo_chain_pom_chain_lub {l : Type} [DCPO l] [OrderBot l]
   · simp only [lowerBounds, upperBounds, Set.mem_range, forall_exists_index,
       forall_apply_eq_imp_iff, Set.mem_setOf_eq]; intro p hp
     refine pom_ge_iff_ge_fin ?_; intro n
-    have h : ∀ n, ∃ β : Lpo l, (ωSup cl).trunc n ≤ β ∧ p = Quotient.mk _ β := by
-      intro n
-      let α := ωSup cl
-      let N := { x ∈ α.nodes | α.rel.lev x ≤ n }
-      have h : ∀ x : ↑N, ∃ i, x.val ∈ (cl i).nodes ∧ (α.trunc n).lab x = (cl i).lab x := by
-        intro ⟨x, hx, hlev⟩
-        have ⟨ℓ, h, hlab⟩ := hc (α.lab x) ((Chain.to_dSet cl).image _ (lab_monotone x))
-          (by refine le_of_eq ?_; rfl)
-        obtain ⟨β, hβ, rfl⟩ := (Set.mem_image _ _ _).mp h
-        obtain ⟨i, rfl⟩ := Set.mem_range.mp hβ
-        refine ⟨i, ?_⟩; sorry
-      choose f hf using h
-      have hN : N.Finite := by
-        unfold N
-        refine (congrArg _ ?_).mp
-          (Set.finite_iUnion fun (k : Fin (n + 1)) ↦ α.property.rel.fin_lev k.val)
-        ext x; simp only [Set.mem_iUnion, Set.mem_setOf_eq, exists_and_left]
-        constructor
-        · rintro ⟨hx, k, hlev⟩; refine ⟨hx, le_of_eq_of_le hlev ?_⟩
-          simp [Nat.cast_lt, k.isLt]; sorry
-        · intro ⟨hx, hlev⟩
-          obtain ⟨k, hk⟩ := lev_finite hx
-          refine ⟨hx, ⟨k, ?_⟩, hk⟩; sorry
-      have hne : Nonempty ↑N := by
-        obtain ⟨r, hr, hrl⟩ := α.property.rel.single_rooted
-        refine ⟨r, hr, ?_⟩; exact le_of_eq_of_le (lev_root hr hrl) bot_le
-      obtain ⟨k, hk⟩ := @Finite.exists_max _ _ hN hne _ f
-      obtain ⟨β, rfl, hle⟩ := Pom.le_lpo sorry (le_of_eq_of_le (h (f k)).symm (hp (f k)))
-      refine ⟨β, le_trans ?_ hle, rfl⟩
-      have htr := α.trunc_le n
-      have hno : N = (α.trunc n).nodes := sorry
-      constructor
-      · intro x hx; sorry
-      · intro x hx y hxy; sorry
-      · intro x hx y hy; sorry
-      · intro x; sorry
-      · intro x hx; sorry
-      · intro x hx; sorry
-    choose f hf using h
-    refine pom_ge_iff_ge_fin ?_
-    intro n; refine ⟨(ωSup cl).trunc n, ?_, f n, (hf n).2, (hf n).1⟩
-    simp only [Pom.trunc, Quotient.lift_mk]
-    sorry
-
--- lemma pom_chain_to_lpo_chain_lub {l : Type} [DCPO l] [OrderBot l]
---     (c : Chain (Pom l)) (hc : ∀ x : l, ScottCompact x) :
---     IsLUB (Set.range c) (Quotient.mk' (ωSup (pom_chain_to_lpo_chain c))) :=
---   lpo_chain_pom_chain_lub (pom_chain_to_lpo_chain_mem c) hc
+    simp [Pom.trunc]
+    conv => lhs; rhs; exact Quotient.lift_mk _ _ _
+    obtain ⟨i, hi⟩ :=  upper_bound_of_compact cl n
+    refine le_trans ⟨(ωSup cl).trunc n, ?_, cl i, h i, hi⟩ (hp i)
+    refine Quotient.eq_iff_equiv.mpr ?_; rfl
 
 def lpo_chain_to_pom {l : Type} [PartialOrder l] [OrderBot l] (c : Chain (Lpo l)) :
     Chain (Pom l) := {
   toFun n := Quotient.mk _ (c n)
   monotone' i j hle := ⟨c i, rfl, c j, rfl, c.monotone' hle⟩
 }
-lemma lpo_chain_to_pom_lub {l : Type} [DCPO l] [OrderBot l]
-    (c : Chain (Lpo l)) (h : ∀ x : l, ScottCompact x) :
+lemma lpo_chain_to_pom_lub {l : Type} [DCPO l] [OrderBot l] [ScottCompact l]
+    (c : Chain (Lpo l)) :
     IsLUB (Set.range (lpo_chain_to_pom c)) (Quotient.mk _ (ωSup c)) :=
-  lpo_chain_pom_chain_lub (fun _ ↦ rfl) h
+  lpo_chain_pom_chain_lub (fun _ ↦ rfl)
 
-instance {l : Type} [DCPO l] [OrderBot l] (hc : ∀ x : l, ScottCompact x) :
+instance {l : Type} [DCPO l] [OrderBot l] [ScottCompact l] :
     OmegaCompletePartialOrder (Pom l) where
   ωSup c := Quotient.mk' (ωSup (exists_lpo_chain_of_pom_chain c).choose)
   le_ωSup c i := by
-    refine (lpo_chain_pom_chain_lub (exists_lpo_chain_of_pom_chain c).choose_spec hc).1 ?_
+    refine (lpo_chain_pom_chain_lub (exists_lpo_chain_of_pom_chain c).choose_spec).1 ?_
     exact Set.mem_range.mpr ⟨i, rfl⟩
   ωSup_le c p h := by
-    refine (lpo_chain_pom_chain_lub (exists_lpo_chain_of_pom_chain c).choose_spec hc).2 ?_
+    refine (lpo_chain_pom_chain_lub (exists_lpo_chain_of_pom_chain c).choose_spec).2 ?_
     intro q hq; obtain ⟨i, rfl⟩ := Set.mem_range.mpr hq; exact h i
-
--- lemma dset_to_chain {l : Type} [LE l] (d : DSet (Pom l)) :
---     ∃ c : OmegaCompletePartialOrder.Chain (Pom l),
---       c.to_dSet.dSup
--- STRATEGY
---  1. If we truncate every element in the directed set to level n,
---     then there are only finitely many element
---  2. Let c i := an upper bound of all those truncated elements
---  3. Since Pom is ω-complete, we can get the sup of that chain
---  4.
-
--- instance {l : Type} [DCPO l] [OrderBot l] : DCPO (Pom l) where
---   dSup d := sorry

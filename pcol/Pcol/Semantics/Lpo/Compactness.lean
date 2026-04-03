@@ -2,7 +2,7 @@ import Pcol.Semantics.Lpo.FinApprox
 
 lemma way_below_finnaprox {l : Type}
     [DCPO l] [OrderBot l]
-    {α β : Lpo l} (h : ∀ x, ScottCompact (β.lab x)) :
+    {α β : Lpo l} (h : ∀ x, IsScottCompact (β.lab x)) :
     α ≪ β ↔ α ∈ β.finapprox := by
   constructor
   · intro h
@@ -45,16 +45,12 @@ lemma way_below_finnaprox {l : Type}
       · exact le_of_eq_of_le (α.property.lab_dom _ hx) bot_le
 
 lemma lpo_fin_compact {l : Type} [DCPO l] [OrderBot l] (α : Lpofin l)
-    (h : ∀ x, ScottCompact (α.lab x)) : ScottCompact α.val :=
+    (h : ∀ x, IsScottCompact (α.lab x)) : IsScottCompact α.val :=
   (way_below_finnaprox h).mpr ⟨le_refl _, α.property⟩
 
 def ext {l X : Type} [PartialOrder l] [OrderBot l] [DCPO X]
     (f : Lpofin l → X) (hf : Monotone f) (α : Lpo l) : X :=
   (α.finapprox'.image _ hf).dSup
-
--- This is pretty strong, but I'm not sure of a better way to express the property
-def CompactType (X : Type) [DCPO X] : Prop :=
-  ∀ x : X, ScottCompact x
 
 lemma ext_monotone {l X : Type} [PartialOrder l] [OrderBot l] [DCPO X]
     {f : Lpofin l → X} (hf : Monotone f) : Monotone (ext f hf) := by
@@ -62,19 +58,22 @@ lemma ext_monotone {l X : Type} [PartialOrder l] [OrderBot l] [DCPO X]
   intro x hx; refine DSet.le_dSup ?_
   exact DSet.image_mono (Lpo.finapprox'_mono hle) hx
 
-theorem ext_continuous {l X : Type} [DCPO X] [DCPO l] [OrderBot l]
-    {f : Lpofin l → X} (hf : Monotone f) (hc : CompactType l) :
+theorem ext_continuous {l X : Type}
+    [DCPO X] [DCPO l] [OrderBot l] [ScottCompact l]
+    {f : Lpofin l → X} (hf : Monotone f) :
     DSet.ScottContinuous (ext_monotone hf) := by
   intro d; unfold ext
   refine le_antisymm (DSet.dSup_le ?_) ?_
   · rintro _ ⟨α, hα, rfl⟩
     obtain ⟨β, hβ, hle⟩ :=
-      (way_below_finnaprox fun x ↦ hc (Lpo.lab _ x)).mpr
+      (way_below_finnaprox fun x ↦
+        ScottCompact.scottCompact (Lpo.lab _ x)).mpr
        ((Lpo.finapprox_convert (α' := α)).mpr hα)
         d (le_refl _)
     refine le_trans ?_ (DSet.le_dSup ?_) (b := (β.finapprox'.image f hf).dSup)
     · obtain ⟨γ, hγ, hαγ⟩ :=
-        (way_below_finnaprox fun x ↦ hc (Lpo.lab _ x)).mpr
+        (way_below_finnaprox fun x ↦
+          ScottCompact.scottCompact (Lpo.lab _ x)).mpr
           ⟨hle, α.property⟩
           β.finapprox
           (le_of_eq Lpo.sup_finapprox_eq_self)

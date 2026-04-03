@@ -85,11 +85,14 @@ def way_below {X : Type} [DCPO X] (x y : X) : Prop :=
       ∃ z ∈ d, x ≤ z
 infix:30 "≪" => way_below
 
-def ScottCompact {X : Type} [DCPO X] (x : X) : Prop := x ≪ x
+def IsScottCompact {X : Type} [DCPO X] (x : X) : Prop := x ≪ x
 
 lemma bot_compact {X : Type} [DCPO X] [OrderBot X] :
-    ScottCompact (⊥ : X) := by
+    IsScottCompact (⊥ : X) := by
   intro ⟨_, _, ⟨z, hz⟩⟩ _; exact ⟨z, hz, bot_le⟩
+
+class ScottCompact (X : Type) [DCPO X] where
+  scottCompact (x : X) : IsScottCompact x
 
 namespace Chain
 
