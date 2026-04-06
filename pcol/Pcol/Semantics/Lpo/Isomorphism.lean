@@ -261,9 +261,16 @@ lemma perm_extend_to {X X' Y : Set Node} (Z : Set Node) (e : X ≃ Y)
           ((Set.mem_diff _).mp (Subtype.coe_prop _)).1⟩
     left_inv := by
       intro x; by_cases hx : x.val ∈ X
-      · simp [hx]
-      · sorry
-    right_inv := sorry
+      · simp only [hx, ↓reduceDIte, Set.subset_union_left, Set.coe_inclusion, Subtype.coe_prop,
+          Subtype.coe_eta, Equiv.symm_apply_apply]
+      · simp only [hx, ↓reduceDIte, Set.subset_union_right, Set.coe_inclusion, Subtype.coe_eta,
+          Equiv.symm_apply_apply, dite_eq_right_iff]
+        intro h; exfalso; exact Set.disjoint_left.mp hd h (hZ (Subtype.coe_prop _))
+    right_inv := by
+      intro x; by_cases hx : x.val ∈ Y
+      · simp only [hx, ↓reduceDIte, Subtype.coe_prop, Subtype.coe_eta, Equiv.apply_symm_apply]
+      · simp only [hx, ↓reduceDIte, Subtype.coe_eta, Equiv.apply_symm_apply, dite_eq_right_iff]
+        intro h; exfalso; exact ((Set.mem_diff _).mp (Subtype.coe_prop _)).2 h
   }
   constructor
   · intro x; simp only [dite_eq_ite, Equiv.coe_fn_mk, Subtype.coe_prop, ↓reduceDIte,

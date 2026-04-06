@@ -36,6 +36,15 @@ def dSup_le {X : Type} [DCPO X] {d : DSet X} {x : X} :
     (∀ y ∈ d, y ≤ x) → d.dSup ≤ x := by
   intro hx; exact (DCPO.lubOfDirected d).2 hx
 
+def singleton {X : Type} [Preorder X] (x : X) : DSet X := {
+  val := {x}
+  property := by
+    constructor
+    · simp only [DirectedOn, Set.mem_singleton_iff, exists_eq_left, forall_eq, and_self]
+      exact le_refl _
+    · exact ⟨x, Set.mem_singleton _⟩
+}
+
 def image {X Y : Type} [Preorder X] [Preorder Y] (d : DSet X) (f : X → Y)
     (hf : Monotone f) : DSet Y := {
   val := f '' d.val
@@ -53,6 +62,13 @@ def image {X Y : Type} [Preorder X] [Preorder Y] (d : DSet X) (f : X → Y)
 lemma image_mem {X Y : Type} [Preorder X] [Preorder Y] {d : DSet X} {x : X}
     {f : X → Y} {hf : Monotone f} (h : x ∈ d) : f x ∈ d.image f hf := by
   exact Set.mem_image_of_mem _ h
+
+lemma mem_image {X Y : Type} [Preorder X] [Preorder Y] {d : DSet X} {y : Y}
+    {f : X → Y} {hf : Monotone f} :
+    y ∈ d.image f hf ↔ ∃ x ∈ d, f x = y := by
+  constructor
+  · intro h; exact (Set.mem_image f _ y).mp h
+  · rintro ⟨x, hx, rfl⟩; exact image_mem hx
 
 lemma image_mono {X Y : Type} [Preorder X] [Preorder Y] {f : X → Y}
     {hf : Monotone f} : Monotone (fun d : DSet X ↦ d.image f hf) := by
@@ -73,6 +89,24 @@ lemma finite_upper_bound {X : Type} [Preorder X] {d : DSet X} {s : Set X}
     rcases Set.mem_insert_iff.mp hγ' with rfl | ht
     · exact hαγ
     · exact (hub _ ht).trans hβγ
+
+def insert {X : Type} [Preorder X] {x : X} {d d' : DSet X}
+    (hfin : d.val.Finite) (hsub : d.val ⊆ d'.val) (hmem : x ∈ d') : DSet X :=
+have hu := finite_upper_bound (Set.insert_subset hmem hsub) (hfin.insert x)
+{
+  val := (d.val.insert x).insert hu.choose
+  property := by
+    constructor
+    · intro y hy z hz
+      refine ⟨hu.choose, Set.mem_insert _ _, ?_, ?_⟩ <;>
+      rcases Set.eq_or_mem_of_mem_insert hy with rfl | hy <;>
+        rcases Set.eq_or_mem_of_mem_insert hz with rfl | hz
+      all_goals {
+        try (exact le_refl _)
+        try (refine hu.choose_spec.2 _ ?_; assumption)
+      }
+    · exact ⟨hu.choose, Set.mem_insert _ _⟩
+}
 
 def ScottContinuous {X Y : Type} [DCPO X] [DCPO Y] {f : X → Y} (hf : Monotone f): Prop :=
   ∀ d : DSet X, f d.dSup = (d.image f hf).dSup

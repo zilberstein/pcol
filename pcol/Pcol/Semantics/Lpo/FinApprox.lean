@@ -357,6 +357,36 @@ lemma trunc_mono {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {n m : �
         refine ⟨w, hw, hwx, ?_, hlev⟩
         exact (le_of_lt (lev_mono hwx)).trans hlev
 
+lemma trunc_le_trunc {l : Type} [Preorder l] [OrderBot l] {α β : Lpo l} {n : ℕ}
+    (h : α.trunc n ≤ β) : α.trunc n ≤ β.trunc n := by
+  have hsub : (α.trunc n).nodes ⊆ (β.trunc n).nodes := by
+    intro x hx; refine ⟨h.nodes hx, ?_⟩
+    have := lev_isotone h hx; rw [← this]
+    have := lev_isotone (trunc_le α n) hx; rw [this]
+    exact hx.2
+  constructor
+  · exact hsub
+  · intro x hx y hrel; exact h.downcl x hx y (le_rel (trunc_le β n) hrel)
+  · intro x hx y hy
+    refine (h.rel _ hx _ hy).trans ((trunc_le _ _).rel _ ?_ _ ?_).symm <;>
+      refine hsub ?_ <;> assumption
+  · intro x; by_cases hx : x ∈ (α.trunc n).nodes
+    · by_cases hlev : β.rel.lev x < n
+      · conv => rhs; exact if_pos hlev
+        exact h.lab x
+      · have := lev_isotone h hx ; rw [← this] at hlev
+        have := lev_isotone (trunc_le α n) hx; rw [this] at hlev
+        exact le_of_eq_of_le (if_neg hlev) bot_le
+    · exact le_of_eq_of_le ((α.trunc n).val.property.lab_dom _ hx) bot_le
+  · intro x hx
+    exact (h.form _ hx).trans ((trunc_le _ _).form _ (hsub hx)).symm
+  · intro x hx
+    rcases h.succ x hx.1 with hx' | ⟨z, hz, hrel⟩
+    · left; exact hx'
+    · right; refine ⟨z, hz, ((trunc_le _ _).rel _ ?_ _ ?_).mpr hrel⟩
+      · exact hsub hz.1
+      · exact hx
+
 lemma lpofin_level_bounded {l : Type} [Bot l] (α : Lpofin l) :
     exists n : ℕ, ∀ x ∈ α.nodes, α.rel.lev x ≤ n := by
   choose f hf using fun (x : ↑α.nodes) ↦ @lev_finite l _ α x.val x.property
