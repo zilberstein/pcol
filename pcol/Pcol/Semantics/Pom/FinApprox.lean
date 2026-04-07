@@ -12,9 +12,18 @@ def Pomfin (l : Type) [Bot l] : Type := Quotient (@Lpofin.instSetoid l _)
 namespace Pomfin
 
 def to_pom {l : Type} [Bot l] (p : Pomfin l) : Pom l :=
-  p.lift
-    (fun a => Quotient.mk' a.val)
-    (fun _ _ heq => Quotient.sound heq)
+  p.map Subtype.val (fun _ _ heq ↦ heq)
+
+lemma to_pom_injective {l : Type} [Bot l] : Function.Injective (@to_pom l _) := by
+  intro p q heq
+  obtain ⟨α, rfl⟩ := p.exists_rep
+  obtain ⟨β, rfl⟩ := q.exists_rep
+  simp [to_pom, Quotient.map_mk] at heq
+  have : Pom.mk (α.val) = Pom.mk (β.val) := by
+    refine (Quotient.map_mk Subtype.val _ _).symm.trans (heq.trans ?_)
+    exact Quotient.map_mk _ _ _
+  refine Quotient.eq.mpr ?_; simp [Lpofin.instSetoid, Lpofin.IsIsomorphic]
+  exact Quotient.eq.mp this
 
 instance {l : Type} [Bot l] : Coe (Pomfin l) (Pom l) where
   coe := Pomfin.to_pom
@@ -23,9 +32,10 @@ instance {l : Type} [LE l] [Bot l] : LE (Pomfin l) where
   le p q := p.to_pom ≤ q.to_pom
 
 instance {l : Type} [PartialOrder l] [OrderBot l] : PartialOrder (Pomfin l) where
-  le_trans p q r hpq hqr := sorry
-  le_refl := sorry
-  le_antisymm := sorry
+  le_refl _ := @le_refl (Pom l) _ _
+  le_trans _ _ _ := @le_trans (Pom l) _ _ _ _
+  le_antisymm _ _ hpq hqp :=
+    to_pom_injective (@le_antisymm (Pom l) _ _ _ hpq hqp)
 
 lemma to_pom_mono {l : Type} [PartialOrder l] [OrderBot l] :
     Monotone (@Pomfin.to_pom l _) := fun _ _ hle ↦ hle
@@ -59,12 +69,13 @@ lemma lpo_trunc_mem {l : Type} [Preorder l] [OrderBot l] {α : Lpo l} {p : Pom l
 
 end Pom
 
-private structure TreeNode {l : Type} [Bot l] [LE l] (a b : Lpo l) : Type where
+structure TreeNode {l : Type} [Bot l] [LE l] (a b : Lpo l) : Type where
   n : ℕ
-  X : Set Node
   -- Perm is a permutation
-  perm : (a.trunc n).nodes ≃ X
-  le_b : (a.trunc n).val.permute perm ≤ b
+  f : Node → Node
+  f_inj : (a.trunc n).nodes.InjOn f
+  f_dom : ∀ x ∉ (a.trunc n).nodes, f x = default
+  le_b : (a.trunc n).val.permute (Equiv.Set.imageOfInjOn f _ f_inj) ≤ b
 
 attribute [ext] TreeNode
 
@@ -74,104 +85,169 @@ def dom {l : Type} [Bot l] [LE l] {a b : Lpo l} (t : TreeNode a b) : Set Node :=
   (a.trunc t.n).val.nodes
 
 def range {l : Type} [Bot l] [LE l] {a b : Lpo l} (t : TreeNode a b) : Set Node :=
-  t.X
+  t.f '' t.dom
 
-noncomputable def root {l : Type} [LE l] [OrderBot l] (a b : Lpo l) : TreeNode a b :=
+noncomputable def perm {l : Type} [Bot l] [LE l] {a b : Lpo l} (t : TreeNode a b) : t.dom ≃ t.range :=
+  Equiv.Set.imageOfInjOn t.f _ t.f_inj
+
+lemma f_eq_perm {l : Type} [Bot l] [LE l] {a b : Lpo l} {t : TreeNode a b} {x : Node}
+    (hx : x ∈ t.dom) : t.f x = t.perm ⟨x, hx⟩ := rfl
+
+open Classical
+
+namespace Equiv
+
+noncomputable def to_f {l : Type} [Bot l] [LE l] {a : Lpo l} {X : Set Node} {n : ℕ}
+    (e : (a.trunc n).nodes ≃ X) : Node → Node :=
+  fun x ↦ if hx : x ∈ (a.trunc n).nodes then e ⟨_, hx⟩ else default
+
+noncomputable def to_treeNode {l : Type} [Bot l] [LE l] {a b : Lpo l} {X : Set Node} {n : ℕ}
+    (e : (a.trunc n).nodes ≃ X) (hle : (a.trunc n).permute e ≤ b) : TreeNode a b := {
+  n := n
+  f := to_f e
+  f_inj := by
+    intro x hx y hy heq
+    have := (dif_pos hx).symm.trans (heq.trans (dif_pos hy))
+    exact Subtype.ext_iff.mp (e.injective (Subtype.ext this))
+  f_dom := fun _ hx ↦ dif_neg hx
+  le_b := by
+    refine le_of_eq_of_le ?_ hle
+    refine Lpo.permute_range_eq ?_ ?_
+    · ext x; constructor
+      · intro hx; obtain ⟨x, hx', rfl⟩ := (Set.mem_image _ _ _).mp hx
+        conv => rhs; exact dif_pos hx'
+        exact Subtype.coe_prop _
+      · intro hx; refine (Set.mem_image _ _ _).mpr ⟨e.symm ⟨_, hx⟩, ?_, ?_⟩
+        · exact Subtype.coe_prop _
+        · refine (dif_pos (Subtype.coe_prop _)).trans ?_
+          simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+    · intro x; exact dif_pos x.property
+}
+
+end Equiv
+
+lemma trunc_0_permute {l : Type} [Bot l] {a b : Lpo l} {X : Set Node} {e : (a.trunc 0).nodes ≃ X}
+    (h : X ⊆ (b.trunc 0).nodes) : (a.trunc 0).val.permute e = b.trunc 0 := by
+  have hy {x} : (e.symm x).val ∈ a.nodes := (e.symm x).property.1
+  have hroot {x} : ∀ z ∈ a.nodes, (e.symm x).val ≠ z → a.rel (e.symm x).val z := by
+    intro z hz hne; refine lev_zero hy ?_ _ hz hne
+    exact bot_unique (e.symm x).property.2
+  have heq : X = (b.trunc 0).nodes := by
+    refine le_antisymm h ?_
+    intro x hx
+    have ⟨y, hy⟩ : ∃ y, y ∈ X := by
+      have ⟨z, hz, hroot⟩ := a.property.rel.single_rooted
+      exact ⟨e ⟨z, hz, le_of_eq (lev_root hz hroot)⟩, Subtype.coe_prop _⟩
+    have : x = y := by
+      by_contra hc; have := lev_zero hx.1 (bot_unique hx.2) _ (h hy).1 hc
+      have :=
+        lt_of_eq_of_lt
+          (bot_unique hx.2).symm
+          (lt_of_lt_of_le (lev_mono this) (h hy).2)
+      simp only [bot_eq_zero', Nat.cast_zero, lt_self_iff_false] at this
+    subst this; exact hy
+  subst heq; clear h
+  simp only [Lpo.trunc, Lpo.trunc_base, Lpo.permute]; ext1
+  · rfl
+  · ext x y; simp only [Lpo.rel, Nat.cast_zero, ENat.not_lt_zero, nonpos_iff_eq_zero]
+    constructor; all_goals {
+      try (intro ⟨_, _, hrel, hlx, hly⟩)
+      try (intro ⟨hrel, hlx, hly⟩)
+      exfalso
+      have := lt_of_eq_of_lt hlx.symm (lt_of_lt_of_eq (lev_mono hrel) hly)
+      exact (lt_self_iff_false _).mp this
+    }
+  · simp only [Lpo.lab, Nat.cast_zero, ENat.not_lt_zero, nonpos_iff_eq_zero, ↓reduceIte,
+      dite_eq_ite, ite_self]
+  · ext x v; simp only [Lpo.form, Lpofin.nodes, Lpo.nodes]; constructor
+    · rintro ⟨hx, _⟩
+      have hroot := lev_zero hx.1 (bot_unique hx.2)
+      conv => exact congrFun ((if_pos hx.2).trans (form_root_true hx.1 hroot)) _
+      exact True.intro
+    · intro hform; by_cases hx : x ∈ (b.trunc 0).nodes
+      · refine ⟨hx, ?_⟩
+        conv => exact congrFun ((if_pos (e.symm _).property.2).trans (form_root_true hy hroot)) _
+        exact True.intro
+      · refine False.elim ((congrFun (if_neg ?_) _).mp hform)
+        intro hc; conv at hform => exact congrFun (if_pos hc) _
+        have h := (b.property.form_dom _).mp ⟨_, hform⟩
+        exact not_and.mp hx h hc
+
+noncomputable def root {l : Type} [Preorder l] [OrderBot l] (a b : Lpo l) : TreeNode a b :=
   let x := a.property.rel.single_rooted.choose
   let y := b.property.rel.single_rooted.choose
   {
     n := 0
-    X := {y}
-    perm := {
-      toFun _ := ⟨y, Set.mem_singleton _⟩
-      invFun _ := ⟨x, by {
-        have ⟨hx, hroot⟩ := Classical.choose_spec a.property.rel.single_rooted
-        refine ⟨hx, le_of_eq ?_⟩; exact lev_root hx hroot
-      }⟩
-      left_inv z := by
-        have ⟨hx, hroot⟩ := Classical.choose_spec a.property.rel.single_rooted
-        ext; simp only
-        refine not_not.mp ((hroot _ z.property.1).mt ?_); intro hrel
-        have :=
-          lt_of_eq_of_lt (lev_root hx hroot).symm
-            (lt_of_lt_of_le (lev_mono hrel) z.property.2)
-        simp only [Nat.cast_zero, lt_self_iff_false] at this
-      right_inv z := by ext; symm; exact Set.mem_singleton_iff.mp z.property
-    }
+    f z := if x = z then y else default
+    f_inj := by
+      intro u hu v hv _; refine Eq.trans (b := x) ?_ (Eq.symm ?_); all_goals {
+        by_contra h; have ⟨hx, hroot⟩ := a.property.rel.single_rooted.choose_spec
+        refine ENat.not_lt_zero (a.rel.lev x) ?_
+        try (exact lt_of_lt_of_le (lev_mono (hroot _ hu.1 (Ne.symm h))) hu.2)
+        try (exact lt_of_lt_of_le (lev_mono (hroot _ hv.1 (Ne.symm h))) hv.2)
+      }
+    f_dom := by
+      intro z hz; refine if_neg ?_
+      rintro rfl; have ⟨hx, hroot⟩ := a.property.rel.single_rooted.choose_spec
+      exact hz ⟨hx, le_of_eq (lev_root hx hroot)⟩
     le_b := by
-      simp only [Lpo.trunc, Lpo.trunc_base, Lpo.permute]; constructor
-      · simp only [Lpo.nodes, Set.singleton_subset_iff]
-        exact b.property.rel.single_rooted.choose_spec.1
-      · simp only [Rel.is_down_closed, Lpo.nodes, Set.mem_singleton_iff, forall_eq]
-        intro z hrel; by_contra hne
-        have ⟨hz, hy⟩ := b.property.rel_dom hrel
-        have := b.property.rel.single_rooted.choose_spec.2 _ hz (Ne.symm hne)
-        exact hne (b.property.rel.antisymm hrel this)
-      · simp only [Lpo.nodes, Set.mem_singleton_iff, Lpo.rel, Nat.cast_zero, ENat.not_lt_zero,
-          nonpos_iff_eq_zero, Set.mem_setOf_eq, Set.coe_setOf, Equiv.coe_fn_symm_mk, and_self,
-          exists_and_left, exists_prop, eq_iff_iff, forall_eq, true_and]
-        constructor
-        · intro ⟨hrel, _⟩; exfalso; exact a.property.rel.irrefl _ hrel
-        · intro hrel; exfalso; exact b.property.rel.irrefl _ hrel
-      · simp only [Lpo.lab, Set.mem_singleton_iff, Nat.cast_zero, ENat.not_lt_zero,
-          nonpos_iff_eq_zero, Equiv.coe_fn_symm_mk, ↓reduceIte, dite_eq_ite, ite_self]
-        intro z; exact bot_le
-      · simp only [Lpo.nodes, Set.mem_singleton_iff, Lpo.form, Nat.cast_zero, ENat.not_lt_zero,
-          nonpos_iff_eq_zero, Set.mem_setOf_eq, Set.coe_setOf, Equiv.coe_fn_symm_mk, exists_and_left,
-          Subtype.exists, exists_prop, exists_eq_left, forall_eq, true_and]
-        sorry
-      · simp only [Lpo.nodes, Set.mem_singleton_iff, Lpo.bots, Lpo.lab, Lpo.rel, Nat.cast_zero,
-        ENat.not_lt_zero, nonpos_iff_eq_zero, Set.mem_setOf_eq, Set.coe_setOf, Equiv.coe_fn_symm_mk,
-        ↓reduceIte, dite_eq_ite, ite_self, and_true, Set.setOf_eq_eq_singleton, exists_eq_left]
-        intro z hz; by_cases heq : z = y
-        · left; exact heq
-        · right; exact b.property.rel.single_rooted.choose_spec.2 _ hz (Ne.symm heq)
+      refine le_of_eq_of_le (trunc_0_permute ?_) (Lpo.trunc_le b 0)
+      intro z hz; obtain ⟨z, hz', rfl⟩ := (Set.mem_image _ _ _).mp hz
+      have : x = z := by
+        by_contra h; have ⟨hx, hroot⟩ := a.property.rel.single_rooted.choose_spec
+        refine h (a.property.rel.antisymm ?_ ?_)
+        · exact hroot _ hz'.1 h
+        · refine lev_zero hz'.1 ?_ _ hx (Ne.symm h)
+          exact bot_unique hz'.2
+      subst this
+      conv => rhs; exact if_pos rfl
+      have ⟨hy, hroot⟩ := b.property.rel.single_rooted.choose_spec
+      exact ⟨hy, le_of_eq (lev_root hy hroot)⟩
   }
 
 instance {l : Type} [LE l] [Bot l] {a b : Lpo l} : LE (TreeNode a b) where
   le t u :=
     t.n ≤ u.n ∧
-    Lpo.PermExt t.perm u.perm
+    ∀ x ∈ t.dom, t.f x = u.f x
 
-instance {l : Type} [LE l] [Bot l] {a b: Lpo l} : Preorder (TreeNode a b) where
+instance {l : Type} [PartialOrder l] [OrderBot l] {a b: Lpo l} : Preorder (TreeNode a b) where
   le_refl t := by
-    refine ⟨le_refl _, ⟨le_refl _, ?_⟩⟩
-    · intro x; rfl
+    refine ⟨le_refl _, ?_⟩; intro _ _; rfl
   le_trans t u v := by
-    intro ⟨hn₁, ⟨hno₁, hp₁⟩⟩ ⟨hn₂, ⟨hno₂, hp₂⟩⟩
-    refine ⟨le_trans hn₁ hn₂, ⟨le_trans hno₁ hno₂, ?_⟩⟩
-    intro x; exact (hp₁ x).trans (hp₂ _)
+    intro ⟨hn₁, hf₁⟩ ⟨hn₂, hf₂⟩
+    refine ⟨le_trans hn₁ hn₂, ?_⟩
+    intro x hx; refine (hf₁ x hx).trans (hf₂ _ ?_)
+    exact (Lpo.trunc_mono (le_refl _) hn₁).nodes hx
 
-instance {l : Type} [LE l] [Bot l] {a b : Lpo l} : PartialOrder (TreeNode a b) where
+instance {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} : PartialOrder (TreeNode a b) where
   le_antisymm t u := by
     intro ⟨hn₁, hex₁⟩ ⟨hn₂, hex₂⟩
     have hn := le_antisymm hn₁ hn₂; ext1
     · exact hn
-    · ext x; constructor <;> intro hx
-      · have := hex₁.extend (t.perm.symm ⟨_, hx⟩)
-        simp only [Equiv.apply_symm_apply] at this; rw [this]
-        exact Subtype.coe_prop _
-      · have := hex₂.extend (u.perm.symm ⟨_, hx⟩)
-        simp only [Equiv.apply_symm_apply] at this; rw [this]
-        exact Subtype.coe_prop _
-    · refine heq_of_cast_eq ?_ ?_
-      · rw [hn]; have := le_antisymm hex₁.cod_sub hex₂.cod_sub; rw [this]
-      · ext x; refine Eq.trans ?_ (hex₂.extend x).symm
-        -- refine congrArg Subtype.val ?_ -- (congr ?_ ?_))
-        -- have {h} : cast h t.perm = t.perm := cast_eq _ _
-        -- rw [this _]
-        sorry
-
+    · ext x; by_cases hx : x ∈ t.dom
+      · exact hex₁ _ hx
+      · rw [t.f_dom _ hx]; symm; refine u.f_dom _ ?_
+        rw [← hn]; exact hx
 
 lemma le_and_n_eq {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b}
     (hle : t ≤ u) (hn : t.n = u.n) : t = u := by
-  refine le_antisymm hle ⟨?_, ⟨?_, ?_⟩⟩
-  · exact le_of_eq hn.symm
-  · exact (Lpo.trunc_mono (le_refl a) (le_of_eq hn.symm)).nodes
-  · intro x; exact (hle.2.extend ⟨x, _⟩).symm
+  refine le_antisymm hle ⟨le_of_eq hn.symm, ?_⟩
+  intro x hx; unfold TreeNode.dom at hx; rw [← hn] at hx
+  exact (hle.2 _ hx).symm
+
+lemma le_iff  {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b} :
+    t ≤ u ↔ t.n ≤ u.n ∧ Lpo.PermExt t.perm u.perm := by
+  constructor
+  · intro hle; refine ⟨hle.1, ?_, ?_⟩
+    · exact (Lpo.trunc_mono (le_refl _) hle.1).nodes
+    · intro x; rw [← f_eq_perm, ← f_eq_perm]
+      exact hle.2 _ x.property
+  · intro ⟨hn, hex⟩; refine ⟨hn, ?_⟩
+    intro x hx; have := hex.extend ⟨_, hx⟩
+    rw [← f_eq_perm, ← f_eq_perm] at this; exact this
 
 lemma lt_iff {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b} :
-  t < u ↔ t.n < u.n ∧ Lpo.PermExt t.perm u.perm := by
+  t < u ↔ t.n < u.n ∧ ∀ x ∈ t.dom, t.f x = u.f x := by
     constructor
     · intro ⟨⟨hn, hex⟩, hc⟩; refine ⟨?_, hex⟩
       · refine Nat.lt_iff_le_and_not_ge.2 ⟨hn, fun h => hc ?_⟩
@@ -181,25 +257,33 @@ lemma lt_iff {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeN
     · intro ⟨hn, hex⟩; refine ⟨⟨Nat.le_of_lt hn, hex⟩, fun hc => ?_⟩
       have h := hc.1; linarith
 
-def cover_of {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b}
+noncomputable def cover_of {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b}
     (hlt : t < u) : TreeNode a b :=
-have hle := Lpo.trunc_mono (le_refl a) (Nat.succ_le_of_lt (lt_iff.mp hlt).1)
-{
-  n := t.n + 1
-  X := _
-  perm := Lpo.perm_subset u.perm hle.nodes
-  le_b := by
-    refine le_trans ?_ u.le_b
-    exact Lpo.permute_monotone hle Lpo.perm_subset_ext
-}
+  have hle := Lpo.trunc_mono (le_refl a) (Nat.succ_le_of_lt (lt_iff.mp hlt).1)
+  {
+    n := t.n + 1
+    f x := if x ∈ (a.trunc (t.n + 1)).nodes then u.f x else default
+    f_inj := by
+      intro x hx y hy heq
+      refine u.f_inj ?_ ?_ ?_
+      · exact hle.nodes hx
+      · exact hle.nodes hy
+      · exact ((if_pos hx).symm.trans heq).trans (if_pos hy)
+    f_dom := by intro x hx; refine if_neg hx
+    le_b := by
+      refine le_trans ?_ u.le_b
+      refine Lpo.permute_monotone hle ⟨hle.nodes, ?_⟩
+      intro ⟨x, hx⟩; simp only [DFunLike.coe, Equiv.Set.imageOfInjOn, Equiv.toFun_as_coe,
+        ite_eq_left_iff, not_le]
+      intro hlev; exfalso; exact hlev hx
+  }
 
 lemma cover_is_cover {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b}
     (hlt : t < u) : t ⋖ cover_of hlt := by
-  refine ⟨lt_iff.mpr ⟨?_, ?_, ?_⟩, ?_⟩
+  refine ⟨lt_iff.mpr ⟨?_, ?_⟩, ?_⟩
   · exact Nat.lt_succ_self _
-  · refine (Lpo.trunc_mono (le_refl _) ?_).nodes; exact Nat.le_succ _
-  · intro x; refine ((le_of_lt hlt).2.2 x).trans ?_
-    symm; simp only [cover_of]; exact Lpo.perm_subset_ext.2 _
+  · intro x hx; refine ((le_of_lt hlt).2 x hx).trans (if_pos ?_).symm
+    exact (Lpo.trunc_mono (le_refl _) (Nat.le_succ _)).nodes hx
   · intro v htv hc
     have h₁ := (lt_iff.mp htv).1
     have h₂ := (lt_iff.mp hc).1; simp only [cover_of] at h₂
@@ -209,13 +293,13 @@ lemma cover_le {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : Tre
     (hlt : t < u) : cover_of hlt ≤ u := by
   unfold cover_of; constructor
   · exact Nat.succ_le_of_lt (lt_iff.mp hlt).1
-  · simp only; exact Lpo.perm_subset_ext
+  · simp only [TreeNode.dom]; intro x hx; exact if_pos hx
 
 instance {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} : IsStronglyAtomic (TreeNode a b) where
   exists_covBy_le_of_lt _ _ hlt := ⟨cover_of hlt, cover_is_cover hlt, cover_le hlt⟩
 
 lemma cov_by_iff {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b} :
-  t ⋖ u ↔ t.n + 1 = u.n ∧ Lpo.PermExt t.perm u.perm := by
+  t ⋖ u ↔ t.n + 1 = u.n ∧ ∀ x ∈ t.dom, t.f x = u.f x := by
   constructor
   · intro ⟨hlt, hnlt⟩; constructor
     · refine le_antisymm ?_ ?_
@@ -223,7 +307,7 @@ lemma cov_by_iff {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : T
       · refine le_of_not_lt fun hc ↦ ?_
         have := lt_iff.mpr.mt (hnlt (cover_is_cover hlt).1)
         simp only [not_and, cover_of] at this
-        refine this hc Lpo.perm_subset_ext
+        refine this hc ?_; intro x hx; exact if_pos hx
     · have ⟨⟨_, hf⟩, _⟩ := hlt; exact hf
   · intro ⟨hn, hp⟩; refine ⟨lt_iff.mpr ⟨by linarith, hp⟩, ?_⟩
     · intro v hv hu
@@ -231,43 +315,41 @@ lemma cov_by_iff {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : T
       have hn₂ := (lt_iff.mp hu).1
       linarith
 
-def covBy_injection {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} (t : TreeNode a b)
+noncomputable def covBy_injection {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} (t : TreeNode a b)
     (u : {u // t ⋖ u})
     (x : { x // x ∈ a.nodes ∧  a.rel.lev x ≤ t.n + 1 }) :
     { x // x ∈ b.nodes ∧ b.rel.lev x ≤ t.n + 1} :=
-  ⟨u.val.perm ⟨x.val, by {
-    have := (cov_by_iff.mp u.property).1; rw [← this]; exact x.property
-  }⟩, by {
+  ⟨u.val.f x.val, by {
+    have hu : x.val ∈ u.val.dom := by
+      refine (Lpo.trunc_mono (le_refl _) ?_).nodes x.property
+      exact Nat.succ_le_of_lt (lt_iff.mp u.property.1).1
     constructor
-    · refine u.val.le_b.nodes ?_; exact Subtype.coe_prop _
+    · refine u.val.le_b.nodes ?_; exact (Set.mem_image _ _ _).mpr ⟨x, hu, rfl⟩
     · refine le_of_eq_of_le ?_ x.property.2
-      refine (lev_isotone u.val.le_b (Subtype.coe_prop _)).symm.trans ?_
-      refine (Lpo.permute_lev _ _).symm.trans ?_
-      refine lev_isotone (Lpo.trunc_le a u.val.n) ?_
-      have := (cov_by_iff.mp u.property).1; rw [← this]; exact x.property
+      refine (lev_isotone u.val.le_b ?_).symm.trans ?_
+      · exact (Set.mem_image _ _ _).mpr ⟨x, hu, rfl⟩
+      · refine (congrArg _ (f_eq_perm hu)).trans ((Lpo.permute_lev _ _).symm.trans ?_)
+        refine lev_isotone (Lpo.trunc_le a u.val.n) ?_
+        have := (cov_by_iff.mp u.property).1; rw [← this]; exact x.property
   }⟩
 
 lemma covBy_injective {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} (t : TreeNode a b) :
     Function.Injective (covBy_injection t) := by
   intro ⟨u, hu⟩ ⟨v, hv⟩ h
-  unfold covBy_injection at h; simp only at h
   have ⟨hun, hup⟩ := cov_by_iff.mp hu
   have ⟨hvn, hvp⟩ := cov_by_iff.mp hv
   ext x <;> simp only
   · rw [← hun, ← hvn]
-  · constructor <;> intro hx
-    · let y := (v.perm ⟨u.perm.symm ⟨_, hx⟩, by {rw [← hvn, hun]; exact Subtype.coe_prop _}⟩)
-      have : x = y.val := by
-        have : x = (Subtype.mk x hx).val := rfl; rw [this]
-        refine (congrArg _ (Equiv.apply_symm_apply u.perm _).symm).trans ?_
-        sorry
-      rw [this]; exact y.property
-    · sorry
-  · sorry
+  · by_cases hx : x ∈ a.nodes ∧ a.rel.lev x ≤ ↑(t.n + 1)
+    · have := congrFun h ⟨x, hx⟩
+      simp only [covBy_injection, Subtype.mk.injEq] at this; exact this
+    · refine (u.f_dom _ ?_).trans (v.f_dom _ ?_).symm
+      · rw [hun] at hx; exact hx
+      · rw [hvn] at hx; exact hx
 
 lemma finite_branching {l : Type} [PartialOrder l] [OrderBot l] (a b : Lpo l)
     (t : TreeNode a b) : { u | t ⋖ u }.Finite := by
-  let f (u : { u | t ⋖ u }) : (a.trunc u.val.n).nodes ≃ u.val.X := u.val.perm
+  let f (u : { u | t ⋖ u }) : (a.trunc u.val.n).nodes ≃ u.val.range := u.val.perm
   refine @Finite.of_injective _ _ ?_ (covBy_injection t) (covBy_injective t)
   exact @Pi.finite _ _ (a.trunc (t.n + 1)).property (fun _ => (b.trunc (t.n + 1)).property)
 
@@ -277,10 +359,27 @@ lemma has_infinite_nodes {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l}
   have h n : ∃ t : TreeNode a b, t.n = n ∧ root a b ≤ t := by
     have ⟨a', ha', hlea⟩ := Pom.ge_lpo (hle n)
     have ⟨e, he⟩ := Quotient.exact ha'
-    refine ⟨⟨n, a'.nodes, e, ?_⟩, rfl, ⟨bot_le, ?_, ?_⟩⟩
+    refine ⟨TreeNode.Equiv.to_treeNode e ?_, rfl, ⟨bot_le, ?_⟩⟩
     · exact le_of_eq_of_le he hlea
-    · intro x hx; exact (Lpo.trunc_mono (le_refl _) bot_le).nodes hx
-    · intro x; simp [root]; sorry
+    · intro x hx
+      conv => rhs; exact dif_pos ((Lpo.trunc_mono (le_refl _) (Nat.zero_le _)).nodes hx)
+      refine (if_pos ?_).trans ?_
+      · by_contra h
+        have ⟨hc, hroot⟩ := a.property.rel.single_rooted.choose_spec
+        refine h (a.property.rel.antisymm ?_ ?_)
+        · exact hroot _ hx.1 h
+        · exact lev_zero hx.1 (bot_unique hx.2) _ hc (Ne.symm h)
+      · by_contra h
+        have ⟨hc, hroot⟩ := b.property.rel.single_rooted.choose_spec
+        have hy {h} : (e ⟨x, h⟩).val ∈ b.nodes := hlea.nodes (Subtype.coe_prop _)
+        refine h (b.property.rel.antisymm ?_ ?_)
+        · exact hroot _ hy h
+        · refine lev_zero hy ?_ _ hc (Ne.symm h)
+          rw [← lev_isotone hlea (Subtype.coe_prop _)]; nth_rewrite 1 [← he]
+          refine (Lpo.permute_lev _ ?_).symm.trans ?_
+          refine (lev_isotone (Lpo.trunc_mono (le_refl _) (Nat.zero_le _)) hx).symm.trans ?_
+          refine (lev_isotone (Lpo.trunc_le a 0) hx).trans ?_
+          exact bot_unique hx.2
   choose f hf using h
   refine (Set.infinite_univ.image ?_ (f := f)).mono ?_
   · intro i _ j _ heq;
@@ -313,17 +412,17 @@ theorem pom_ge_iff_ge_fin {l : Type} [DCPO l] [OrderBot l] {p q : Pom l}
     monotone_nat_of_le_succ (fun n ↦ (hsucc n).le) hle
   have hext {i j hi hj} (hle : i ≤ j) :
       Lpo.PermExt
-        (Lpo.cast_perm (f i).perm hi (Y := (a.trunc i).nodes))
-        (Lpo.cast_perm (f j).perm hj (Y := (a.trunc j).nodes)) := by
+        (Lpo.cast_perm (f i).perm hi rfl (X' := (a.trunc i).nodes))
+        (Lpo.cast_perm (f j).perm hj rfl (X' := (a.trunc j).nodes)) := by
     constructor
     · intro x
-      exact (hf hle).2.2 ⟨x, by rw [hn i]; exact Subtype.coe_prop _⟩
-    · refine (congrArg₂ (· ⊆ ·) ?_ ?_).mp (hf hle).2.1
-      · rw [hn i]
-      · rw [hn j]
+      exact (TreeNode.le_iff.mp (hf hle)).2.2
+        ⟨x, by unfold TreeNode.dom; rw [hn i]; exact Subtype.coe_prop _⟩
+    · refine (congrArg₂ (· ⊆ ·) ?_ ?_).mp (TreeNode.le_iff.mp (hf hle)).2.1
+      all_goals { unfold TreeNode.dom; rw [hn]; rfl }
   -- Build a new chain by permuting truncations
   let c : Chain (Lpo l) := {
-    toFun n := (a.trunc n).val.permute' (f n).perm (by rw [hn n]; rfl)
+    toFun n := (a.trunc n).val.permute' (f n).perm (by unfold TreeNode.dom; rw [hn n]) rfl
     monotone' i j hle := by
       refine Lpo.permute_monotone ?_ ?_
       · exact Lpo.trunc_mono (le_refl _) hle
@@ -334,14 +433,14 @@ theorem pom_ge_iff_ge_fin {l : Type} [DCPO l] [OrderBot l] {p q : Pom l}
   refine ⟨ωSup c, ?_, b, rfl, ?_⟩
   -- a ≈ sup c
   · refine Quotient.eq_iff_equiv.mpr ?_
-    refine Lpo.permute_chain ?_ ?_ (en := fun n ↦ Lpo.cast_perm (f n).perm ?_)
-    · rw [hn n]
+    refine Lpo.permute_chain ?_ ?_ (en := fun n ↦ Lpo.cast_perm (f n).perm ?_ rfl)
+    · unfold TreeNode.dom; rw [hn n]; rfl
     · intro i; rfl
     · intro i j hle; exact hext hle
   -- sup c is smaller than b, since every element of c is smaller than b
   · refine ωSup_le _ _ ?_; intro n; unfold c
     refine le_of_eq_of_le ?_ (f n).le_b
-    refine (Lpo.permute'_eq ?_).symm; rw [hn n]
+    refine (Lpo.permute'_eq ?_ rfl).symm; rw [hn n]
   }
 
 open Cardinal

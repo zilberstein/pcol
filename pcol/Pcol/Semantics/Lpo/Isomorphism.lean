@@ -68,9 +68,9 @@ noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
 --        · simp [Form.vars]; intro y hy
   }
 
-def cast_perm {X Y Z : Set Node} (e : X ≃ Z) (h : X = Y) : Y ≃ Z := {
-  toFun x := e.toFun ⟨x.val, by rw [h]; exact x.property⟩
-  invFun y := ⟨e.invFun y, by rw [← h]; exact Subtype.coe_prop _⟩
+def cast_perm {X X' Y Y' : Set Node} (e : X ≃ Y) (hx : X = X') (hy : Y = Y') : X' ≃ Y' := {
+  toFun x := ⟨e.toFun ⟨x.val, le_of_eq hx.symm x.property⟩, le_of_eq hy (Subtype.coe_prop _)⟩
+  invFun y := ⟨e.invFun ⟨y.val, le_of_eq hy.symm y.property⟩, le_of_eq hx (Subtype.coe_prop _)⟩
   left_inv := by
     intro x; simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.symm_apply_apply,
       Subtype.coe_eta]
@@ -79,14 +79,19 @@ def cast_perm {X Y Z : Set Node} (e : X ≃ Z) (h : X = Y) : Y ≃ Z := {
       Equiv.apply_symm_apply]
 }
 
-noncomputable def permute' {l : Type} [Bot l] {X Y : Set Node} (a : Lpo l)
-    (e : X ≃ Y) (h : a.nodes = X) : Lpo l :=
-  a.permute (cast_perm e h.symm)
+lemma permute_range_eq {l : Type} [Bot l] {X Y : Set Node} {a : Lpo l}
+    {e : a.nodes ≃ X} {e' : a.nodes ≃ Y} (h : X = Y)
+    (heq : ∀ x, (e x).val = (e' x).val) : a.permute e = a.permute e' := by
+  subst h; refine congrArg _ ?_; ext x; exact heq x
 
-lemma permute'_eq {l : Type} [Bot l] {X : Set Node} {a b : Lpo l}
-    {e : a.nodes ≃ X} (h : a = b) :
-    a.permute e = b.permute' e (by rw [h]) := by
-  unfold permute'; ext1 <;>
+noncomputable def permute' {l : Type} [Bot l] {X Y Y' : Set Node} (a : Lpo l)
+    (e : X ≃ Y) (hx : a.nodes = X) (hy : Y = Y') : Lpo l :=
+  a.permute (cast_perm e hx.symm hy)
+
+lemma permute'_eq {l : Type} [Bot l] {X Y : Set Node} {a b : Lpo l}
+    {e : a.nodes ≃ X} (h : a = b) (h' : X = Y) :
+    a.permute e = b.permute' e (by rw [h]) h' := by
+  unfold permute'; ext1 <;> subst h' <;>
     simp only [permute, Lpo.nodes, Lpo.rel, Lpo.form, Lpo.lab, cast_perm]
   · ext x y; refine exists_congr fun hx ↦ exists_congr fun hy ↦ ?_
     refine Iff.of_eq (congr (congr ?_ ?_) ?_)
@@ -101,9 +106,10 @@ lemma permute'_eq {l : Type} [Bot l] {X : Set Node} {a b : Lpo l}
     · simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
     · simp only [Subtype.exists, Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
 
-lemma permute_convert {l : Type} [Bot l] {X : Set Node} (a b : Lpo l)
-    {e : a.nodes ≃ X} (h : a = b) :
-    ∃ e' : b.nodes ≃ X, a.permute e = b.permute e' := by
+lemma permute_convert {l : Type} [Bot l] {X Y : Set Node} (a b : Lpo l)
+    {e : a.nodes ≃ X} (h : a = b) (h' : X = Y) :
+    ∃ e' : b.nodes ≃ Y, a.permute e = b.permute e' := by
+  subst h'
   use {
     toFun x := e ⟨x, by rw [h]; exact x.property⟩
     invFun y := ⟨e.symm y, by rw [← h]; exact Subtype.coe_prop _⟩
@@ -167,7 +173,7 @@ lemma permute_symm {l : Type} [Bot l] {a b : Lpo l} {e : a.nodes ≃ b.nodes} :
     a.permute e = b → a = b.permute e.symm := by
   intro h; refine (permute_refl a).symm.trans ?_
   rw [← Equiv.self_trans_symm e, ← permute_trans]
-  exact (permute'_eq h).trans (permute'_eq rfl)
+  exact (permute'_eq h rfl).trans (permute'_eq rfl rfl)
 
 def IsIsomorphic {l : Type} [Bot l] (a b : Lpo l) : Prop :=
     ∃ (e : a.nodes ≃ b.nodes), a.permute e = b
@@ -181,7 +187,7 @@ lemma isoEquivalence {l : Type} [Bot l] : Equivalence (@IsIsomorphic l _) := by
   -- Transitivity
   · intro a b c ⟨e₁, hab⟩ ⟨e₂, hbc⟩
     refine ⟨e₁.trans e₂, ?_⟩; rw [← permute_trans]
-    rw [permute'_eq hab]; exact Eq.trans (permute'_eq rfl).symm hbc
+    rw [permute'_eq hab]; exact Eq.trans (permute'_eq rfl rfl).symm hbc
 
 instance instSetoid {l : Type} [Bot l] : Setoid (Lpo l) where
   r := IsIsomorphic
