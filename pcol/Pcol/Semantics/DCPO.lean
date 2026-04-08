@@ -8,6 +8,13 @@ instance {X : Type} [LE X] : SetLike (DSet X) X where
   coe d := d.val
   coe_injective' := Subtype.val_injective
 
+instance {X : Type} [LE X] : LE (DSet X) where
+  le d d' := d.val ⊆ d'.val
+instance {X : Type} [LE X] : PartialOrder (DSet X) where
+  le_refl d := le_refl d.val
+  le_trans d₁ d₂ d₃ := @le_trans _ _ d₁.val d₂.val d₃.val
+  le_antisymm _ _ hle hge := Subtype.val_injective (le_antisymm hle hge)
+
 -- In Mathlib, CompletePartialOrder is pointed. Here is a version that does not
 -- require the domain to be pointed, but requires directed sets to be nonempty
 class DCPO (X : Type) extends PartialOrder X where
@@ -128,9 +135,9 @@ lemma bot_compact {X : Type} [DCPO X] [OrderBot X] :
 class ScottCompact (X : Type) [DCPO X] where
   scottCompact (x : X) : IsScottCompact x
 
-namespace Chain
-
 open OmegaCompletePartialOrder
+
+namespace Chain
 
 def to_dSet {X : Type} [DCPO X] (c : Chain X) : DSet X :=
   ⟨ Set.range c, by {
@@ -144,6 +151,18 @@ def to_dSet {X : Type} [DCPO X] (c : Chain X) : DSet X :=
     · exact ⟨(c 0), Set.mem_range.mpr ⟨0, rfl⟩⟩
   } ⟩
 
+def lfp {X : Type} [OmegaCompletePartialOrder X] [OrderBot X]
+    (f : X → X) (hf : Monotone f) : X :=
+  ωSup (OmegaCompletePartialOrder.fixedPoints.iterateChain ⟨f, hf⟩ ⊥ bot_le)
+
+theorem lfp_is_lfp {X : Type} [OmegaCompletePartialOrder X] [OrderBot X]
+    {f : X → X} (hc : ωScottContinuous f):
+    IsLeast f.fixedPoints (lfp f hc.monotone) := by
+  let f' := ContinuousHom.mk ⟨f, _⟩ hc.map_ωSup
+  constructor
+  · exact fixedPoints.ωSup_iterate_mem_fixedPoint f' _ _
+  · intro x hx; exact fixedPoints.ωSup_iterate_le_fixedPoint f' _ _ hx bot_le
+
 end Chain
 
 instance {X : Type} [DCPO X] : OmegaCompletePartialOrder X where
@@ -153,3 +172,17 @@ instance {X : Type} [DCPO X] : OmegaCompletePartialOrder X where
     refine DSet.dSup_le ?_; intro d hd
     obtain ⟨i, rfl⟩ := Set.mem_range.mp hd
     exact h i
+
+instance {X Y : Type} [OmegaCompletePartialOrder Y] : OmegaCompletePartialOrder (X → Y) where
+  ωSup c := fun x ↦ ωSup {
+    toFun n := c n x
+    monotone' i j hle := c.monotone' hle x
+  }
+  le_ωSup := by
+    intro c i x; simp only; refine le_of_eq_of_le ?_ (le_ωSup _ i); rfl
+  ωSup_le := by
+    intro c f hle x; simp only; refine ωSup_le _ _ ?_
+    intro i; exact hle i x
+
+instance {X Y : Type} [LE Y] [OrderBot Y] : OrderBot (X → Y) where
+  bot_le _ _ := bot_le

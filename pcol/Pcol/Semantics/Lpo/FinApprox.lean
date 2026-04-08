@@ -109,7 +109,7 @@ lemma trunc_valid {l : Type} [Bot l] (a : Lpo l) (n : ℕ) :
     · simp only [Form.sat, Form.false, exists_const, not_false_eq_true]
   · intro x hx hlev; constructor
     · intro y hy
-      simp only [hlev, ↓reduceIte, not_forall, Set.mem_setOf_eq] at hy
+      simp only [hlev, ↓reduceIte] at hy
       have hsat : (a.form x).sat := Form.sat_if_vars_nonempty ⟨_, hy⟩
       have hx := (a.property.form_dom x).mp hsat
       have hyx := (a.property.form x hx).1 y hy
@@ -126,7 +126,7 @@ noncomputable def trunc {l : Type} [Bot l] (a : Lpo l) (n : ℕ) : Lpofin l :=
       · exact Set.finite_le_nat n
       · intro k _; exact a.property.rel.fin_lev k
     · intro x ⟨hx, hlev⟩
-      simp only [Pi.natCast_def, Set.mem_iUnion, Set.mem_setOf_eq, exists_and_left, exists_prop]
+      simp only [Set.mem_iUnion, Set.mem_setOf_eq, exists_and_left, exists_prop]
       obtain ⟨k, hk⟩ := lev_finite hx
       refine ⟨hx, k, ?_, hk⟩; exact ENat.coe_le_coe.mp (le_of_eq_of_le hk.symm hlev)
   )
@@ -147,7 +147,7 @@ lemma trunc_le {l : Type} [Preorder l] [OrderBot l] (a : Lpo l) (n : ℕ) :
   · intro x hx; by_cases hlev : a.rel.lev x ≤ n
     · left; exact ⟨hx, hlev⟩
     · right
-      obtain ⟨z, hz, hzx⟩ := exists_node_lt_lev hx (lt_of_not_le hlev)
+      obtain ⟨z, hz, hzx⟩ := exists_node_lt_lev hx (not_le.mp hlev)
       simp only [bots, nodes, Set.mem_setOf_eq, lab, ite_eq_right_iff]
       refine ⟨z, ⟨⟨?_, ?_⟩, ?_⟩, hzx⟩
       · exact (a.property.rel_dom hzx).1
@@ -157,6 +157,7 @@ lemma trunc_le {l : Type} [Preorder l] [OrderBot l] (a : Lpo l) (n : ℕ) :
 lemma trunc_permute_nodes {l : Type} [Bot l] {a : Lpo l} {n : ℕ} {X : Set Node}
     {e : (a.trunc n).nodes ≃ X} :
     ((a.trunc n).val.permute e).nodes = X := rfl
+
 lemma permute_trunc_nodes {l : Type} [Bot l] {a : Lpo l} {n : ℕ} {X : Set Node}
     {e : a.nodes ≃ X} :
     ((a.permute e).trunc n).nodes = { x ∈ X | (a.permute e).rel.lev x ≤ n } := by
@@ -477,24 +478,21 @@ lemma finapprox'_mono {l : Type} [PartialOrder l] [OrderBot l] :
 theorem sup_finapprox_eq_self {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} :
     α = (finapprox α).dSup := by
   simp [DSet.dSup, DCPO.dSup, lpo_base_sup]; ext x y
-  · simp only [nodes, Set.mem_setOf_eq, Set.mem_iUnion, exists_prop]
+  · simp only [nodes, Set.mem_iUnion, exists_prop]
     constructor
     · intro hx; obtain ⟨n, hlev⟩ := lev_finite hx
       refine ⟨α.trunc n, ⟨trunc_le _ _, (α.trunc n).property⟩, ?_⟩
-      simp only [nodes, trunc, Set.mem_setOf_eq]
       exact ⟨hx, le_of_eq hlev⟩
     · intro ⟨β, ⟨hle, _⟩, hx⟩; exact hle.nodes hx
-  · simp only [rel, Set.mem_setOf_eq]; constructor
+  · simp only [rel]; constructor
     · intro hxy; obtain ⟨n, hlev⟩ := lev_finite (α.property.rel_dom hxy).2
       refine ⟨α.trunc n, ⟨trunc_le _ _, (α.trunc n).property⟩, ?_⟩
       have hy : y ∈ (α.trunc n).nodes := by
-        simp only [nodes, Lpofin.nodes, trunc, Set.mem_setOf_eq]
         exact ⟨(α.property.rel_dom hxy).2, le_of_eq hlev⟩
       refine ((trunc_le _ _).rel _ ?_ _ hy).mpr hxy
       exact (trunc_le _ _).downcl _ hy _ hxy
     · intro ⟨β, ⟨hle, _⟩, hxy⟩; exact le_rel hle hxy
-  · simp only [lab, Set.mem_setOf_eq]
-    refine le_antisymm ?_ ?_
+  · simp only [lab]; refine le_antisymm ?_ ?_
     · by_cases hx : x ∈ α.nodes
       · refine DSet.le_dSup (Set.mem_setOf_eq.mpr ?_)
         obtain ⟨n, hlev⟩ := lev_finite hx
@@ -505,7 +503,7 @@ theorem sup_finapprox_eq_self {l : Type} [DCPO l] [OrderBot l] {α : Lpo l} :
       · refine le_of_eq_of_le (α.property.lab_dom _ hx) bot_le
     · refine DSet.dSup_le ?_
       rintro _ ⟨β, ⟨hle, _⟩, rfl⟩; exact hle.lab x
-  · simp only [form, Set.mem_setOf_eq]; constructor
+  · simp only [form]; constructor
     · intro hform
       have hx : x ∈ α.nodes := (α.property.form_dom x).mp ⟨y, hform⟩
       obtain ⟨n, hlev⟩ := lev_finite hx
@@ -674,7 +672,9 @@ lemma permute_continuous {l : Type} [DCPO l] [OrderBot l]
     ext x; by_cases hx : x ∈ (ωSup c₂).nodes
     · conv => lhs; exact dif_pos hx
       refine (congrFun ωSup_lab _).trans (congrArg _ ?_)
-      ext i; simp only [OrderHom.coe_mk]
+      ext i
+      conv => lhs; exact (congrFun (OrderHom.coe_mk _ _) _)
+      conv => rhs; exact (congrFun (OrderHom.coe_mk _ _) _)
       rw [← hp i]; simp only [permute, lab]
       by_cases hx : x ∈ (c₂ i).nodes
       · conv => rhs; exact dif_pos hx

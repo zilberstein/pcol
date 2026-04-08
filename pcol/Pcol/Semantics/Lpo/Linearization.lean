@@ -50,6 +50,9 @@ lemma lab_is_test_le {act test : Type} {b : test} {l : Label act test}
     | Label.lab_test b' => simp [LE.le] at hle; exact ⟨b', rfl, hle⟩
   }
 
+instance {act test : Type} [LE act] [LE test] : OrderBot (Label act test) where
+  bot_le _ := True.intro
+
 instance {act test : Type} [Preorder act] [Preorder test] : Preorder (Label act test) where
   le_refl := by intro l; simp [LE.le]; cases l; all_goals simp
   le_trans := by {
@@ -76,8 +79,9 @@ instance {act test : Type} [PartialOrder act] [PartialOrder test] : PartialOrder
     · exact le_antisymm h12 h21
   }
 
-instance {act test : Type} [LE act] [LE test] : OrderBot (Label act test) where
-  bot_le _ := True.intro
+instance {act test : Type} [DCPO act] [DCPO test] : DCPO (Label act test) where
+  dSup d := sorry
+  lubOfDirected := sorry
 
 class Linearizable (t : Type → Type)
   [Monad t] [∀ {β : Type}, Preorder (t β)]
@@ -90,7 +94,7 @@ class Linearizable (t : Type → Type)
 
 
 class Sem (c : Type) (in_type out_type : Type)
-  extends PartialOrder c
+  extends DCPO c
   where
     sem : c → in_type → out_type
     sem_mono [Preorder out_type] (s : in_type) : Monotone (sem · s)
@@ -121,7 +125,7 @@ mutual
     if s = ∅ then
       pure st
     else
-      Linearizable.nondet fun x : next a s => lin_node a s x.val x.property.1 st
+      Linearizable.nondet fun x : ↑(next a s) => lin_node a s x.val x.property.1 st
     termination_by (s.card, 1)
 
   noncomputable def lin_node {t : Type → Type} {α act test: Type}
@@ -255,22 +259,32 @@ theorem lin_mono {m : Type → Type} {α act test : Type}
     refine lin_rec_mono ?_ ?_ ?_ hle
     · unfold Lpofin.nodes_finset; refine Eq.symm (Finset.inter_eq_right.2 ?_)
       simp [hle.nodes]
-    · intro _ _ y hr; simp [Lpofin.nodes, Lpo.nodes]
+    · intro _ _ y hr;
       exact (Set.Finite.mem_toFinset _).mpr (α.val.property.rel_dom hr).2
     · intro _ hx _; exact (Set.Finite.mem_toFinset _).mpr hx
   }
 
+noncomputable def finset_equiv_image {X Y : Set Node} (e : X ≃ Y) (s : Finset Node) : Finset Node :=
+  s.filterMap
+    (fun x ↦ if hx : x ∈ X then some (e ⟨_, hx⟩).val else none)
+    (by {
+      simp only [Option.mem_def, Option.dite_none_right_eq_some, Option.some.injEq,
+        forall_exists_index, forall_apply_eq_imp_iff]
+      intro _ _ _ _ heq; symm; exact Subtype.ext_iff.mp (e.injective (Subtype.ext heq))
+    })
+
+
 lemma lin_rec_iso {m : Type → Type} {α act test : Type}
     [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
-    [OrderBot (m α)] [Linearizable m]
-    {a : Lpofin (Label act test)} {e : Equiv.Perm Node} {s : Finset Node} :
-    (lin_rec a s : α →  m α) = lin_rec (a.permute e) (s.image e) := by
+    [OrderBot (m α)] [Linearizable m] {X : Set Node}
+    {a : Lpofin (Label act test)} {e : a.nodes ≃ X} {s : Finset Node} :
+    (lin_rec a s : α → m α) =
+    lin_rec (a.permute e) (finset_equiv_image e s) := by
   induction s using Finset.strongInduction with
   | H s hind =>
     ext st; unfold lin_rec; by_cases h : s = ∅
-    · subst h; simp
-    · simp only [h, ↓reduceIte, Finset.image_eq_empty]
-      sorry
+    · subst h; simp only [↓reduceIte, finset_equiv_image, Finset.filterMap_empty]
+    · sorry
 
 lemma lin_iso {m : Type → Type} {α act test : Type}
     [Monad m] [Sem act α (m α)] [Sem test α (m Bool)] [∀ β, Preorder (m β)]
@@ -280,12 +294,13 @@ lemma lin_iso {m : Type → Type} {α act test : Type}
   unfold lin; rcases h with ⟨e, h⟩
   refine Eq.trans lin_rec_iso (congr_arg₂ _ (Subtype.ext h) ?_)
   have hn := congr_arg Lpo.nodes h; simp [permute, Lpo.nodes] at hn
-  have _ : Fintype ↑(e '' a.val.val.nodes) := by
-    unfold Lpo.nodes; rw [hn]; exact b.property.fintype
-  have _ : Fintype ↑(b.val.val.nodes) := b.property.fintype
-  refine (Set.Finite.toFinset_image _ _ ?_).symm.trans ?_
-  · unfold Lpo.nodes; rw [hn]; exact b.property
-  · unfold Lpofin.nodes_finset; unfold Set.Finite.toFinset
-    refine @Set.toFinset_congr _ _ _ ?_ ?_ hn
+  sorry
+  -- have _ : Fintype ↑(e '' a.val.val.nodes) := by
+  --   unfold Lpo.nodes; rw [hn]; exact b.property.fintype
+  -- have _ : Fintype ↑(b.val.val.nodes) := b.property.fintype
+  -- refine (@Set.Finite.toFinset_image _ _ _ ?_ _ _ ?_).symm.trans ?_
+  -- · unfold Lpo.nodes; rw [hn]; exact b.property
+  -- · unfold Lpofin.nodes_finset; unfold Set.Finite.toFinset
+  --   refine @Set.toFinset_congr _ _ _ ?_ ?_ hn
 
 end Lpo

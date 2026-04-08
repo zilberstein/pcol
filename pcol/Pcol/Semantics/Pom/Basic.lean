@@ -33,7 +33,8 @@ lemma singleton_equiv {l : Type} [Bot l] {x y : Node} (ℓ : l) :
     · exact False.elim
   · ext z; simp only [Lpo.lab, Lpo.permute, Lpo.singleton, Lpo.nodes]
     by_cases heq : y = z
-    · subst heq; simp only [Set.mem_singleton_iff, ↓reduceDIte, Equiv.coe_fn_symm_mk, ↓reduceIte]
-    · simp only [Set.mem_singleton_iff, Equiv.coe_fn_symm_mk, ↓reduceIte, dite_eq_ite]
-      refine if_congr ?_ rfl rfl ; constructor <;> exact Eq.symm
+    · subst heq; simp only [Set.mem_singleton_iff, ↓reduceDIte, ↓reduceIte]
+      refine dif_pos ?_; rfl
+    · simp only [Set.mem_singleton_iff, heq, ↓reduceIte, dite_eq_right_iff, ite_eq_right_iff]
+      rintro rfl; contradiction
   · sorry

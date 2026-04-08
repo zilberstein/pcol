@@ -139,9 +139,9 @@ def FinitelyPreceded {α : Type} (ord : Rel α α) : Prop :=
 
 structure IsCausalityRel {α : Type} (ord : Rel α α) (s : Set α) : Prop where
   -- ord is a strict partial order
-  trans : Transitive ord
-  antisymm : AntiSymmetric ord
-  irrefl : Irreflexive ord
+  trans : ∀ {x y z}, ord x y → ord y z → ord x z
+  antisymm : ∀ {x y}, ord x y → ord y x → x = y
+  irrefl : ∀ x, ¬ ord x x
   -- ord is finitely preceeded
   fin_prec : FinitelyPreceded ord
   -- each level is finite
@@ -324,28 +324,28 @@ lemma lev_finite {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes
   refine (fun hnt ↦ let ⟨n, h⟩ := ENat.ne_top_iff_exists.mp hnt; ⟨n, h.symm⟩) ?_
   obtain ⟨n, hfin⟩ := (α.property.rel.fin_prec x).exists_encard_eq_coe
   refine ne_top_of_le_ne_top (ENat.coe_ne_top n) ?_
-  refine sSup_le ?_; rintro _ ⟨k, rfl, c, hc, rfl⟩;
-  have hcard : { x | ∃ k', k' < k ∧ x = c k'}.encard = ↑k := by
-    refine Eq.trans (Set.encard_congr (Equiv.trans ?_ (Equiv.Set.univ _).symm))
-      ((Set.encard_univ _).trans (ENat.card_eq_coe_fintype_card.trans (congrArg _ (Fintype.card_fin k))))
-    rw [Set.coe_setOf]
-    have h x (hx : ∃ k' < k, x = c ↑k') : ∃ (y : Fin k), c y = x := by
-      obtain ⟨k', hk', rfl⟩ := hx; exact ⟨⟨k', hk'⟩, rfl⟩
-    choose f hf using h
-    refine ⟨fun x ↦ f x.val x.property,
-            fun k' ↦ ⟨c k', k', k'.isLt, rfl⟩, ?_, ?_⟩
-    · rintro ⟨y, hy⟩; have h := hf y hy
-      simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq]
-      simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq] at h
-      exact h
-    · intro k'; simp only [Fin.coe_eq_castSucc]
-      have h := succ_chain_inj hc (hf (c k') ⟨k'.val, k'.isLt, rfl⟩)
-      simp only [Fin.coe_eq_castSucc, Fin.castSucc_inj] at h; exact h
-  rw [← hfin, ← hcard]
-  refine Set.encard_mono ?_; rintro x ⟨k', hk, rfl⟩
-  refine succ_chain_mono c hc (Fin.mk_lt_mk.mpr ?_)
-  refine lt_of_eq_of_lt (Nat.mod_succ_eq_iff_lt.mpr ?_) hk
-  linarith
+  refine sSup_le ?_; rintro _ ⟨k, rfl, c, hc, rfl⟩; sorry
+  -- have hcard : { x | ∃ k' : Fin k, k'.val < k ∧ x = c k'}.encard = ↑k := by
+  --   refine Eq.trans (Set.encard_congr (Equiv.trans ?_ (Equiv.Set.univ _).symm))
+  --     ((Set.encard_univ _).trans (ENat.card_eq_coe_fintype_card.trans (congrArg _ (Fintype.card_fin k))))
+  --   rw [Set.coe_setOf]
+  --   have h x (hx : ∃ k', k'.val < k ∧ x = c ↑k') : ∃ (y : Fin (k + 1)), c y = x := by
+  --     obtain ⟨k', hk', rfl⟩ := hx; exact ⟨⟨k', hk'⟩, rfl⟩
+  --   choose f hf using h
+  --   refine ⟨fun x ↦ f x.val x.property,
+  --           fun k' ↦ ⟨c k', k', k'.isLt, rfl⟩, ?_, ?_⟩
+  --   · rintro ⟨y, hy⟩; have h := hf y hy
+  --     simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq]
+  --     simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq] at h
+  --     exact h
+  --   · intro k'; simp only [Fin.coe_eq_castSucc]
+  --     have h := succ_chain_inj hc (hf (c k') ⟨k'.val, k'.isLt, rfl⟩)
+  --     simp only [Fin.coe_eq_castSucc, Fin.castSucc_inj] at h; exact h
+  -- rw [← hfin, ← hcard]
+  -- refine Set.encard_mono ?_; rintro x ⟨k', hk, rfl⟩
+  -- refine succ_chain_mono c hc (Fin.mk_lt_mk.mpr ?_)
+  -- refine lt_of_eq_of_lt (Nat.mod_succ_eq_iff_lt.mpr ?_) hk
+  -- linarith
 
 namespace Lpo
 
@@ -405,7 +405,7 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
       obtain ⟨n', hn'⟩ := lev_finite hn
       have hnn : n < n' := ENat.coe_lt_coe.mp (lt_of_lt_of_eq h hn')
       have hnle : ¬ (n' + m - n ≤ m) := by
-        refine not_le_of_lt ?_; rw [add_comm]
+        refine Nat.not_le_of_lt ?_; rw [add_comm]
         refine lt_of_lt_of_eq ?_ (Nat.add_sub_assoc ?_ _).symm
         · exact Nat.lt_add_of_pos_right (tsub_pos_iff_lt.mpr hnn)
         · exact le_of_lt hnn
@@ -431,22 +431,21 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
           -- ⟩
       refine ⟨n' + m - n, rfl, c', ?_, ?_⟩
       · intro k'; by_cases hk : k'.val < n'
-        · simp [c', hk]; by_cases hk' : k'.val + 1 < n' <;> simp only [hk', ↓reduceIte, c']
+        · simp [c', hk]; by_cases hk' : k'.val + 1 < n' <;> simp only [hk']
           · exact hcn ⟨k', hk⟩
           · have : k'.val + 1 = n' := by grind
             refine (congrArg₂ _ rfl ?_).mp (hcn ⟨k', hk⟩)
-            · simp only [c']; refine (Eq.trans ?_ hl').trans ?_
+            · refine (Eq.trans ?_ hl').trans ?_
               · refine congrArg _ ?_; ext; simp only [Fin.val_last]; exact this
-              · refine congrArg _ ?_; ext; simp only; rw [this]
-                simp only [tsub_self, zero_add]
+              · refine congrArg _ ?_; ext; simp only
         · have : ¬ (k' + 1 < n') := by linarith
           simp [c', hk, this]
           refine (congrArg₂ _ rfl ?_).mp  (hc ⟨k'.val - n' + n, ?_⟩)
-          · refine congrArg _ ?_; ext; simp only [c']
+          · refine congrArg _ ?_; ext; simp only
             sorry
           · sorry
       · have :  ¬ (n' + m - n < n') := by sorry
-        simp [FinChain.last, dite_eq_ite, Fin.val_last, this, ↓reduceIte, c']
+        simp [FinChain.last, Fin.val_last, this, c']
         refine congrArg _ ?_; ext; simp only [Fin.val_last]
         sorry
     · refine le_sSup ?_; simp only [Set.mem_setOf_eq, Nat.cast_inj, exists_eq_left']

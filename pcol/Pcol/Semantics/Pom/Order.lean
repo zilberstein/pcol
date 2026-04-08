@@ -180,7 +180,7 @@ lemma permute_le_self_lab {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l}
                 refine Nat.sub_add_cancel ?_
                 refine (Nat.le_of_lt_succ (lt_of_le_of_lt hj1 j.isLt)).trans ?_
                 simp only [tsub_le_iff_right, le_add_iff_nonneg_right, zero_le]
-            }⟩; simp only [Fin.eta] at this
+            }⟩; simp only at this
             have hj' {h} : ⟨j.val - 1 + 1, h⟩ = j := by
               ext; simp; refine Nat.sub_add_cancel hj1
             rw [hj', hj] at this; simp only [z] at this
@@ -214,7 +214,7 @@ lemma permute_le_self_lab {l : Type} [PartialOrder l] [OrderBot l] {α : Lpo l}
             refine congrArg _ (Eq.trans ?_ (dif_pos ?_).symm)
             · rfl
             · exact hj.trans (Nat.lt_succ_self _)
-          · rw [dif_neg hj]; simp only [z]
+          · rw [dif_neg hj]; simp only
             refine congrArg _ (congrArg _ (Subtype.ext ?_)); simp only
             have : j.val ≤ n - (k + 1) - 1 := by
               refine le_of_le_of_eq (Nat.le_pred_of_lt j.isLt) ?_

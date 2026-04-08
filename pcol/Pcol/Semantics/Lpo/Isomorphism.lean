@@ -96,15 +96,15 @@ lemma permute'_eq {l : Type} [Bot l] {X Y : Set Node} {a b : Lpo l}
   · ext x y; refine exists_congr fun hx ↦ exists_congr fun hy ↦ ?_
     refine Iff.of_eq (congr (congr ?_ ?_) ?_)
     · rw [h]
-    · simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
-    · simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
-  · ext x; simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
+    · rfl
+    · rfl
+  · ext x; simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe]
     nth_rewrite 1 [h]; rfl
   · ext x v; refine exists_congr fun hx ↦ ?_
     refine Iff.of_eq (congr (congr ?_ ?_) ?_)
     · rw [h]
-    · simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
-    · simp only [Subtype.exists, Equiv.toFun_as_coe, Equiv.invFun_as_coe, Equiv.coe_fn_symm_mk]
+    · rfl
+    · rfl
 
 lemma permute_convert {l : Type} [Bot l] {X Y : Set Node} (a b : Lpo l)
     {e : a.nodes ≃ X} (h : a = b) (h' : X = Y) :
@@ -136,17 +136,18 @@ lemma permute_refl {l : Type} [Bot l] (a : Lpo l) :
     a.permute (Equiv.refl a.nodes) = a := by
   unfold permute; ext1 <;> simp [Lpo.nodes, Lpo.rel, Lpo.lab, Lpo.form]
   · ext x y; refine ⟨fun ⟨_, _, hr⟩ ↦ hr, fun hr ↦ ⟨?_, ?_, hr⟩⟩
-    · exact (a.property.rel_dom hr).2
     · exact (a.property.rel_dom hr).1
-  · ext x; simp; intro h
-    exact Eq.symm (a.property.lab_dom _ h)
+    · exact (a.property.rel_dom hr).2
+  · ext x; by_cases hx : x ∈ a.nodes
+    · exact dif_pos hx
+    · exact (dif_neg hx).trans (a.property.lab_dom _ hx).symm
   · ext x v; constructor
     · intro ⟨hx, hform⟩;
       have hh := a.property.form x hx
       sorry
     · intro hform; constructor
-      · exact (a.property.form_dom x).mp ⟨_, hform⟩
       · sorry
+      · exact (a.property.form_dom x).mp ⟨_, hform⟩
 
 lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
     {e₁ : a.nodes ≃ X} {e₂ : X ≃ Y} :
@@ -187,7 +188,7 @@ lemma isoEquivalence {l : Type} [Bot l] : Equivalence (@IsIsomorphic l _) := by
   -- Transitivity
   · intro a b c ⟨e₁, hab⟩ ⟨e₂, hbc⟩
     refine ⟨e₁.trans e₂, ?_⟩; rw [← permute_trans]
-    rw [permute'_eq hab]; exact Eq.trans (permute'_eq rfl rfl).symm hbc
+    rw [permute'_eq hab rfl]; exact Eq.trans (permute'_eq rfl rfl).symm hbc
 
 instance instSetoid {l : Type} [Bot l] : Setoid (Lpo l) where
   r := IsIsomorphic
@@ -279,7 +280,7 @@ lemma perm_extend_to {X X' Y : Set Node} (Z : Set Node) (e : X ≃ Y)
         intro h; exfalso; exact ((Set.mem_diff _).mp (Subtype.coe_prop _)).2 h
   }
   constructor
-  · intro x; simp only [dite_eq_ite, Equiv.coe_fn_mk, Subtype.coe_prop, ↓reduceDIte,
+  · intro x; simp only [Equiv.coe_fn_mk, Subtype.coe_prop, ↓reduceDIte,
       Subtype.coe_eta, Set.subset_union_left, Set.coe_inclusion]
   · exact hsub
 
