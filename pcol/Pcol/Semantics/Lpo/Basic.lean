@@ -60,8 +60,8 @@ lemma mt {p q : Form α} (h : p ≤ q) : q.not ≤ p.not := by
 def free [DecidableEq α] (p : Form α) (x : α) : Prop :=
   ∀ v, p v ↔ p (fun y => if x = y then ¬(v y) else v y)
 
-def vars (p : Form Node) : Set Node :=
-  { x | ¬ p.free x }
+def vars (p : Form α) : Set α :=
+  { x | ∃ v v', x ∈ symmDiff v v' ∧ p v ≠ p v' }
 
 lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
     (hs : ∀ x ∈ s, p.free x) (hf : s.Finite) :
@@ -84,12 +84,38 @@ lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
         · subst hxy; exact not_iff.mp hv
         · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
 
+lemma sat_on_vars {p : Form Node} (v v' : Set Node) :
+    (∀ x ∈ symmDiff v v', x ∉ p.vars) → p v = p v' := by
+  intro h; by_cases hsd : (symmDiff v v').Nonempty
+  · have ⟨x, hx⟩ := hsd
+    unfold vars at h; simp only [ne_eq, eq_iff_iff, Set.mem_setOf_eq, not_exists, not_and,
+      not_not] at h
+    ext; exact h x hx v v' hx
+  · simp only [Set.symmDiff_nonempty, ne_eq, Decidable.not_not] at hsd
+    subst hsd; rfl
+
 lemma sat_if_vars_nonempty {p : Form Node} (h : p.vars.Nonempty) : p.sat := by
-  simp only [vars, free, not_forall] at h
-  obtain ⟨x, v, hform⟩ := h
+  have ⟨_, v, v', _, hp⟩ := h
   by_cases h : p v
   · exact ⟨v, h⟩
-  · exact ⟨_, (not_iff.mp hform).mp h⟩
+  · have := (not_iff.mp (eq_iff_iff.mpr.mt hp)).mp h
+    exact ⟨v', this⟩
+
+lemma true_vars : (@Form.true α).vars = ∅ := by
+  ext x; unfold vars
+  simp only [ne_eq, eq_iff_iff, Set.mem_setOf_eq, Set.mem_empty_iff_false, iff_false, not_exists,
+    not_and, not_not]
+  intro _ _ _; rfl
+
+lemma empty_vars {p : Form α} (h : p.vars = ∅) (hsat : p.sat): p = Form.true := by
+  ext v; conv => exact iff_true _
+  have ⟨v', hform⟩ := hsat
+  by_cases heq : v = v'
+  · subst heq; exact hform
+  · have ⟨x, hx⟩ := Set.symmDiff_nonempty.mpr heq
+    have := Set.eq_empty_iff_forall_notMem.mp h
+    simp only [vars, ne_eq, eq_iff_iff, Set.mem_setOf_eq, not_exists, not_and, not_not] at this
+    exact (this x v v' hx).mpr hform
 
 end Form
 
@@ -213,8 +239,7 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
           simp [Form.false] at h
       · intro heq; use ∅
         rw [ite_cond_eq_true _ _ (eq_true (Eq.symm heq))]; simp [Form.true]
-    · intro y; simp only [Form.vars, Form.free, Form.true, implies_true, not_true_eq_false,
-        Set.setOf_false, Set.mem_empty_iff_false, not_false_eq_true]
+    · intro y; rw [Form.true_vars]; exact Set.notMem_empty _
   })
 
 end Lpo
@@ -324,28 +349,24 @@ lemma lev_finite {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes
   refine (fun hnt ↦ let ⟨n, h⟩ := ENat.ne_top_iff_exists.mp hnt; ⟨n, h.symm⟩) ?_
   obtain ⟨n, hfin⟩ := (α.property.rel.fin_prec x).exists_encard_eq_coe
   refine ne_top_of_le_ne_top (ENat.coe_ne_top n) ?_
-  refine sSup_le ?_; rintro _ ⟨k, rfl, c, hc, rfl⟩; sorry
-  -- have hcard : { x | ∃ k' : Fin k, k'.val < k ∧ x = c k'}.encard = ↑k := by
-  --   refine Eq.trans (Set.encard_congr (Equiv.trans ?_ (Equiv.Set.univ _).symm))
-  --     ((Set.encard_univ _).trans (ENat.card_eq_coe_fintype_card.trans (congrArg _ (Fintype.card_fin k))))
-  --   rw [Set.coe_setOf]
-  --   have h x (hx : ∃ k', k'.val < k ∧ x = c ↑k') : ∃ (y : Fin (k + 1)), c y = x := by
-  --     obtain ⟨k', hk', rfl⟩ := hx; exact ⟨⟨k', hk'⟩, rfl⟩
-  --   choose f hf using h
-  --   refine ⟨fun x ↦ f x.val x.property,
-  --           fun k' ↦ ⟨c k', k', k'.isLt, rfl⟩, ?_, ?_⟩
-  --   · rintro ⟨y, hy⟩; have h := hf y hy
-  --     simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq]
-  --     simp only [Fin.coe_eq_castSucc, Subtype.mk.injEq] at h
-  --     exact h
-  --   · intro k'; simp only [Fin.coe_eq_castSucc]
-  --     have h := succ_chain_inj hc (hf (c k') ⟨k'.val, k'.isLt, rfl⟩)
-  --     simp only [Fin.coe_eq_castSucc, Fin.castSucc_inj] at h; exact h
-  -- rw [← hfin, ← hcard]
-  -- refine Set.encard_mono ?_; rintro x ⟨k', hk, rfl⟩
-  -- refine succ_chain_mono c hc (Fin.mk_lt_mk.mpr ?_)
-  -- refine lt_of_eq_of_lt (Nat.mod_succ_eq_iff_lt.mpr ?_) hk
-  -- linarith
+  refine sSup_le ?_; rintro _ ⟨k, rfl, c, hc, rfl⟩
+  have hcard : { x | ∃ k' : Fin (k + 1), k'.val < k ∧ x = c k'}.encard = ↑k := by
+    refine Eq.trans (Set.encard_congr (Equiv.trans ?_ (Equiv.Set.univ _).symm))
+      ((Set.encard_univ _).trans (ENat.card_eq_coe_fintype_card.trans (congrArg _ (Fintype.card_fin k))))
+    rw [Set.coe_setOf]
+    have h x (hx : ∃ k' : Fin (k + 1), k'.val < k ∧ x = c k') : ∃ (y : Fin k), c y.castSucc = x := by
+      obtain ⟨k', hk', rfl⟩ := hx; exact ⟨⟨k', hk'⟩, rfl⟩
+    choose f hf using h
+    refine ⟨fun x ↦ f x.val x.property,
+            fun k' ↦ ⟨c k'.castSucc, k'.castSucc, k'.isLt, rfl⟩, ?_, ?_⟩
+    · rintro ⟨y, hy⟩; have h := hf y hy
+      simp only [Subtype.mk.injEq]; exact h
+    · intro k'
+      have h := succ_chain_inj hc (hf (c k'.castSucc) ⟨k'.castSucc, k'.isLt, rfl⟩)
+      simp only [Fin.castSucc_inj] at h; exact h
+  rw [← hfin, ← hcard]
+  refine Set.encard_mono ?_; rintro x ⟨k', hk, rfl⟩
+  refine succ_chain_mono c hc (Fin.mk_lt_mk.mpr hk)
 
 namespace Lpo
 
@@ -357,7 +378,7 @@ end Lpo
 lemma lev_finite_exists_finchain {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
     (hlev : α.rel.lev x = n) :
     ∃ c : FinChain n Node, α.rel.is_succ_chain c ∧ c.last = x := by
-  simp only [Rel.lev, Set.mem_setOf_eq] at hlev
+  simp only [Rel.lev] at hlev
   have _ :
       Nonempty
         ↑{n : ENat | ∃ k : ℕ, n = ↑k ∧ ∃ c : FinChain k Node, α.rel.is_succ_chain c ∧ c.last = x} :=
@@ -458,17 +479,17 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
 lemma form_root_true {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
     (hr : ∀ y ∈ α.nodes, x ≠ y → α.rel x y) :
     α.form x = Form.true := by
-  ext v; refine ⟨fun _ ↦ True.intro, fun _ ↦ ?_⟩
-  have hvars : (α.form x).vars = ∅ := by
-    ext y; refine ⟨fun hc ↦ ?_, fun hc ↦ False.elim hc⟩
+  refine Form.empty_vars ?_ ?_
+  · ext y; refine ⟨fun hc ↦ ?_, fun hc ↦ False.elim hc⟩
     apply (α.property.form _ hx).1 at hc
     by_cases h : x = y
     · subst h; exact α.property.rel.irrefl _ hc
     · have hy := (α.property.rel_dom hc).1
       exact h (α.property.rel.antisymm (hr _ hy h) hc)
+  · exact (α.property.form_dom x).mpr hx
 
-  simp [Form.vars] at hvars
-  apply le_of_eq at hvars
-
-  obtain ⟨v', hsat⟩ := (α.property.form_dom x).mpr hx
-  sorry
+lemma notMem_vars {l : Type} [Bot l] {α : Lpo l} {x y : Node}
+    (hx : x ∈ α.nodes) (hy : y ∉ α.nodes) : y ∉ (α.form x).vars := by
+  intro hc; apply hy
+  have hrel := (α.property.form _ hx).1 _ hc
+  exact (α.property.rel_dom hrel).1

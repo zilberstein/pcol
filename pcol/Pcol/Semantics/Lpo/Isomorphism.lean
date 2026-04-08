@@ -54,18 +54,34 @@ noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
         · intro y hy hne; refine ⟨Subtype.coe_prop _, hy, ?_⟩
           simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
           refine hroot _ (Subtype.coe_prop _) fun hc ↦ hne ?_
-          sorry
+          have : ⟨x, hx⟩ = e.symm ⟨y, hy⟩ := by
+            ext; exact hc
+          rw [this, Equiv.apply_symm_apply]
     · intro _ hlab _ hx _; exact a.property.bot _ (hlab hx) _
-    · sorry --intro x; constructor
-      -- · intro ⟨_, h⟩; exact hinv ((a.property.form_dom _).1 ⟨_, h⟩)
-      -- · intro ⟨y, hy, hxy⟩; rw [← hxy]
-      --   unfold finv; rw [Function.leftInverse_surjInv hf y]
-      --   rcases (a.property.form_dom _).2 hy with ⟨v, h⟩
-      --   use (finv '' v); simp; rw [← Set.image_comp]
-      --   have heq : f ∘ finv = id := by ext _; exact Function.surjInv_eq hf.2 _
-      --   rw [heq, Set.image_id]; exact h
-    · sorry
---        · simp [Form.vars]; intro y hy
+    · intro x; constructor
+      · intro ⟨_, hx, _⟩; exact hx
+      · intro hx;
+        have ⟨v, hform⟩ := (a.property.form_dom (e.symm ⟨_, hx⟩).val).mpr (Subtype.coe_prop _)
+        use { y | ∃ z ∈ v, ∃ hz : z ∈ a.nodes, y = e ⟨z, hz⟩ }
+        refine ⟨hx, (Form.sat_on_vars _ _ ?_).mp hform⟩
+        intro z hz
+        rcases Set.mem_symmDiff.mp hz with ⟨h, h'⟩ | ⟨h, h'⟩
+        · refine notMem_vars (Subtype.coe_prop _) ?_
+          simp only [Set.mem_setOf_eq, ↓existsAndEq, Subtype.coe_eta, Equiv.symm_apply_apply,
+            Subtype.coe_prop, exists_const, and_true, exists_and_left, exists_prop, exists_eq_left,
+            Set.sep_mem_eq, Set.mem_inter_iff, not_and] at h'
+          exact h'.mt (Set.not_notMem.mpr h)
+        · simp only [Set.mem_setOf_eq, ↓existsAndEq, Subtype.coe_eta, Equiv.symm_apply_apply,
+            Subtype.coe_prop, exists_const, and_true, exists_and_left, exists_prop, exists_eq_left,
+            Set.sep_mem_eq, Set.mem_inter_iff] at h
+          exfalso; exact h' h.2
+    · intro x hx; constructor
+      · intro y hy; simp only [Form.vars, ne_eq, eq_iff_iff, Set.mem_setOf_eq] at hy
+        have ⟨v, v', hy, h⟩ := hy
+        have := exists_congr.mt h
+        exfalso; apply h; sorry
+      · intro z hx hz hrel v ⟨_, hform⟩; refine ⟨hx, ?_⟩
+        exact (a.property.form _ (e.symm ⟨_, hx⟩).property).2 _ hrel _ hform
   }
 
 def cast_perm {X X' Y Y' : Set Node} (e : X ≃ Y) (hx : X = X') (hy : Y = Y') : X' ≃ Y' := {
@@ -142,12 +158,27 @@ lemma permute_refl {l : Type} [Bot l] (a : Lpo l) :
     · exact dif_pos hx
     · exact (dif_neg hx).trans (a.property.lab_dom _ hx).symm
   · ext x v; constructor
-    · intro ⟨hx, hform⟩;
-      have hh := a.property.form x hx
-      sorry
-    · intro hform; constructor
-      · sorry
-      · exact (a.property.form_dom x).mp ⟨_, hform⟩
+    · intro ⟨hx, hform⟩
+      refine (Form.sat_on_vars _ _ ?_).mp hform
+      intro y hy
+      rcases Set.mem_symmDiff.mp hy with ⟨⟨z, ⟨hz, heq⟩, hzv⟩, hyv⟩ | ⟨hyv, h⟩
+      · have : z = y := by
+          exact (congrArg _ (Equiv.refl_apply _)).symm.trans heq
+        subst this; contradiction
+      · intro hvars; apply h
+        have hy := (a.property.rel_dom ((a.property.form _ hx).1 _ hvars)).1
+        refine ⟨y, ⟨hy, ?_⟩, hyv⟩; exact Equiv.refl_apply _
+    · intro hform; have hx := (a.property.form_dom x).mp ⟨_, hform⟩
+      refine ⟨hx, ?_⟩; conv => lhs; exact Equiv.refl_apply _
+      refine (Form.sat_on_vars _ _ ?_).mp hform
+      intro y hy
+      rcases Set.mem_symmDiff.mp hy with ⟨hyv, h⟩ | ⟨⟨z, ⟨hz, heq⟩, hzv⟩, hyv⟩
+      · intro hc; apply h
+        have hy := (a.property.rel_dom ((a.property.form _ hx).1 _ hc)).1
+        refine ⟨y, ⟨hy, ?_⟩, hyv⟩; exact Equiv.refl_apply _
+      · have : z = y := by
+          exact (congrArg _ (Equiv.refl_apply _)).symm.trans heq
+        subst this; contradiction
 
 lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
     {e₁ : a.nodes ≃ X} {e₂ : X ≃ Y} :
@@ -330,17 +361,37 @@ lemma permute_monotone {l : Type} [LE l] [OrderBot l] {a b : Lpo l} {X Y : Set N
       exact hext.symm.extend _
     · refine le_of_eq_of_le (dif_neg hx) bot_le
   -- Formula
-  · sorry
-    -- simp only [Lpo.nodes, Lpo.form]; intro x hx; ext v; constructor
-    -- intro ⟨hx, hform⟩; use hext.cod_sub hx
-    -- refine
-    --   ((congrArg₂ b.form ?_ ?_).trans
-    --     (congrFun (hle.form _ (Subtype.coe_prop _)) _).symm).mpr hform
-    -- · symm; exact hext.symm.extend _
-    -- · ext y; simp only [Subtype.exists, exists_and_right, Set.mem_setOf_eq]
-    --   refine exists_congr fun z ↦ ⟨?_, ?_⟩
-    --   rintro ⟨⟨hz, rfl⟩, hv⟩; sorry; sorry -- THIS APPROACH IS NOT CORRECT, NEED SOMETHING ABOUT THE FREE VARS
-    -- · sorry
+  · simp only [Lpo.nodes, Lpo.form]
+    intro x hx; ext v; constructor
+    · intro ⟨hx, hform⟩; use hext.cod_sub hx
+      conv => lhs; exact (hext.symm.extend ⟨_, hx⟩).symm
+      conv => exact congrFun (hle.form _ (Subtype.coe_prop _)).symm _
+      refine (Form.sat_on_vars _ _ ?_).mp hform
+      intro y hy hvars
+      rcases Set.mem_symmDiff.mp hy with ⟨⟨z, rfl, hzv⟩, h⟩ | ⟨⟨z, rfl, hzv⟩, h⟩
+      · apply h; refine ⟨⟨z.val, hext.cod_sub z.property⟩, ?_, hzv⟩
+        exact (hext.symm.extend z).symm
+      · apply h; refine ⟨⟨z.val, ?_⟩, ?_, hzv⟩
+        · have hz' := (a.property.rel_dom ((a.property.form _ (Subtype.coe_prop _)).1 _ hvars)).1
+          have := (e₁ ⟨_, hz'⟩).property
+          refine (congrArg₂ (· ∈ ·) ?_ rfl).mp this
+          rw [hext.extend]; exact congrArg _ (Equiv.apply_symm_apply e₂ z)
+        · exact hext.symm.extend _
+    · intro ⟨hx', hform⟩; use hx
+      conv at hform => lhs; exact (hext.symm.extend ⟨_, hx⟩).symm
+      conv => exact congrFun (hle.form _ (Subtype.coe_prop _)) _
+      refine (Form.sat_on_vars _ _ ?_).mp hform
+      intro y hy hvars
+      rcases Set.mem_symmDiff.mp hy with ⟨⟨z, rfl, hzv⟩, h⟩ | ⟨⟨z, rfl, hzv⟩, h⟩
+      · apply h; refine ⟨⟨z.val, ?_⟩, ?_, hzv⟩
+        · conv at hvars => lhs; congr; exact (hle.form _ (Subtype.coe_prop _)).symm
+          have hz' := (a.property.rel_dom ((a.property.form _ (Subtype.coe_prop _)).1 _ hvars)).1
+          have := (e₁ ⟨_, hz'⟩).property
+          refine (congrArg₂ (· ∈ ·) ?_ rfl).mp this
+          rw [hext.extend]; exact congrArg _ (Equiv.apply_symm_apply e₂ z)
+        · exact hext.symm.extend _
+      · apply h; refine ⟨⟨z.val, hext.cod_sub z.property⟩, ?_, hzv⟩
+        exact (hext.symm.extend _).symm
   · simp only [Lpo.nodes, Lpo.rel]; intro x hx
     rcases hle.succ _ (e₂.symm ⟨_, hx⟩).property with hx' | ⟨z, ⟨hz, hbot⟩, hrel⟩
     · left; refine (congrArg₂ (· ∈ ·) ?_ rfl).mp (e₁ ⟨_, hx'⟩).property

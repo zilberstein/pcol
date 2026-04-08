@@ -690,7 +690,18 @@ lemma permute_continuous {l : Type} [DCPO l] [OrderBot l]
       refine (c₂ i).property.lab_dom _ fun c ↦ hx ?_
       exact (le_ωSup c₂ i).nodes c
   -- FORMULA
-  · sorry
+  · ext1 x; by_cases hx : x ∈ (ωSup c₂).nodes
+    · simp only [ωSup_nodes, Set.mem_iUnion] at hx
+      have ⟨i, hx⟩ := hx
+      rw [← (le_ωSup c₂ i).form _ hx, ← hp i]
+      refine ((permute_monotone (le_ωSup c₁ i) ?_).form _ ?_).symm
+      · exact le_permute_sup _ _
+      · exact hx
+    · ext v; constructor; all_goals {
+        intro hform; exfalso
+        refine ((Subtype.property (p := is_valid_lpo) _).form_dom x).mp.mt ?_ ⟨_, hform⟩
+        exact hx
+      }
 
 lemma permute_chain {l : Type} [DCPO l] [OrderBot l]
     {α : Lpo l} {c : Chain (Lpo l)}

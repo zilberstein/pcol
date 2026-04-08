@@ -360,49 +360,6 @@ lemma form_directed_eq (d : DSet (Lpo l)) {x : Node} {α β : Lpo l}
   obtain ⟨γ, _, hαγ, hβγ⟩ := d.directed _ hα _ hβ
   rw [hαγ.form x hx, hβγ.form x hx']
 
-lemma form_vars_set (d : DSet (Lpo l)) {x : Node} {α : Lpo l}
-    (hα : α ∈ d) (hx : x ∈ α.nodes) :
-    Form.vars (fun v ↦ ∃ a ∈ d, a.form x v) = ⋃ a ∈ d, (a.form x).vars := by
-  ext y; constructor
-  · simp only [Form.vars, Form.free, not_forall, Set.mem_setOf_eq, Set.mem_iUnion, exists_prop,
-      forall_exists_index]
-    intro v hs
-    refine ⟨α, hα, v, not_iff.mpr ⟨?_, ?_⟩⟩
-    · intro hform;
-      have hform' : ¬ ∃ β ∈ d, β.form x v := by
-        simp only [not_exists, not_and]; intro β hβ
-        by_cases hx' : x ∈ β.nodes
-        · rw [← form_directed_eq d hα hβ hx hx']; exact hform
-        · have hfls := (β.property.form_dom x).mp.mt hx'
-          simp only [Form.sat, not_exists] at hfls
-          exact hfls _
-      obtain ⟨β, hβ, hf⟩ := (not_iff.mp hs).mp hform'
-      have hx' := (β.property.form_dom x).mp ⟨_, hf⟩
-      rw [form_directed_eq d hα hβ hx hx']; exact hf
-    · intro hform
-      have h := (not_iff.mp hs).mpr ⟨α, hα, hform⟩
-      simp only [not_exists, not_and] at h
-      exact h α hα
-  · simp only [Form.vars, Form.free, not_forall, Set.mem_iUnion, Set.mem_setOf_eq, exists_prop,
-      forall_exists_index, and_imp]
-    intro α hα v hs; use v; refine not_iff.mpr ⟨?_, ?_⟩
-    · simp only [not_exists, not_and]
-      intro h; refine ⟨α, hα, ?_⟩
-      exact (not_iff.mp hs).mp (h α hα)
-    · simp only [not_exists, not_and, forall_exists_index, and_imp]
-      intro β hβ hform γ hγ; by_cases hxγ : x ∈ γ.nodes
-      · have hxα : x ∈ α.nodes := by
-          by_contra hc; apply (α.property.form_dom x).mp.mt at hc
-          simp only [Form.sat, not_exists] at hc
-          exact hc _ ((not_iff.mp hs).mp (hc _))
-        have hxβ := (β.property.form_dom x).mp ⟨_, hform⟩
-        rw [form_directed_eq d hβ hα hxβ hxα] at hform
-        rw [form_directed_eq d hγ hα hxγ hxα]
-        exact (not_iff.mp hs).mpr hform
-      · have hfls := (γ.property.form_dom x).mp.mt hxγ
-        simp only [Form.sat, not_exists] at hfls
-        exact hfls _
-
 lemma lpo_sup_valid (d : DSet (Lpo l)) :
     is_valid_lpo (lpo_base_sup d) := by
   unfold lpo_base_sup
@@ -429,16 +386,17 @@ lemma lpo_sup_valid (d : DSet (Lpo l)) :
       exact ⟨v, α, hα, hform⟩
   -- Other Formula Properties
   · intro x α hα hx; constructor
-    · rw [form_vars_set d hα hx]
-      simp only [Set.mem_iUnion, exists_prop, forall_exists_index, and_imp]
-      intro y β hβ hy; refine ⟨β, hβ, ?_⟩
-      refine (β.property.form x ?_).1 _ hy
-      refine (β.property.form_dom x).mp ?_
-      simp [Form.vars, Form.free] at hy
-      obtain ⟨v, hv⟩ := hy
-      by_cases hsat : β.form x v
-      · exact ⟨v, hsat⟩
-      · exact ⟨_, (not_iff.mp hv).mp hsat⟩
+    · unfold Form.vars; simp only [ne_eq, eq_iff_iff, Set.mem_setOf_eq, forall_exists_index,
+        and_imp]
+      intro y v v' hy h; by_cases hv : ∃ a ∈ d, a.form x v; all_goals {
+        try (have ⟨β, hβ, hform⟩ := hv)
+        try (have ⟨β, hβ, hform⟩ := (not_iff.mp h).mp hv)
+        refine ⟨β, hβ, (β.property.form x ?_).1 _ ?_⟩
+        · exact (β.property.form_dom _).mp ⟨_, hform⟩
+        · refine ⟨v, v', hy, ?_⟩; intro hc
+          try (exact (not_iff.mp h).mpr ⟨β, hβ, hc.mp hform⟩ ⟨β, hβ, hform⟩)
+          try (exact hv ⟨β, hβ, hc.mpr hform⟩)
+      }
     · intro z a ha hxz v ⟨b, hb, hform⟩
       obtain ⟨c, hc, hac, hbc⟩ := d.directed _ ha _ hb
       refine ⟨c, hc, ?_⟩
