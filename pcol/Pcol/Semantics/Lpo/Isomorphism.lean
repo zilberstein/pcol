@@ -1,6 +1,109 @@
 import Pcol.Semantics.Lpo.Basic
 import Pcol.Semantics.Lpo.Order
 
+structure PermExt {X Y A B : Set Node} (e : X ≃ A) (e' : Y ≃ B) : Prop where
+  dom_sub : X ⊆ Y
+  extend : ∀ x : X, (e x).val = (e' ⟨x, dom_sub x.property⟩).val
+
+namespace PermExt
+
+lemma cod_sub {X Y A B : Set Node} {e : X ≃ A} {e' : Y ≃ B}
+    (h : PermExt e e') : A ⊆ B := by
+  intro x hx
+  have he := h.extend (e.symm ⟨x, hx⟩)
+  simp only [Equiv.apply_symm_apply] at he; rw [he]
+  refine (e' _).property
+
+lemma symm {X Y A B : Set Node} {e : X ≃ A} {e' : Y ≃ B}
+    (h : PermExt e e') : PermExt e.symm e'.symm := by
+  constructor
+  · intro x
+    have hx := h.extend (e.symm x); simp only [Equiv.apply_symm_apply] at hx
+    have heq :
+       (⟨x, h.cod_sub x.property⟩ : ↑B) =
+       e' ⟨e.symm x, h.dom_sub (Subtype.coe_prop _)⟩ := by
+      ext; exact hx
+    rw [heq]; simp only [Equiv.symm_apply_apply]
+
+end PermExt
+
+namespace Form
+
+def image {X Y : Set Node} (s : Set Node) (e : X ≃ Y) : Set Node :=
+  { y | ∃ x : ↑X, (e x).val = y ∧ x.val ∈ s }
+
+def permute {X Y : Set Node} (φ : Form Node) (e : X ≃ Y) : Form Node :=
+  fun v ↦ φ (image v e.symm)
+
+lemma permute_refl {X : Set Node} (φ : Form Node) (hd : φ.dependsOn X) :
+    φ.permute (Equiv.refl X) = φ := by
+  ext1 v; refine hd _ _ ?_; refine Set.disjoint_left.mpr ?_
+  intro x hsd hx; rcases Set.mem_symmDiff.mp hsd with ⟨⟨y, heq, hv⟩, hv'⟩ | ⟨hv, hv'⟩
+  · simp only [Equiv.refl_symm, Equiv.refl_apply] at heq; subst heq
+    exact hv' hv
+  · apply hv'; exact ⟨⟨_, hx⟩, rfl, hv⟩
+
+lemma permute_trans {X Y Z : Set Node} (φ : Form Node) (e : X ≃ Y) (e' : Y ≃ Z)
+    (hd : φ.dependsOn X) :
+    (φ.permute e).permute e' = φ.permute (e.trans e') := by
+  ext1 v; refine hd _ _ ?_; refine Set.disjoint_left.mpr ?_
+  intro x hsd hx; rcases Set.mem_symmDiff.mp hsd with
+    ⟨⟨y, rfl, ⟨z, hyz, hzv⟩⟩, h⟩ | ⟨⟨z, rfl, hzv⟩, h⟩
+  · apply h; refine ⟨z, ?_, hzv⟩
+    simp only [Equiv.symm_trans_apply]; refine congrArg _ (congrArg _ ?_)
+    exact Subtype.val_injective hyz
+  · apply h; refine ⟨_, rfl, _, rfl, hzv⟩
+
+lemma permute_monotone {X X' Y Y' : Set Node} {e : X ≃ Y} {e' : X' ≃ Y'} {φ : Form Node}
+    (hex : PermExt e e') (hd : φ.dependsOn X) : φ.permute e = φ.permute e' := by
+  ext1 v; refine hd _ _ ?_; refine Set.disjoint_left.mpr ?_
+  intro x hsd hx; rcases Set.mem_symmDiff.mp hsd with ⟨⟨y, rfl, hv⟩, h⟩ | ⟨⟨y, rfl, hv⟩, h⟩
+  · apply h; refine ⟨⟨y.val, hex.cod_sub y.property⟩, ?_, hv⟩
+    exact (hex.symm.extend y).symm
+  · apply h; refine ⟨⟨y.val, ?_⟩, ?_, hv⟩
+    · have := (e ⟨_, hx⟩).property; conv at this => rhs; exact hex.extend _
+      simp only [Subtype.coe_eta, Equiv.apply_symm_apply] at this
+      exact this
+    · exact hex.symm.extend _
+
+lemma image_inv {X Y : Set Node} (s : Set Node) (e : X ≃ Y) :
+    image (image s e) e.symm = s ∩ X := by
+  ext x; constructor
+  · rintro ⟨y, rfl, x, hy, hx⟩
+    rw [← Subtype.val_injective hy]; simp only [Equiv.symm_apply_apply]
+    exact ⟨hx, x.property⟩
+  · intro ⟨hs, hx⟩; refine ⟨e ⟨_, hx⟩, ?_, ⟨_, hx⟩, rfl, hs⟩
+    simp only [Equiv.symm_apply_apply]
+
+lemma image_symmDiff {X Y : Set Node} (s t : Set Node) (e : X ≃ Y) :
+    symmDiff (image s e) (image t e) = image (symmDiff s t) e := by
+  ext x; constructor
+  · intro hx; rcases Set.mem_symmDiff.mp hx with ⟨⟨y, rfl, hy⟩, h'⟩ | ⟨⟨y, rfl, hy⟩, h'⟩
+    all_goals {
+      refine ⟨y, rfl, Set.mem_symmDiff.mpr ?_⟩
+      try (refine Or.inl ⟨hy, ?_⟩)
+      try (refine Or.inr ⟨hy, ?_⟩)
+      intro ht; apply h' ⟨y, rfl, ht⟩
+    }
+  · rintro ⟨y, rfl, hy⟩; rcases Set.mem_symmDiff.mp hy with ⟨h, h'⟩ | ⟨h, h'⟩
+    all_goals {
+      refine Set.mem_symmDiff.mpr ?_
+      try (left; refine ⟨⟨y, rfl, h⟩, ?_⟩)
+      try (right; refine ⟨⟨y, rfl, h⟩, ?_⟩)
+      intro ⟨x, heq, ht⟩
+      have := e.injective (Subtype.val_injective heq); subst this
+      exact h' ht
+    }
+
+lemma disjoint_image {X Y : Set Node} {s t : Set Node} (e : X ≃ Y)
+    (hd : Disjoint s t) : Disjoint (image s e) (image t e) := by
+  refine Set.disjoint_left.mpr ?_
+  rintro _ ⟨x, rfl, hs⟩ ⟨y, heq, ht⟩
+  have := e.injective (Subtype.val_injective heq); subst this
+  exact Set.disjoint_left.mp hd hs ht
+
+end Form
+
 namespace Lpo
 
 noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
@@ -12,7 +115,7 @@ noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
       classical
       exact if hx : x ∈ X then a.lab (e.symm ⟨x, hx⟩) else ⊥
     form x v :=
-      ∃ hx, a.form (e.symm ⟨x, hx⟩) { y | ∃ z : ↑X, (e.symm z).val = y ∧ z.val ∈ v }
+      ∃ hx, (a.form (e.symm ⟨x, hx⟩)).permute e v
   }
   property := by
     constructor <;> try simp
@@ -62,24 +165,23 @@ noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
       · intro ⟨_, hx, _⟩; exact hx
       · intro hx;
         have ⟨v, hform⟩ := (a.property.form_dom (e.symm ⟨_, hx⟩).val).mpr (Subtype.coe_prop _)
-        use { y | ∃ z ∈ v, ∃ hz : z ∈ a.nodes, y = e ⟨z, hz⟩ }
-        refine ⟨hx, (Form.sat_on_vars _ _ ?_).mp hform⟩
-        intro z hz
-        rcases Set.mem_symmDiff.mp hz with ⟨h, h'⟩ | ⟨h, h'⟩
-        · refine notMem_vars (Subtype.coe_prop _) ?_
-          simp only [Set.mem_setOf_eq, ↓existsAndEq, Subtype.coe_eta, Equiv.symm_apply_apply,
-            Subtype.coe_prop, exists_const, and_true, exists_and_left, exists_prop, exists_eq_left,
-            Set.sep_mem_eq, Set.mem_inter_iff, not_and] at h'
-          exact h'.mt (Set.not_notMem.mpr h)
-        · simp only [Set.mem_setOf_eq, ↓existsAndEq, Subtype.coe_eta, Equiv.symm_apply_apply,
-            Subtype.coe_prop, exists_const, and_true, exists_and_left, exists_prop, exists_eq_left,
-            Set.sep_mem_eq, Set.mem_inter_iff] at h
-          exfalso; exact h' h.2
+        use Form.image v e
+        refine ⟨hx, ((a.property.form _ (Subtype.coe_prop _)).1 _ _ ?_).mp hform⟩
+        refine Set.disjoint_left.mpr ?_
+        intro y hy hc; have hy' := (a.property.rel_dom hc).1
+        rcases Set.mem_symmDiff.mp hy with ⟨hyv, h⟩ | ⟨h, h'⟩
+        · apply h; rw [Form.image_inv]; exact ⟨hyv, hy'⟩
+        · rw [Form.image_inv] at h; exact h' h.1
     · intro x hx; constructor
-      · intro y hy; simp only [Form.vars, ne_eq, eq_iff_iff, Set.mem_setOf_eq] at hy
-        have ⟨v, v', hy, h⟩ := hy
-        have := exists_congr.mt h
-        exfalso; apply h; sorry
+      · intro v v' hd; ext; refine exists_congr fun hx ↦ ?_
+        refine iff_eq_eq.mpr ((a.property.form _ (Subtype.coe_prop _)).1 _ _ ?_)
+        rw [Form.image_symmDiff]
+        refine Set.disjoint_of_subset_right ?_ (Form.disjoint_image _ hd)
+        intro y hrel; have hy := (a.property.rel_dom hrel).1
+        refine ⟨e ⟨_, hy⟩, ?_, Subtype.coe_prop _, hx, ?_⟩
+        · simp only [Equiv.symm_apply_apply]
+        · simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
+          exact hrel
       · intro z hx hz hrel v ⟨_, hform⟩; refine ⟨hx, ?_⟩
         exact (a.property.form _ (e.symm ⟨_, hx⟩).property).2 _ hrel _ hform
   }
@@ -117,36 +219,12 @@ lemma permute'_eq {l : Type} [Bot l] {X Y : Set Node} {a b : Lpo l}
   · ext x; simp only [Equiv.toFun_as_coe, Equiv.invFun_as_coe]
     nth_rewrite 1 [h]; rfl
   · ext x v; refine exists_congr fun hx ↦ ?_
-    refine Iff.of_eq (congr (congr ?_ ?_) ?_)
-    · rw [h]
-    · rfl
-    · rfl
+    subst h; rfl
 
 lemma permute_convert {l : Type} [Bot l] {X Y : Set Node} (a b : Lpo l)
     {e : a.nodes ≃ X} (h : a = b) (h' : X = Y) :
     ∃ e' : b.nodes ≃ Y, a.permute e = b.permute e' := by
-  subst h'
-  use {
-    toFun x := e ⟨x, by rw [h]; exact x.property⟩
-    invFun y := ⟨e.symm y, by rw [← h]; exact Subtype.coe_prop _⟩
-    left_inv := by intro x; simp only [Equiv.symm_apply_apply, Subtype.coe_eta]
-    right_inv := by intro x; simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
-  }
-  ext1
-  · simp only [permute, nodes]
-  · simp only [permute, rel]; ext x y; constructor <;>
-      intro ⟨hx, hy, hrel⟩ <;> refine ⟨hx, hy, ?_⟩
-    · nth_rewrite 1 [← h]; exact hrel
-    · nth_rewrite 1 [h]; exact hrel
-  · simp only [permute, lab]; ext x
-    classical
-    refine dite_congr rfl ?_ ?_
-    · intro _; nth_rewrite 1 [h]; rfl
-    · intro _; rfl
-  · simp only [permute, form]; ext x v; constructor <;>
-      intro ⟨hx, hform⟩ <;> refine ⟨hx, ?_⟩
-    · nth_rewrite 1 [← h]; exact hform
-    · nth_rewrite 1 [h]; exact hform
+  subst h'; subst h; use e
 
 lemma permute_refl {l : Type} [Bot l] (a : Lpo l) :
     a.permute (Equiv.refl a.nodes) = a := by
@@ -159,26 +237,17 @@ lemma permute_refl {l : Type} [Bot l] (a : Lpo l) :
     · exact (dif_neg hx).trans (a.property.lab_dom _ hx).symm
   · ext x v; constructor
     · intro ⟨hx, hform⟩
-      refine (Form.sat_on_vars _ _ ?_).mp hform
-      intro y hy
-      rcases Set.mem_symmDiff.mp hy with ⟨⟨z, ⟨hz, heq⟩, hzv⟩, hyv⟩ | ⟨hyv, h⟩
-      · have : z = y := by
-          exact (congrArg _ (Equiv.refl_apply _)).symm.trans heq
-        subst this; contradiction
-      · intro hvars; apply h
-        have hy := (a.property.rel_dom ((a.property.form _ hx).1 _ hvars)).1
-        refine ⟨y, ⟨hy, ?_⟩, hyv⟩; exact Equiv.refl_apply _
+      rw [Form.permute_refl] at hform
+      · conv at hform => lhs; exact Equiv.refl_apply _
+        exact hform
+      · refine Form.dependsOn_monotone _ ?_ (a.property.form x hx).1
+        intro y hrel; exact (a.property.rel_dom hrel).1
     · intro hform; have hx := (a.property.form_dom x).mp ⟨_, hform⟩
-      refine ⟨hx, ?_⟩; conv => lhs; exact Equiv.refl_apply _
-      refine (Form.sat_on_vars _ _ ?_).mp hform
-      intro y hy
-      rcases Set.mem_symmDiff.mp hy with ⟨hyv, h⟩ | ⟨⟨z, ⟨hz, heq⟩, hzv⟩, hyv⟩
-      · intro hc; apply h
-        have hy := (a.property.rel_dom ((a.property.form _ hx).1 _ hc)).1
-        refine ⟨y, ⟨hy, ?_⟩, hyv⟩; exact Equiv.refl_apply _
-      · have : z = y := by
-          exact (congrArg _ (Equiv.refl_apply _)).symm.trans heq
-        subst this; contradiction
+      refine ⟨hx, ?_⟩; rw [Form.permute_refl]
+      · conv => lhs; exact Equiv.refl_apply _
+        exact hform
+      · refine Form.dependsOn_monotone _ ?_ (a.property.form x hx).1
+        intro y hrel; exact (a.property.rel_dom hrel).1
 
 lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
     {e₁ : a.nodes ≃ X} {e₂ : X ≃ Y} :
@@ -189,17 +258,14 @@ lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
     ext x y; rfl
   · simp only [lab, Subtype.coe_prop, ↓reduceDIte, Subtype.coe_eta, Equiv.symm_trans_apply]
     ext x; rfl
-  · ext x v; simp only [form, Subtype.coe_eta, Subtype.exists, exists_and_right, Set.mem_setOf_eq,
-      Subtype.coe_prop, exists_const, Equiv.symm_trans_apply]
-    refine exists_congr fun hx ↦ Iff.of_eq (congrArg _ ?_)
-    ext y; simp only [Set.mem_setOf_eq]; constructor
-    · rintro ⟨z, ⟨hz, hzy⟩, w, ⟨hw, hwz⟩, hv⟩
-      refine ⟨w, ⟨hw, ?_⟩, hv⟩
-      refine Eq.trans (Subtype.val_inj.mpr ?_) hzy
-      exact congrArg _ (Subtype.ext hwz)
-    · rintro ⟨z, ⟨hz, hzy⟩, hv⟩
-      refine ⟨e₂.symm ⟨z, hz⟩, ⟨Subtype.coe_prop _, hzy⟩, ?_⟩
-      refine ⟨z, ⟨hz, rfl⟩, hv⟩
+  · ext x v; simp only [form]; refine exists_congr fun hx ↦ ?_
+    rw [← Form.permute_trans]
+    · refine iff_eq_eq.mpr (congrFun₂ (congrArg Form.permute ?_) _ _)
+      ext v; constructor
+      · rintro ⟨_, hform⟩; exact hform
+      · intro hform; exact ⟨Subtype.coe_prop _, hform⟩
+    · refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+      intro y hrel; exact (a.property.rel_dom hrel).1
 
 lemma permute_symm {l : Type} [Bot l] {a b : Lpo l} {e : a.nodes ≃ b.nodes} :
     a.permute e = b → a = b.permute e.symm := by
@@ -229,32 +295,6 @@ lemma is_isomorphic' {l : Type} [Bot l] {a b : Lpo l} {X : Set Node}
     {e : a.nodes ≃ X} (h : a.permute e = b) : a ≈ b := by
   have : X = b.nodes := by rw [← h]; simp only [permute, nodes]
   subst this; exact ⟨e, h⟩
-
-structure PermExt {X Y A B : Set Node} (e : X ≃ A) (e' : Y ≃ B) : Prop where
-  dom_sub : X ⊆ Y
-  extend : ∀ x : X, (e x).val = (e' ⟨x, dom_sub x.property⟩).val
-
-namespace PermExt
-
-lemma cod_sub {X Y A B : Set Node} {e : X ≃ A} {e' : Y ≃ B}
-    (h : PermExt e e') : A ⊆ B := by
-  intro x hx
-  have he := h.extend (e.symm ⟨x, hx⟩)
-  simp only [Equiv.apply_symm_apply] at he; rw [he]
-  refine (e' _).property
-
-lemma symm {X Y A B : Set Node} {e : X ≃ A} {e' : Y ≃ B}
-    (h : PermExt e e') : PermExt e.symm e'.symm := by
-  constructor
-  · intro x
-    have hx := h.extend (e.symm x); simp only [Equiv.apply_symm_apply] at hx
-    have heq :
-       (⟨x, h.cod_sub x.property⟩ : ↑B) =
-       e' ⟨e.symm x, h.dom_sub (Subtype.coe_prop _)⟩ := by
-      ext; exact hx
-    rw [heq]; simp only [Equiv.symm_apply_apply]
-
-end PermExt
 
 def perm_subset {X X' Y : Set Node} (e : X ≃ Y) (h : X' ⊆ X) :
     X' ≃ (Set.range fun x : ↑X' ↦ (e ⟨x, h x.property⟩).val) := {
@@ -364,34 +404,15 @@ lemma permute_monotone {l : Type} [LE l] [OrderBot l] {a b : Lpo l} {X Y : Set N
   · simp only [Lpo.nodes, Lpo.form]
     intro x hx; ext v; constructor
     · intro ⟨hx, hform⟩; use hext.cod_sub hx
-      conv => lhs; exact (hext.symm.extend ⟨_, hx⟩).symm
-      conv => exact congrFun (hle.form _ (Subtype.coe_prop _)).symm _
-      refine (Form.sat_on_vars _ _ ?_).mp hform
-      intro y hy hvars
-      rcases Set.mem_symmDiff.mp hy with ⟨⟨z, rfl, hzv⟩, h⟩ | ⟨⟨z, rfl, hzv⟩, h⟩
-      · apply h; refine ⟨⟨z.val, hext.cod_sub z.property⟩, ?_, hzv⟩
-        exact (hext.symm.extend z).symm
-      · apply h; refine ⟨⟨z.val, ?_⟩, ?_, hzv⟩
-        · have hz' := (a.property.rel_dom ((a.property.form _ (Subtype.coe_prop _)).1 _ hvars)).1
-          have := (e₁ ⟨_, hz'⟩).property
-          refine (congrArg₂ (· ∈ ·) ?_ rfl).mp this
-          rw [hext.extend]; exact congrArg _ (Equiv.apply_symm_apply e₂ z)
-        · exact hext.symm.extend _
+      conv => arg 1; exact (congrArg _ (hext.symm.extend ⟨x, hx⟩)).symm.trans (hle.form _ (Subtype.coe_prop _)).symm
+      refine (congrFun (Form.permute_monotone hext ?_) _).mp hform
+      refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+      intro y hrel; exact (a.property.rel_dom hrel).1
     · intro ⟨hx', hform⟩; use hx
-      conv at hform => lhs; exact (hext.symm.extend ⟨_, hx⟩).symm
-      conv => exact congrFun (hle.form _ (Subtype.coe_prop _)) _
-      refine (Form.sat_on_vars _ _ ?_).mp hform
-      intro y hy hvars
-      rcases Set.mem_symmDiff.mp hy with ⟨⟨z, rfl, hzv⟩, h⟩ | ⟨⟨z, rfl, hzv⟩, h⟩
-      · apply h; refine ⟨⟨z.val, ?_⟩, ?_, hzv⟩
-        · conv at hvars => lhs; congr; exact (hle.form _ (Subtype.coe_prop _)).symm
-          have hz' := (a.property.rel_dom ((a.property.form _ (Subtype.coe_prop _)).1 _ hvars)).1
-          have := (e₁ ⟨_, hz'⟩).property
-          refine (congrArg₂ (· ∈ ·) ?_ rfl).mp this
-          rw [hext.extend]; exact congrArg _ (Equiv.apply_symm_apply e₂ z)
-        · exact hext.symm.extend _
-      · apply h; refine ⟨⟨z.val, hext.cod_sub z.property⟩, ?_, hzv⟩
-        exact (hext.symm.extend _).symm
+      conv at hform => arg 1; exact (congrArg _ (hext.symm.extend ⟨x, hx⟩)).symm.trans (hle.form _ (Subtype.coe_prop _)).symm
+      refine (congrFun (Form.permute_monotone hext ?_) _).mpr hform
+      refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+      intro y hrel; exact (a.property.rel_dom hrel).1
   · simp only [Lpo.nodes, Lpo.rel]; intro x hx
     rcases hle.succ _ (e₂.symm ⟨_, hx⟩).property with hx' | ⟨z, ⟨hz, hbot⟩, hrel⟩
     · left; refine (congrArg₂ (· ∈ ·) ?_ rfl).mp (e₁ ⟨_, hx'⟩).property

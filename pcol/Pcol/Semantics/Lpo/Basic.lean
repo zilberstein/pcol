@@ -57,65 +57,55 @@ instance : PartialOrder (Form α) where
 lemma mt {p q : Form α} (h : p ≤ q) : q.not ≤ p.not := by
   intro v hqn hp; exact hqn (h v hp)
 
-def free [DecidableEq α] (p : Form α) (x : α) : Prop :=
-  ∀ v, p v ↔ p (fun y => if x = y then ¬(v y) else v y)
+def dependsOn (p : Form α) (s : Set α) : Prop :=
+  ∀ v v', Disjoint (symmDiff v v') s → p v = p v'
 
-def vars (p : Form α) : Set α :=
-  { x | ∃ v v', x ∈ symmDiff v v' ∧ p v ≠ p v' }
+lemma dependsOn_monotone (p : Form α) : Monotone p.dependsOn := by
+  intro s t hsub hd v v' h
+  refine hd v v' ?_
+  exact Set.disjoint_of_subset_right hsub h
 
-lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
-    (hs : ∀ x ∈ s, p.free x) (hf : s.Finite) :
-    ∀ v₁ v₂, (∀ x ∉ s, x ∈ v₁ ↔ x ∈ v₂) → (p v₁ ↔ p v₂) := by
-  revert hs; refine hf.induction_on s ?_ ?_
-  · intro _ v₁ v₂ h
-    have heq : v₁ = v₂ := by ext x; exact h _ id
-    subst heq; rfl
-  · intro x t hx ht ih hins v₁ v₂ h
-    by_cases hv : x ∈ v₁ ↔ x ∈ v₂
-    · refine ih ?_ _ _ ?_
-      · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
-      · intro y hy; by_cases hxy : x = y
-        · subst hxy; exact hv
-        · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
-    · refine (hins _ (Set.mem_insert _ _) v₁).trans ?_
-      refine ih ?_ _ _ ?_
-      · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
-      · intro y hy; by_cases hxy : x = y <;> simp only [Membership.mem, hxy, Set.Mem, ↓reduceIte]
-        · subst hxy; exact not_iff.mp hv
-        · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
+-- lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
+--     (hs : ∀ x ∈ s, p.free x) (hf : s.Finite) :
+--     ∀ v₁ v₂, (∀ x ∉ s, x ∈ v₁ ↔ x ∈ v₂) → (p v₁ ↔ p v₂) := by
+--   revert hs; refine hf.induction_on s ?_ ?_
+--   · intro _ v₁ v₂ h
+--     have heq : v₁ = v₂ := by ext x; exact h _ id
+--     subst heq; rfl
+--   · intro x t hx ht ih hins v₁ v₂ h
+--     by_cases hv : x ∈ v₁ ↔ x ∈ v₂
+--     · refine ih ?_ _ _ ?_
+--       · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
+--       · intro y hy; by_cases hxy : x = y
+--         · subst hxy; exact hv
+--         · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
+--     · refine (hins _ (Set.mem_insert _ _) v₁).trans ?_
+--       refine ih ?_ _ _ ?_
+--       · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
+--       · intro y hy; by_cases hxy : x = y <;> simp only [Membership.mem, hxy, Set.Mem, ↓reduceIte]
+--         · subst hxy; exact not_iff.mp hv
+--         · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
 
-lemma sat_on_vars {p : Form Node} (v v' : Set Node) :
-    (∀ x ∈ symmDiff v v', x ∉ p.vars) → p v = p v' := by
-  intro h; by_cases hsd : (symmDiff v v').Nonempty
-  · have ⟨x, hx⟩ := hsd
-    unfold vars at h; simp only [ne_eq, eq_iff_iff, Set.mem_setOf_eq, not_exists, not_and,
-      not_not] at h
-    ext; exact h x hx v v' hx
-  · simp only [Set.symmDiff_nonempty, ne_eq, Decidable.not_not] at hsd
-    subst hsd; rfl
 
-lemma sat_if_vars_nonempty {p : Form Node} (h : p.vars.Nonempty) : p.sat := by
-  have ⟨_, v, v', _, hp⟩ := h
-  by_cases h : p v
-  · exact ⟨v, h⟩
-  · have := (not_iff.mp (eq_iff_iff.mpr.mt hp)).mp h
-    exact ⟨v', this⟩
+-- lemma sat_if_vars_nonempty {p : Form α} {s : Set α} (hne : s.Nonempty) (hd : p.dependsOn s) : p.sat := by
+--   have ⟨x, hx⟩ := hne
+--   by_contra
+--   have ⟨x, hx⟩ := h
+--   simp only [vars, bound, all_free, eq_iff_iff, Set.mem_setOf_eq] at hx
+--   have := (hx {x}).mt (Set.not_notMem.mpr (Set.mem_singleton _))
+--   simp only [Set.subset_singleton_iff, not_forall] at this
+--   have ⟨v, v', _, h⟩ := this; by_cases hp : p v
+--   · exact ⟨_, hp⟩
+--   · exact ⟨v', (not_iff.mp h).mp hp⟩
 
-lemma true_vars : (@Form.true α).vars = ∅ := by
-  ext x; unfold vars
-  simp only [ne_eq, eq_iff_iff, Set.mem_setOf_eq, Set.mem_empty_iff_false, iff_false, not_exists,
-    not_and, not_not]
+lemma true_vars : (@Form.true α).dependsOn ∅ := by
   intro _ _ _; rfl
 
-lemma empty_vars {p : Form α} (h : p.vars = ∅) (hsat : p.sat): p = Form.true := by
+lemma empty_vars {p : Form α} (hd : p.dependsOn ∅) (hsat : p.sat): p = Form.true := by
   ext v; conv => exact iff_true _
   have ⟨v', hform⟩ := hsat
-  by_cases heq : v = v'
-  · subst heq; exact hform
-  · have ⟨x, hx⟩ := Set.symmDiff_nonempty.mpr heq
-    have := Set.eq_empty_iff_forall_notMem.mp h
-    simp only [vars, ne_eq, eq_iff_iff, Set.mem_setOf_eq, not_exists, not_and, not_not] at this
-    exact (this x v v' hx).mpr hform
+  refine (hd v v' ?_).mpr hform
+  exact Set.disjoint_empty _
 
 end Form
 
@@ -193,7 +183,7 @@ structure is_valid_lpo {l : Type} [Bot l] (a : Lpo_base l) : Prop where
   bot : ∀ x, a.lab x = ⊥ → ∀ y, ¬(a.rel x y)
   -- Formulae
   form_dom : ∀ x, (a.form x).sat ↔ x ∈ a.nodes
-  form : ∀ x ∈ a.nodes, (∀ y ∈ (a.form x).vars, a.rel y x) ∧
+  form : ∀ x ∈ a.nodes, (a.form x).dependsOn { y | a.rel y x } ∧
           ∀ z, a.rel x z → a.form z ≤ a.form x
 
 
@@ -239,7 +229,7 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
           simp [Form.false] at h
       · intro heq; use ∅
         rw [ite_cond_eq_true _ _ (eq_true (Eq.symm heq))]; simp [Form.true]
-    · intro y; rw [Form.true_vars]; exact Set.notMem_empty _
+    · exact Form.true_vars
   })
 
 end Lpo
@@ -480,16 +470,17 @@ lemma form_root_true {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.n
     (hr : ∀ y ∈ α.nodes, x ≠ y → α.rel x y) :
     α.form x = Form.true := by
   refine Form.empty_vars ?_ ?_
-  · ext y; refine ⟨fun hc ↦ ?_, fun hc ↦ False.elim hc⟩
-    apply (α.property.form _ hx).1 at hc
-    by_cases h : x = y
-    · subst h; exact α.property.rel.irrefl _ hc
-    · have hy := (α.property.rel_dom hc).1
-      exact h (α.property.rel.antisymm (hr _ hy h) hc)
+  · have : { y | α.rel y x } = ∅ := by
+      ext y; simp only [Set.mem_setOf_eq, Set.mem_empty_iff_false, iff_false]
+      by_cases heq : x = y
+      · subst heq; exact α.property.rel.irrefl _
+      · intro h; have hy := (α.property.rel_dom h).1
+        exact heq (α.property.rel.antisymm (hr _ hy heq) h)
+    rw [← this]; exact (α.property.form _ hx).1
   · exact (α.property.form_dom x).mpr hx
 
-lemma notMem_vars {l : Type} [Bot l] {α : Lpo l} {x y : Node}
-    (hx : x ∈ α.nodes) (hy : y ∉ α.nodes) : y ∉ (α.form x).vars := by
-  intro hc; apply hy
-  have hrel := (α.property.form _ hx).1 _ hc
-  exact (α.property.rel_dom hrel).1
+-- lemma notMem_vars {l : Type} [Bot l] {α : Lpo l} {x y : Node}
+--     (hx : x ∈ α.nodes) (hy : y ∉ α.nodes) : y ∉ (α.form x).vars := by
+--   intro hc; apply hy
+--   have hrel := (α.property.form _ hx).1 _ hc
+--   exact (α.property.rel_dom hrel).1

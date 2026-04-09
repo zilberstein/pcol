@@ -386,17 +386,15 @@ lemma lpo_sup_valid (d : DSet (Lpo l)) :
       exact ⟨v, α, hα, hform⟩
   -- Other Formula Properties
   · intro x α hα hx; constructor
-    · unfold Form.vars; simp only [ne_eq, eq_iff_iff, Set.mem_setOf_eq, forall_exists_index,
-        and_imp]
-      intro y v v' hy h; by_cases hv : ∃ a ∈ d, a.form x v; all_goals {
-        try (have ⟨β, hβ, hform⟩ := hv)
-        try (have ⟨β, hβ, hform⟩ := (not_iff.mp h).mp hv)
-        refine ⟨β, hβ, (β.property.form x ?_).1 _ ?_⟩
-        · exact (β.property.form_dom _).mp ⟨_, hform⟩
-        · refine ⟨v, v', hy, ?_⟩; intro hc
-          try (exact (not_iff.mp h).mpr ⟨β, hβ, hc.mp hform⟩ ⟨β, hβ, hform⟩)
-          try (exact hv ⟨β, hβ, hc.mpr hform⟩)
-      }
+    · intro v v' hd; ext; constructor; all_goals {
+        intro ⟨β, hβ, hform⟩; refine ⟨β, hβ, ?_⟩
+        have hx := (β.property.form_dom x).mp ⟨_, hform⟩
+        have h := (β.property.form _ hx).1 v v'
+        try (refine (h ?_).mp hform)
+        try (refine (h ?_).mpr hform)
+        refine Set.disjoint_of_subset_right ?_ hd
+        intro y hy; exact ⟨β, hβ, hy⟩
+    }
     · intro z a ha hxz v ⟨b, hb, hform⟩
       obtain ⟨c, hc, hac, hbc⟩ := d.directed _ ha _ hb
       refine ⟨c, hc, ?_⟩

@@ -108,13 +108,10 @@ lemma trunc_valid {l : Type} [Bot l] (a : Lpo l) (n : ℕ) :
     · exact a.property.form_dom x
     · simp only [Form.sat, Form.false, exists_const, not_false_eq_true]
   · intro x hx hlev; constructor
-    · intro y hy
-      simp only [hlev, ↓reduceIte] at hy
-      have hsat : (a.form x).sat := Form.sat_if_vars_nonempty ⟨_, hy⟩
-      have hx := (a.property.form_dom x).mp hsat
-      have hyx := (a.property.form x hx).1 y hy
-      refine ⟨hyx, ?_, hlev⟩
-      exact (le_of_lt (lev_mono hyx)).trans hlev
+    · simp only [hlev, ↓reduceIte]
+      refine Form.dependsOn_monotone _ ?_ (a.property.form _ hx).1
+      intro y hrel; refine ⟨hrel, ?_, True.intro⟩
+      exact (le_of_lt (lev_mono hrel)).trans hlev
     · intro z hxz hlx hlz; simp only [hlz, ↓reduceIte, hlx]
       exact (a.property.form x hx).2 z hxz
 

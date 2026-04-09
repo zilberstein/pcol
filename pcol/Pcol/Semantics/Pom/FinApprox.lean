@@ -258,7 +258,7 @@ lemma le_and_n_eq {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : 
   exact (hle.2 _ hx).symm
 
 lemma le_iff  {l : Type} [PartialOrder l] [OrderBot l] {a b : Lpo l} {t u : TreeNode a b} :
-    t ≤ u ↔ t.n ≤ u.n ∧ Lpo.PermExt t.perm u.perm := by
+    t ≤ u ↔ t.n ≤ u.n ∧ PermExt t.perm u.perm := by
   constructor
   · intro hle; refine ⟨hle.1, ?_, ?_⟩
     · exact (Lpo.trunc_mono (le_refl _) hle.1).nodes
@@ -432,7 +432,7 @@ theorem pom_ge_iff_ge_fin {l : Type} [DCPO l] [OrderBot l] {p q : Pom l}
   have hf {i j} (hle : i ≤ j) : f i ≤ f j :=
     monotone_nat_of_le_succ (fun n ↦ (hsucc n).le) hle
   have hext {i j hi hj} (hle : i ≤ j) :
-      Lpo.PermExt
+      PermExt
         (Lpo.cast_perm (f i).perm hi rfl (X' := (a.trunc i).nodes))
         (Lpo.cast_perm (f j).perm hj rfl (X' := (a.trunc j).nodes)) := by
     constructor
@@ -473,7 +473,7 @@ def LpoChain (l : Type) [PartialOrder l] [OrderBot l] (c : Chain (Pom l)) (n : �
 namespace LpoChain
 
 lemma exists_extensible_perm {X Y : Set Node} (hinf : X.compl.Infinite) (hsub : X ⊆ Y) :
-    ∃ Z : Set Node, ∃ e : Y ≃ Z, Z.compl.Infinite ∧ Lpo.PermExt (Equiv.refl X) e := by
+    ∃ Z : Set Node, ∃ e : Y ≃ Z, Z.compl.Infinite ∧ PermExt (Equiv.refl X) e := by
   have hc : Cardinal.mk X.compl = Cardinal.mk (Bool × Node) := by
     refine Eq.trans ?_ (Eq.symm ?_) (b := ℵ₀)
     · exact @Cardinal.mk_eq_aleph0 _ _ hinf.to_subtype
