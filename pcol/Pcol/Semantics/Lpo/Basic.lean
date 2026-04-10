@@ -13,6 +13,8 @@ import Mathlib.Order.SetNotation
 import Mathlib.SetTheory.Cardinal.Finite
 import Mathlib.Tactic.Linarith
 
+import Pcol.Semantics.Lpo.Form
+
 def Node := ℕ
 instance : Inhabited Node where
   default := (0 : ℕ)
@@ -20,94 +22,6 @@ instance : Inhabited Node where
 instance : DecidableEq Node := instDecidableEqNat
 instance : Countable Node := instCountableNat
 instance : Infinite Node := instInfiniteNat
-
-def Form (α : Type) := Set α → Prop
-
-@[ext]
-lemma form_ext {α : Type} {φ ψ : Form α} (h : ∀ x, φ x = ψ x) : φ = ψ := funext h
-
-namespace Form
-
-variable {α : Type}
-
-def true : Form α := fun _ => True
-def false: Form α := fun _ => False
-def and (p : Form α) (q : Form α) : Form α := fun v => p v ∧ q v
-def or (p : Form α) (q : Form α) : Form α := fun v => p v ∨ q v
-def not (p : Form α) : Form α := fun v => ¬(p v)
-def literal (x : α) : Form α := fun v => x ∈ v
-
-def sOr {β : Type} (s : Set β) (p : β → Form α) : Form α :=
-  fun v ↦ ∃ x ∈ s, p x v
-def sAnd {β : Type} (s : Set β) (p : β → Form α) : Form α :=
-  fun v ↦ ∀ x ∈ s, p x v
-
-def sat (p : Form α) : Prop := ∃ v, p v
-
-instance : LE (Form α) where
-  le φ ψ := ∀ v, φ v → ψ v
-
-instance : Preorder (Form α) where
-  le_refl φ v h := h
-  le_trans φ ψ ξ h₁ h₂ v hφ := h₂ v (h₁ v hφ)
-
-instance : PartialOrder (Form α) where
-  le_antisymm φ ψ h₁ h₂ := by ext v; exact ⟨h₁ v, h₂ v⟩
-
-lemma mt {p q : Form α} (h : p ≤ q) : q.not ≤ p.not := by
-  intro v hqn hp; exact hqn (h v hp)
-
-def dependsOn (p : Form α) (s : Set α) : Prop :=
-  ∀ v v', Disjoint (symmDiff v v') s → p v = p v'
-
-lemma dependsOn_monotone (p : Form α) : Monotone p.dependsOn := by
-  intro s t hsub hd v v' h
-  refine hd v v' ?_
-  exact Set.disjoint_of_subset_right hsub h
-
--- lemma sat_on_vars_fin {p : Form Node} {s : Set Node}
---     (hs : ∀ x ∈ s, p.free x) (hf : s.Finite) :
---     ∀ v₁ v₂, (∀ x ∉ s, x ∈ v₁ ↔ x ∈ v₂) → (p v₁ ↔ p v₂) := by
---   revert hs; refine hf.induction_on s ?_ ?_
---   · intro _ v₁ v₂ h
---     have heq : v₁ = v₂ := by ext x; exact h _ id
---     subst heq; rfl
---   · intro x t hx ht ih hins v₁ v₂ h
---     by_cases hv : x ∈ v₁ ↔ x ∈ v₂
---     · refine ih ?_ _ _ ?_
---       · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
---       · intro y hy; by_cases hxy : x = y
---         · subst hxy; exact hv
---         · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
---     · refine (hins _ (Set.mem_insert _ _) v₁).trans ?_
---       refine ih ?_ _ _ ?_
---       · intro y hy; exact hins _ (Set.mem_insert_of_mem _ hy)
---       · intro y hy; by_cases hxy : x = y <;> simp only [Membership.mem, hxy, Set.Mem, ↓reduceIte]
---         · subst hxy; exact not_iff.mp hv
---         · refine h _ (Set.eq_or_mem_of_mem_insert.mt (not_or.mpr ⟨Ne.symm hxy, hy⟩))
-
-
--- lemma sat_if_vars_nonempty {p : Form α} {s : Set α} (hne : s.Nonempty) (hd : p.dependsOn s) : p.sat := by
---   have ⟨x, hx⟩ := hne
---   by_contra
---   have ⟨x, hx⟩ := h
---   simp only [vars, bound, all_free, eq_iff_iff, Set.mem_setOf_eq] at hx
---   have := (hx {x}).mt (Set.not_notMem.mpr (Set.mem_singleton _))
---   simp only [Set.subset_singleton_iff, not_forall] at this
---   have ⟨v, v', _, h⟩ := this; by_cases hp : p v
---   · exact ⟨_, hp⟩
---   · exact ⟨v', (not_iff.mp h).mp hp⟩
-
-lemma true_vars : (@Form.true α).dependsOn ∅ := by
-  intro _ _ _; rfl
-
-lemma empty_vars {p : Form α} (hd : p.dependsOn ∅) (hsat : p.sat): p = Form.true := by
-  ext v; conv => exact iff_true _
-  have ⟨v', hform⟩ := hsat
-  refine (hd v v' ?_).mpr hform
-  exact Set.disjoint_empty _
-
-end Form
 
 def FinChain (n : ℕ) (α : Type) := Fin (n + 1) → α
 
@@ -183,7 +97,7 @@ structure is_valid_lpo {l : Type} [Bot l] (a : Lpo_base l) : Prop where
   bot : ∀ x, a.lab x = ⊥ → ∀ y, ¬(a.rel x y)
   -- Formulae
   form_dom : ∀ x, (a.form x).sat ↔ x ∈ a.nodes
-  form : ∀ x ∈ a.nodes, (a.form x).dependsOn { y | a.rel y x } ∧
+  form : ∀ x ∈ a.nodes, (a.form x).DependsOn { y | a.rel y x } ∧
           ∀ z, a.rel x z → a.form z ≤ a.form x
 
 
@@ -229,7 +143,7 @@ def singleton {l : Type} [Bot l] (x : Node) (ℓ : l) : Lpo l :=
           simp [Form.false] at h
       · intro heq; use ∅
         rw [ite_cond_eq_true _ _ (eq_true (Eq.symm heq))]; simp [Form.true]
-    · exact Form.true_vars
+    · exact Form.DependsOn.true
   })
 
 end Lpo
@@ -399,7 +313,6 @@ lemma lev_mono {l : Type} [Bot l] {α : Lpo l} {x y : Node} (h : α.rel x y) :
         subst this; refine (congrArg₂ _ ?_ rfl).mpr h; rfl
     · simp only [FinChain.last, Fin.val_last, lt_self_iff_false, ↓reduceDIte, c']
 
--- The proof is almost done, except for some annoying arithmetic with Nats
 lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
    (hx : x ∈ α.nodes) (hlt : n < α.rel.lev x) : ∃ y, α.rel.lev y = n ∧ α.rel y x := by
   obtain ⟨m, hlev⟩ := lev_finite hx
@@ -422,27 +335,15 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
         · exact le_of_lt hnn
       apply hnle; refine ENat.coe_le_coe.mp ?_; simp only [ENat.coe_sub, Nat.cast_add]
       nth_rw 2 [← hlev]; refine le_sSup ?_; simp only [Set.mem_setOf_eq]
+      refine ⟨n' + m - n, rfl, ?_⟩
       obtain ⟨cn, hcn, hl'⟩ := lev_finite_exists_finchain hn'
-      let c' : FinChain (n' + m - n) Node := fun k ↦
-        if h : k.val < n' then
-          cn ⟨k.val, by linarith⟩
-        else
-          c ⟨k.val - n' + n, by sorry ⟩
-          --   refine lt_trans (Nat.add_lt_add (Nat.sub_lt_sub_right ?_ k.isLt) hnn) ?_
-          --   · exact not_lt.mp h
-          --   · rw [Nat.sub_add_cancel]
-          --     · nth_rw 2 [add_comm]
-          --       refine (Nat.add_lt_add_right (Nat.sub_lt_sub_right ?_ (Nat.add_lt_add_left hnn _)) _).trans ?_
-          --       rw [Nat.sub_add_cancel]
-
-          -- ⟩
-          --   refine lt_trans ?_ ?_ (b := ((n' + m - n + 1) + n) - n')
-          --   · refine Nat.sub_lt_sub_right ?_ ?_
-          --     · refine Nat.le_add_right_of_le (not_lt.mp h)
-          -- ⟩
-      refine ⟨n' + m - n, rfl, c', ?_, ?_⟩
+      refine
+        ⟨fun k ↦ if h : k.val < n' then cn ⟨k.val, by linarith⟩ else c ⟨k.val - n' + n, ?_⟩,
+          ?_, ?_⟩
+      · grind
       · intro k'; by_cases hk : k'.val < n'
-        · simp [c', hk]; by_cases hk' : k'.val + 1 < n' <;> simp only [hk']
+        · simp only [hk, ↓reduceDIte, Order.add_one_le_iff, Nat.sub_eq_zero_of_le, zero_add]
+          by_cases hk' : k'.val + 1 < n' <;> simp only [hk']
           · exact hcn ⟨k', hk⟩
           · have : k'.val + 1 = n' := by grind
             refine (congrArg₂ _ rfl ?_).mp (hcn ⟨k', hk⟩)
@@ -450,15 +351,14 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
               · refine congrArg _ ?_; ext; simp only [Fin.val_last]; exact this
               · refine congrArg _ ?_; ext; simp only
         · have : ¬ (k' + 1 < n') := by linarith
-          simp [c', hk, this]
+          simp only [hk, ↓reduceDIte, this]
           refine (congrArg₂ _ rfl ?_).mp  (hc ⟨k'.val - n' + n, ?_⟩)
-          · refine congrArg _ ?_; ext; simp only
-            sorry
-          · sorry
-      · have :  ¬ (n' + m - n < n') := by sorry
-        simp [FinChain.last, Fin.val_last, this, c']
+          · refine congrArg _ ?_; ext; grind
+          · grind
+      · have :  ¬ (n' + m - n < n') := by grind
+        simp only [FinChain.last, Fin.val_last, this, ↓reduceDIte]
         refine congrArg _ ?_; ext; simp only [Fin.val_last]
-        sorry
+        grind
     · refine le_sSup ?_; simp only [Set.mem_setOf_eq, Nat.cast_inj, exists_eq_left']
       refine ⟨fun k ↦ c ⟨k.val, k.isLt.trans ?_⟩, ?_, rfl⟩
       · linarith
@@ -469,7 +369,7 @@ lemma exists_node_lt_lev {l : Type} [Bot l] {α : Lpo l} {n : ℕ} {x : Node}
 lemma form_root_true {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.nodes)
     (hr : ∀ y ∈ α.nodes, x ≠ y → α.rel x y) :
     α.form x = Form.true := by
-  refine Form.empty_vars ?_ ?_
+  refine Form.DependsOn.empty_vars ?_ ?_
   · have : { y | α.rel y x } = ∅ := by
       ext y; simp only [Set.mem_setOf_eq, Set.mem_empty_iff_false, iff_false]
       by_cases heq : x = y
@@ -478,9 +378,3 @@ lemma form_root_true {l : Type} [Bot l] {α : Lpo l} {x : Node} (hx : x ∈ α.n
         exact heq (α.property.rel.antisymm (hr _ hy heq) h)
     rw [← this]; exact (α.property.form _ hx).1
   · exact (α.property.form_dom x).mpr hx
-
--- lemma notMem_vars {l : Type} [Bot l] {α : Lpo l} {x y : Node}
---     (hx : x ∈ α.nodes) (hy : y ∉ α.nodes) : y ∉ (α.form x).vars := by
---   intro hc; apply hy
---   have hrel := (α.property.form _ hx).1 _ hc
---   exact (α.property.rel_dom hrel).1

@@ -5,7 +5,7 @@ namespace Pom
 
 open OmegaCompletePartialOrder
 
-noncomputable def lin_fin {t : Type → Type} {α act test : Type}
+noncomputable def lin_fin (t : Type → Type) (α act test : Type)
     [Sem act α (t α)] [Sem test α (t Bool)] [Monad t]
     [∀ {β : Type}, Preorder (t β)] [∀ {β : Type}, OrderBot (t β)]
     [Linearizable t]
@@ -16,13 +16,8 @@ lemma lin_fin_monotone (t : Type → Type) (α act test : Type)
     [Sem act α (t α)] [Sem test α (t Bool)] [Monad t]
     [∀ {β : Type}, PartialOrder (t β)] [∀ {β : Type}, OrderBot (t β)]
     [Linearizable t] :
-    Monotone (@lin_fin t α act test _ _ _ _ _ _) := by
-  intro _ _ hle
-  obtain ⟨a, rfl, b, rfl, hle'⟩ := Pomfin.le_iff.mp hle
-  unfold lin_fin
-  refine le_of_eq_of_le (Quotient.lift_mk _ _ _) ?_
-  refine le_of_le_of_eq ?_ (Quotient.lift_mk _ _ _).symm
-  exact Lpo.lin_mono hle'
+    Monotone (lin_fin t α act test) :=
+  Pomfin.lift_monotone Lpo.lin_mono
 
 noncomputable def lin {t : Type → Type} {α act test : Type}
     [Sem act α (t α)] [Sem test α (t Bool)] [Monad t]

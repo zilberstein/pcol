@@ -35,7 +35,7 @@ def image {X Y : Set Node} (s : Set Node) (e : X ≃ Y) : Set Node :=
 def permute {X Y : Set Node} (φ : Form Node) (e : X ≃ Y) : Form Node :=
   fun v ↦ φ (image v e.symm)
 
-lemma permute_refl {X : Set Node} (φ : Form Node) (hd : φ.dependsOn X) :
+lemma permute_refl {X : Set Node} (φ : Form Node) (hd : φ.DependsOn X) :
     φ.permute (Equiv.refl X) = φ := by
   ext1 v; refine hd _ _ ?_; refine Set.disjoint_left.mpr ?_
   intro x hsd hx; rcases Set.mem_symmDiff.mp hsd with ⟨⟨y, heq, hv⟩, hv'⟩ | ⟨hv, hv'⟩
@@ -44,7 +44,7 @@ lemma permute_refl {X : Set Node} (φ : Form Node) (hd : φ.dependsOn X) :
   · apply hv'; exact ⟨⟨_, hx⟩, rfl, hv⟩
 
 lemma permute_trans {X Y Z : Set Node} (φ : Form Node) (e : X ≃ Y) (e' : Y ≃ Z)
-    (hd : φ.dependsOn X) :
+    (hd : φ.DependsOn X) :
     (φ.permute e).permute e' = φ.permute (e.trans e') := by
   ext1 v; refine hd _ _ ?_; refine Set.disjoint_left.mpr ?_
   intro x hsd hx; rcases Set.mem_symmDiff.mp hsd with
@@ -55,7 +55,7 @@ lemma permute_trans {X Y Z : Set Node} (φ : Form Node) (e : X ≃ Y) (e' : Y �
   · apply h; refine ⟨_, rfl, _, rfl, hzv⟩
 
 lemma permute_monotone {X X' Y Y' : Set Node} {e : X ≃ Y} {e' : X' ≃ Y'} {φ : Form Node}
-    (hex : PermExt e e') (hd : φ.dependsOn X) : φ.permute e = φ.permute e' := by
+    (hex : PermExt e e') (hd : φ.DependsOn X) : φ.permute e = φ.permute e' := by
   ext1 v; refine hd _ _ ?_; refine Set.disjoint_left.mpr ?_
   intro x hsd hx; rcases Set.mem_symmDiff.mp hsd with ⟨⟨y, rfl, hv⟩, h⟩ | ⟨⟨y, rfl, hv⟩, h⟩
   · apply h; refine ⟨⟨y.val, hex.cod_sub y.property⟩, ?_, hv⟩
@@ -303,13 +303,13 @@ lemma permute_refl {l : Type} [Bot l] (a : Lpo l) :
       rw [Form.permute_refl] at hform
       · conv at hform => lhs; exact Equiv.refl_apply _
         exact hform
-      · refine Form.dependsOn_monotone _ ?_ (a.property.form x hx).1
+      · refine Form.DependsOn.monotone _ ?_ (a.property.form x hx).1
         intro y hrel; exact (a.property.rel_dom hrel).1
     · intro hform; have hx := (a.property.form_dom x).mp ⟨_, hform⟩
       refine ⟨hx, ?_⟩; rw [Form.permute_refl]
       · conv => lhs; exact Equiv.refl_apply _
         exact hform
-      · refine Form.dependsOn_monotone _ ?_ (a.property.form x hx).1
+      · refine Form.DependsOn.monotone _ ?_ (a.property.form x hx).1
         intro y hrel; exact (a.property.rel_dom hrel).1
 
 lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
@@ -328,7 +328,7 @@ lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
       ext v; constructor
       · rintro ⟨_, hform⟩; exact hform
       · intro hform; exact ⟨Subtype.coe_prop _, hform⟩
-    · refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+    · refine Form.DependsOn.monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
       intro y hrel; exact (a.property.rel_dom hrel).1
 
 lemma permute_symm {l : Type} [Bot l] {a b : Lpo l} {e : a.nodes ≃ b.nodes} :
@@ -470,12 +470,12 @@ lemma permute_monotone {l : Type} [LE l] [OrderBot l] {a b : Lpo l} {X Y : Set N
     · intro ⟨hx, hform⟩; use hext.cod_sub hx
       conv => arg 1; exact (congrArg _ (hext.symm.extend ⟨x, hx⟩)).symm.trans (hle.form _ (Subtype.coe_prop _)).symm
       refine (congrFun (Form.permute_monotone hext ?_) _).mp hform
-      refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+      refine Form.DependsOn.monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
       intro y hrel; exact (a.property.rel_dom hrel).1
     · intro ⟨hx', hform⟩; use hx
       conv at hform => arg 1; exact (congrArg _ (hext.symm.extend ⟨x, hx⟩)).symm.trans (hle.form _ (Subtype.coe_prop _)).symm
       refine (congrFun (Form.permute_monotone hext ?_) _).mpr hform
-      refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+      refine Form.DependsOn.monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
       intro y hrel; exact (a.property.rel_dom hrel).1
   · simp only [Lpo.nodes, Lpo.rel]; intro x hx
     rcases hle.succ _ (e₂.symm ⟨_, hx⟩).property with hx' | ⟨z, ⟨hz, hbot⟩, hrel⟩

@@ -40,7 +40,6 @@ instance instSetoid {l : Type} [Bot l] : Setoid (Lpofin l) where
 
 noncomputable def permute {l : Type} [Bot l] (a : Lpofin l) {X : Set Node}
     (e : a.nodes ≃ X) : Lpofin l :=
---  ⟨ a.val.permute e, Set.Finite.image _ a.property ⟩
   ⟨ a.val.permute e, by {
     refine Set.finite_coe_iff.mp ?_
     refine e.finite_iff.mp ?_
@@ -109,7 +108,7 @@ lemma trunc_valid {l : Type} [Bot l] (a : Lpo l) (n : ℕ) :
     · simp only [Form.sat, Form.false, exists_const, not_false_eq_true]
   · intro x hx hlev; constructor
     · simp only [hlev, ↓reduceIte]
-      refine Form.dependsOn_monotone _ ?_ (a.property.form _ hx).1
+      refine Form.DependsOn.monotone _ ?_ (a.property.form _ hx).1
       intro y hrel; refine ⟨hrel, ?_, True.intro⟩
       exact (le_of_lt (lev_mono hrel)).trans hlev
     · intro z hxz hlx hlz; simp only [hlz, ↓reduceIte, hlx]
@@ -269,7 +268,7 @@ lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
         simp only [hlev', ↓reduceIte]; refine ⟨Subtype.coe_prop _, ?_⟩
         simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
         refine (congrFun (Form.permute_monotone perm_subset_ext ?_) _).mp hform
-        refine Form.dependsOn_monotone _ ?_ (a.property.form _ y.property.1).1
+        refine Form.DependsOn.monotone _ ?_ (a.property.form _ y.property.1).1
         intro z hrel; have hz := (a.property.rel_dom hrel).1
         refine ⟨hz, (le_of_lt (lev_mono hrel)).trans hlev⟩
       · exact False.elim hform
@@ -286,7 +285,7 @@ lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
           simp only [Subtype.coe_eta, Equiv.apply_symm_apply, hlev, ↓reduceIte]
           have ⟨_, hform⟩ := hform
           refine (congrFun (Form.permute_monotone perm_subset_ext ?_) _).mpr hform
-          refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+          refine Form.DependsOn.monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
           intro z hrel; have hz := (a.property.rel_dom hrel).1
           refine ⟨hz, (le_of_lt (lev_mono hrel)).trans ?_⟩
           rw [permute_lev e (Subtype.coe_prop _)]; simp only [Subtype.coe_eta,
@@ -659,9 +658,8 @@ lemma permute_continuous {l : Type} [DCPO l] [OrderBot l]
       simp only [permute, rel] at hrel
       obtain ⟨hx, hy, hrel⟩ := hrel
       refine ⟨(le_ωSup c₂ i).nodes hx, (le_ωSup c₂ i).nodes hy, ?_⟩
-      refine le_rel (le_ωSup c₁ i) ?_; refine (congrArg₂ _ ?_ ?_).mp hrel
-      · exact (le_permute_sup he i).symm.extend ⟨x, _⟩
-      · exact (le_permute_sup he i).symm.extend ⟨y, _⟩
+      refine le_rel (le_ωSup c₁ i) ?_; refine (congrArg₂ _ ?_ ?_).mp hrel <;>
+        exact (le_permute_sup he i).symm.extend _
   -- LABEL
   · conv => lhs; simp only [permute, lab]
     conv => rhs; exact ωSup_lab

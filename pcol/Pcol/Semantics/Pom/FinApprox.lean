@@ -66,6 +66,15 @@ lemma le_iff {l : Type} [LE l] [OrderBot l] {p q : Pomfin l} :
   · rintro ⟨α, rfl, β, rfl, hle⟩
     refine ⟨α.val, ?_, β.val, ?_, hle⟩ <;> exact val_mem_to_pom.mp rfl
 
+lemma lift_monotone {l X : Type} [PartialOrder l] [OrderBot l] [Preorder X]
+    {f : Lpofin l → X} {h : ∀ α β, α ≈ β → f α = f β}
+    (hmono : Monotone f) : Monotone (fun p : Pomfin l ↦ p.lift f h) := by
+  intro _ _ hle
+  obtain ⟨a, rfl, b, rfl, hle'⟩ := Pomfin.le_iff.mp hle
+  refine le_of_eq_of_le (Quotient.lift_mk _ _ _) ?_
+  refine le_of_le_of_eq ?_ (Quotient.lift_mk _ _ _).symm
+  exact hmono hle'
+
 end Pomfin
 
 namespace Pom
