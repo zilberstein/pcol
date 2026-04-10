@@ -80,7 +80,20 @@ end Pomfin
 
 namespace Pom
 
-noncomputable def seq {l : Type} [DCPO l] [OrderBot l] [ScottCompact l] : Pom l → Pom l → Pom l :=
+noncomputable def seq {l : Type} [DCPO l] [OrderBot l] [ScottCompact l] :
+    Pom l → Pom l → Pom l :=
   Pom.ext₂ (fun p q ↦ (Pomfin.seq p q).to_pom) Pomfin.seq_monotone
+
+lemma seq_monotone {l : Type} [DCPO l] [OrderBot l] [ScottCompact l] {p p' q q' : Pom l} :
+    p ≤ p' → q ≤ q' → seq p q ≤ seq p' q' := ext₂_monotone
+
+open OmegaCompletePartialOrder
+
+lemma seq_continuous {l : Type} [DCPO l] [OrderBot l] [ScottCompact l]
+    {c c' : Chain (Pom l)} :
+    seq (ωSup c) (ωSup c') = ωSup {
+      toFun n := seq (c n) (c' n)
+      monotone' _ _ hle := seq_monotone (c.monotone' hle) (c'.monotone' hle)
+    } := ext₂_continuous
 
 end Pom
