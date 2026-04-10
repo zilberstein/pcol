@@ -57,7 +57,11 @@ instance {l : Type} [LE l] [OrderBot l] : OrderBot (Pom l) where
           intro hc; exfalso; exact (Subtype.property _ (p := is_valid_lpo)).rel.irrefl _ hc
         }
       · intro y; exact le_of_eq_of_le (ite_self _) bot_le
-      · intro y hy; sorry
+      · intro y hy; have := Set.mem_singleton_iff.mp hy; subst this
+        rw [form_root_true hx hroot]
+        refine form_root_true hy ?_; intro z hz hc
+        have := Set.mem_singleton_iff.mp hz; subst this
+        contradiction
       · intro y hy; by_cases heq: x = y
         · subst heq; left; exact Set.mem_singleton _
         · right; refine ⟨x, ⟨Set.mem_singleton _, ite_self _⟩, ?_⟩

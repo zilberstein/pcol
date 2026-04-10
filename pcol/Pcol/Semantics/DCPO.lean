@@ -153,7 +153,7 @@ def to_dSet {X : Type} [DCPO X] (c : Chain X) : DSet X :=
 
 def lfp {X : Type} [OmegaCompletePartialOrder X] [OrderBot X]
     (f : X → X) (hf : Monotone f) : X :=
-  ωSup (OmegaCompletePartialOrder.fixedPoints.iterateChain ⟨f, hf⟩ ⊥ bot_le)
+  ωSup (fixedPoints.iterateChain ⟨f, hf⟩ ⊥ bot_le)
 
 theorem lfp_is_lfp {X : Type} [OmegaCompletePartialOrder X] [OrderBot X]
     {f : X → X} (hc : ωScottContinuous f):

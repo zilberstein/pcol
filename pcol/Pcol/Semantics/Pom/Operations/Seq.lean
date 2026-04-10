@@ -4,12 +4,39 @@ import Pcol.Semantics.Pom.FinApprox
 namespace Pomfin
 
 lemma exists_copy_fn {l : Type} [PartialOrder l] [OrderBot l] (α β : Lpofin l) :
-    ∃ f : Lpofin.CopyFn α β, True := by
-  sorry
+    Nonempty (Lpofin.CopyFn α β) := by
+  have hc : Cardinal.mk (α.branches × β.nodes) ≤ Cardinal.mk α.nodes.compl := by
+    refine le_of_le_of_eq Cardinal.mk_le_aleph0 ?_
+    symm; exact @Cardinal.mk_eq_aleph0 _ _ α.property.infinite_compl.to_subtype
+  have ⟨s, hsub, hc'⟩ := Cardinal.le_mk_iff_exists_subset.mp hc
+  have ⟨e_base⟩ := Cardinal.eq.mp hc'.symm
+  let e φ : β.nodes ≃ Set.range (fun x ↦ (e_base (φ, x)).val) := {
+    toFun x := ⟨e_base (φ, x), Set.mem_range.mpr ⟨_, rfl⟩⟩
+    invFun y := (e_base.symm ⟨y, by {
+      have ⟨x, hx⟩ := Set.mem_range.mp y.property; rw [← hx]; exact Subtype.coe_prop _
+   }⟩).snd
+    left_inv x := by simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
+    right_inv y := by
+      ext; simp only
+      have ⟨x, hx⟩ := Set.mem_range.mp y.property
+      have {h} : ⟨y.val, h⟩ = e_base (φ, x) := by
+        ext; exact hx.symm
+      rw [this]; simp only [Equiv.symm_apply_apply]; exact hx
+  }
+  refine ⟨⟨fun φ ↦ β.permute (e φ), fun φ ↦ ⟨?_, ?_, ?_⟩⟩⟩
+  · symm; exact ⟨e φ, rfl⟩
+  · refine Set.disjoint_left.mpr ?_; intro x hx hx'
+    obtain ⟨y, rfl⟩ := Set.mem_range.mp hx'
+    refine (Set.mem_compl_iff _ _).mp (hsub ?_) hx; exact Subtype.coe_prop _
+  · intro ψ hne; refine Set.disjoint_left.mpr ?_; intro x hx hx'
+    obtain ⟨y, rfl⟩ := Set.mem_range.mp hx
+    have ⟨z, heq⟩ := Set.mem_range.mp hx'
+    have := e_base.injective (Subtype.val_injective heq)
+    exact hne (Prod.mk_inj.mp this).1.symm
 
 noncomputable def seq {l : Type} [DCPO l] [OrderBot l] (p q : Pomfin l) : Pomfin l :=
   Quotient.map₂
-    (fun α β ↦ Lpofin.seq α β (exists_copy_fn α β).choose)
+    (fun α β ↦ Lpofin.seq α β (Classical.choice (exists_copy_fn α β)))
     (fun _ _ h _ _ h' ↦ Lpofin.seq_isomorphic h h')
     p q
 
@@ -17,7 +44,7 @@ lemma seq_monotone {l : Type} [DCPO l] [OrderBot l] {p p' q q' : Pomfin l}
     (hle : p ≤ p') (hle' : q ≤ q') : seq p q ≤ seq p' q' := by
   obtain ⟨α, rfl, α', rfl, hle₁⟩ := Pomfin.le_iff.mp hle
   obtain ⟨β, rfl, β', rfl, hle₂⟩ := Pomfin.le_iff.mp hle'
-  have ⟨g, _⟩ := exists_copy_fn α' β'
+  have ⟨g⟩ := exists_copy_fn α' β'
   let up (φ : α.branches) : α'.branches :=
     ⟨φ.val, Lpofin.branches_monotone hle₁ φ.property⟩
   have h (φ : α.branches) :
