@@ -719,4 +719,12 @@ theorem ext_continuous {X : Type} [OmegaCompletePartialOrder X] {f : Pomfin l �
       refine le_trans ?_ (le_ωSup _ n)
       exact hf (trunc_mono (le_ωSup _ i) (le_refl _))
 
+noncomputable def ext₂ {X : Type} [OmegaCompletePartialOrder X]
+    (f : Pomfin l → Pomfin l → X)
+    (hf : ∀ {p p' q q'}, p ≤ p' → q ≤ q' → f p q ≤ f p' q') (p q: Pom l) : X :=
+  ωSup {
+    toFun n := f (p.trunc n) (q.trunc n)
+    monotone' _ _ hle := hf (trunc_mono (le_refl _) hle) (trunc_mono (le_refl _) hle)
+  }
+
 end Pom

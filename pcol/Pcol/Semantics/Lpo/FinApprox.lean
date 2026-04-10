@@ -15,6 +15,9 @@ instance {l : Type} [Bot l] : Coe (Lpofin l) (Lpo l) where
 
 namespace Lpofin
 
+lemma le_iff {l : Type} [LE l] [Bot l] {α β : Lpofin l} :
+    α ≤ β ↔ α.val ≤ β.val := by rfl
+
 def nodes {l : Type} [Bot l] (a : Lpofin l) := a.val.nodes
 noncomputable def nodes_finset {l : Type} [Bot l] (a : Lpofin l) := a.property.toFinset
 def rel {l : Type} [Bot l] (a : Lpofin l) := a.val.rel
