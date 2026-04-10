@@ -104,13 +104,74 @@ lemma disjoint_image {X Y : Set Node} {s t : Set Node} (e : X ≃ Y)
 
 end Form
 
+namespace Rel
+
+def permute {X Y : Set Node} (r : Rel Node Node) (e : X ≃ Y) : Rel Node Node :=
+  fun x y ↦ ∃ hx hy, r (e.symm ⟨x, hx⟩) (e.symm ⟨y, hy⟩)
+
+def permute_lev {X Y : Set Node} (r : Rel Node Node) (e : X ≃ Y)
+    {x : Node} (hx : x ∈ X)
+    (h : ∀ {x y}, r x y → x ∈ X ∧ y ∈ X) :
+    r.lev x = (r.permute e).lev (e ⟨_, hx⟩).val := by
+  refine congrArg sSup ?_
+  ext _; refine exists_congr fun k ↦ and_congr (Iff.refl _) ?_
+  have hlt {i : Fin (k+1)} (h : i ≠ Fin.last k) : i.val < k := by
+    refine lt_of_le_of_ne ?_ ?_
+    · exact Nat.le_of_lt_succ i.isLt
+    · intro hc; apply h; unfold Fin.last; ext; exact hc
+  constructor
+  · rintro ⟨c, hc, rfl⟩
+    have hi i : c i ∈ X := by
+      by_cases hl : i = Fin.last k
+      · subst hl; exact hx
+      · exact (h (hc ⟨i, hlt hl⟩)).1
+    refine ⟨fun i ↦ e ⟨c i, hi i⟩, ?_, rfl⟩
+    intro i; refine ⟨Subtype.coe_prop _, Subtype.coe_prop _, ?_⟩
+    simp only [Subtype.coe_eta, Equiv.symm_apply_apply]; exact hc i
+  · rintro ⟨c, hc, heq⟩
+    have hi i : c i ∈ Y := by
+      by_cases h : i = Fin.last k
+      · subst h; conv in c _ => exact heq
+        exact Subtype.coe_prop _
+      · obtain ⟨hx, _⟩ := (hc ⟨i, hlt h⟩); exact hx
+    refine ⟨fun i ↦ e.symm ⟨c i, hi i⟩, ?_, ?_⟩
+    · intro i; simp only
+      obtain ⟨_, _, h⟩ := hc i; exact h
+    · simp only [FinChain.last]
+      conv in c _ => exact heq
+      simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
+
+def permute_lev_nodes {X Y : Set Node} {n : ℕ} (r : Rel Node Node) (e : X ≃ Y)
+    (h : ∀ {x y}, r x y → x ∈ X ∧ y ∈ X) :
+    {x | x ∈ X ∧ r.lev x = n } ≃
+    {x | x ∈ Y ∧ (r.permute e).lev x = n } := {
+  toFun x := ⟨e ⟨x.val, x.property.1⟩, by {
+    refine ⟨Subtype.coe_prop _, ?_⟩
+    exact (permute_lev _ _ _ h).symm.trans x.property.2
+  }⟩
+  invFun y := ⟨e.symm ⟨y.val, y.property.1⟩, by {
+    refine ⟨Subtype.coe_prop _, Eq.trans ?_ y.property.2⟩
+    refine (permute_lev _ e (Subtype.coe_prop _) h).trans (congrArg _ ?_)
+    simp only [Set.mem_setOf_eq, Subtype.coe_eta, Equiv.apply_symm_apply, Set.sep_subset,
+      Set.coe_inclusion]
+  }⟩
+  left_inv x := by
+    simp only [Set.coe_setOf, Set.mem_setOf_eq, Subtype.coe_eta, Equiv.symm_apply_apply,
+      Set.sep_subset, Set.coe_inclusion]
+  right_inv y := by
+    simp only [Set.coe_setOf, Set.mem_setOf_eq, Subtype.coe_eta, Equiv.apply_symm_apply,
+      Set.sep_subset, Set.coe_inclusion]
+}
+
+end Rel
+
 namespace Lpo
 
 noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
     (e : a.nodes ≃ X) : Lpo l := {
   val := {
     nodes := X
-    rel x y := ∃ hx hy, a.rel (e.symm ⟨x, hx⟩) (e.symm ⟨y, hy⟩)
+    rel := a.rel.permute e
     lab x := by
       classical
       exact if hx : x ∈ X then a.lab (e.symm ⟨x, hx⟩) else ⊥
@@ -118,7 +179,8 @@ noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
       ∃ hx, (a.form (e.symm ⟨x, hx⟩)).permute e v
   }
   property := by
-    constructor <;> try simp
+    constructor <;>
+      try simp [dite_eq_right_iff, Rel.permute, not_exists, forall_exists_index]
     · intro _ _ hx hy _; exact ⟨hx, hy⟩
     · intro _ hx hc; exact False.elim (hx hc)
     · constructor
@@ -137,20 +199,21 @@ noncomputable def permute {l : Type} [Bot l] {X : Set Node} (a : Lpo l)
           · rintro ⟨y, hy⟩; simp only [Set.mem_setOf_eq] at hy
             refine ⟨e ⟨y, ?_⟩, ?_⟩
             · exact (a.property.rel_dom hy).1
-            · simp only [Set.mem_setOf_eq, Subtype.coe_eta, Equiv.symm_apply_apply,
-                Subtype.coe_prop, exists_const]
+            · simp only [Rel.permute, Set.mem_setOf_eq, Subtype.coe_eta, Equiv.symm_apply_apply,
+              Subtype.coe_prop, exists_const]
               exact ⟨hx, hy⟩
           · intro x; simp only [Set.coe_setOf, Set.mem_setOf_eq, Subtype.coe_eta,
               Equiv.apply_symm_apply]
           · intro x; simp only [Set.coe_setOf, Set.mem_setOf_eq, Subtype.coe_eta,
              Equiv.symm_apply_apply]
         · refine (congrArg _ ?_).mp Set.finite_empty
-          ext y; simp only [Set.mem_empty_iff_false, Set.mem_setOf_eq, false_iff, not_exists]
+          ext y
+          simp only [Rel.permute, Set.mem_empty_iff_false, Set.mem_setOf_eq, false_iff, not_exists]
           intro hy hx'; contradiction
       · intro n
         rcases finite_iff_exists_equiv_fin.mp (a.property.rel.fin_lev n) with ⟨m, ⟨eq⟩⟩
         refine finite_iff_exists_equiv_fin.mpr ⟨m, ⟨Equiv.trans ?_ eq⟩⟩
-        unfold Rel.lev; simp [Lpo.rel]; sorry
+        exact (Rel.permute_lev_nodes _ _ a.property.rel_dom).symm
       · obtain ⟨x, hx, hroot⟩ := a.property.rel.single_rooted
         refine ⟨e ⟨x, hx⟩, ?_, ?_⟩
         · exact Subtype.coe_prop _
@@ -254,7 +317,8 @@ lemma permute_trans {l : Type} [Bot l] {a : Lpo l} {X Y : Set Node}
     (a.permute e₁).permute e₂ = a.permute (e₁.trans e₂) := by
   unfold permute; ext1
   · simp only [Lpo.nodes]
-  · simp only [rel, Subtype.coe_eta, Subtype.coe_prop, exists_const, Equiv.symm_trans_apply]
+  · unfold Rel.permute
+    simp only [rel, Subtype.coe_eta, Subtype.coe_prop, exists_const, Equiv.symm_trans_apply]
     ext x y; rfl
   · simp only [lab, Subtype.coe_prop, ↓reduceDIte, Subtype.coe_eta, Equiv.symm_trans_apply]
     ext x; rfl
@@ -426,5 +490,10 @@ lemma permute_monotone {l : Type} [LE l] [OrderBot l] {a b : Lpo l} {X Y : Set N
         refine (congrArg₂ _ ?_ rfl).mpr hrel
         simp only [z']; refine (hext.symm.extend _).symm.trans ?_
         simp only [Equiv.symm_apply_apply]
+
+lemma permute_lev {l : Type} [Bot l] {a : Lpo l} {X : Set Node} (e : a.nodes ≃ X)
+    {x : Node} (hx : x ∈ a.nodes) :
+    a.rel.lev x = (a.permute e).rel.lev (e ⟨x, hx⟩) :=
+  Rel.permute_lev a.rel e hx a.property.rel_dom
 
 end Lpo

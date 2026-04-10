@@ -162,38 +162,6 @@ lemma permute_trunc_nodes {l : Type} [Bot l] {a : Lpo l} {n : ℕ} {X : Set Node
   ext x; refine and_congr ?_ (Iff.refl _)
   simp only [permute, nodes]
 
-lemma permute_lev {l : Type} [Bot l] {a : Lpo l} {X : Set Node} (e : a.nodes ≃ X)
-    {x : Node} (hx : x ∈ a.nodes) :
-    a.rel.lev x = (a.permute e).rel.lev (e ⟨x, hx⟩) := by
-  simp only [permute, rel, Rel.lev]; refine congrArg _ ?_
-  ext _; simp only [Set.mem_setOf_eq]
-  refine exists_congr fun k ↦ and_congr (Iff.refl _) ?_
-  have hlt {i : Fin (k+1)} (h : i ≠ Fin.last k) : i.val < k := by
-    refine lt_of_le_of_ne ?_ ?_
-    · exact Nat.le_of_lt_succ i.isLt
-    · intro hc; apply h; unfold Fin.last; ext; exact hc
-  constructor
-  · rintro ⟨c, hc, rfl⟩
-    have hi i : c i ∈ a.nodes := by
-      by_cases h : i = Fin.last k
-      · subst h; exact hx
-      · exact (a.property.rel_dom (hc ⟨i, hlt h⟩)).1
-    refine ⟨fun i ↦ e ⟨c i, hi i⟩, ?_, rfl⟩
-    intro i; refine ⟨Subtype.coe_prop _, Subtype.coe_prop _, ?_⟩
-    simp only [Subtype.coe_eta, Equiv.symm_apply_apply]; exact hc i
-  · rintro ⟨c, hc, heq⟩
-    have hi i : c i ∈ X := by
-      by_cases h : i = Fin.last k
-      · subst h; conv in c _ => exact heq
-        exact Subtype.coe_prop _
-      · obtain ⟨hx, _⟩ := (hc ⟨i, hlt h⟩); exact hx
-    refine ⟨fun i ↦ e.symm ⟨c i, hi i⟩, ?_, ?_⟩
-    · intro i; simp only
-      obtain ⟨_, _, h⟩ := hc i; exact h
-    · simp only [FinChain.last]
-      conv in c _ => exact heq
-      simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
-
 lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
     {n : ℕ} {X : Set Node} {e : a.nodes ≃ X} :
     (a.trunc n).val.permute (perm_subset e (a.trunc_le n).nodes) =
@@ -222,7 +190,7 @@ lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
       obtain ⟨⟨x, hx', hxl⟩, rfl⟩ := Set.mem_range.mp hx
       obtain ⟨⟨y, hy', hyl⟩, rfl⟩ := Set.mem_range.mp hy
       refine ⟨?_, ?_, ?_⟩
-      · simp only [permute, Subtype.exists, exists_and_right, Subtype.coe_eta,
+      · simp only [permute, Rel.permute, Subtype.coe_eta,
           Equiv.symm_apply_apply, Subtype.coe_prop, exists_const]
         refine (congrArg₂ _ ?_ ?_).mp hrel <;>
           simp only [perm_subset, Equiv.coe_fn_symm_mk,
@@ -291,8 +259,39 @@ lemma trunc_permute {l : Type} [Preorder l] [OrderBot l] {a : Lpo l}
   · simp only [form, trunc, trunc_base]
     conv => lhs; simp only [permute, form]
     ext x v; constructor
-    · intro ⟨hx, hh⟩; sorry
-    · sorry
+    · intro ⟨hx, hform⟩
+      have ⟨y, hy⟩ := Set.mem_range.mp hx; subst hy
+      rw [perm_subset_ext.symm.extend] at hform
+      simp only [Subtype.coe_eta, Equiv.symm_apply_apply] at hform
+      by_cases hlev : a.rel.lev y.val ≤ n <;>
+        simp only [hlev, ↓reduceIte] at hform
+      · have hlev' := le_of_eq_of_le (permute_lev e y.property.1).symm hlev
+        simp only [hlev', ↓reduceIte]; refine ⟨Subtype.coe_prop _, ?_⟩
+        simp only [Subtype.coe_eta, Equiv.symm_apply_apply]
+        refine (congrFun (Form.permute_monotone perm_subset_ext ?_) _).mp hform
+        refine Form.dependsOn_monotone _ ?_ (a.property.form _ y.property.1).1
+        intro z hrel; have hz := (a.property.rel_dom hrel).1
+        refine ⟨hz, (le_of_lt (lev_mono hrel)).trans hlev⟩
+      · exact False.elim hform
+    · intro hform
+      by_cases hlev : (a.permute e).rel.lev x ≤ n <;>
+        simp only [hlev, ↓reduceIte] at hform
+      · have hx := ((a.permute e).property.form_dom x).mp ⟨_, hform⟩
+        refine ⟨Set.mem_range.mpr ⟨⟨e.symm ⟨x, hx⟩, ?_⟩, ?_⟩, ?_⟩
+        · refine ⟨Subtype.coe_prop _, ?_⟩; rw [permute_lev e (Subtype.coe_prop _)]
+          simp only [Subtype.coe_eta, Equiv.apply_symm_apply]; exact hlev
+        · simp only [Subtype.coe_eta, Equiv.apply_symm_apply]
+        · rw [perm_subset_ext.symm.extend]
+          conv => arg 1; arg 1; lhs; exact permute_lev e (Subtype.coe_prop _)
+          simp only [Subtype.coe_eta, Equiv.apply_symm_apply, hlev, ↓reduceIte]
+          have ⟨_, hform⟩ := hform
+          refine (congrFun (Form.permute_monotone perm_subset_ext ?_) _).mpr hform
+          refine Form.dependsOn_monotone _ ?_ (a.property.form _ (Subtype.coe_prop _)).1
+          intro z hrel; have hz := (a.property.rel_dom hrel).1
+          refine ⟨hz, (le_of_lt (lev_mono hrel)).trans ?_⟩
+          rw [permute_lev e (Subtype.coe_prop _)]; simp only [Subtype.coe_eta,
+            Equiv.apply_symm_apply]; exact hlev
+      · exact False.elim hform
 
 lemma trunc_equiv {l : Type} [Preorder l] [OrderBot l] {a b : Lpo l} {n : ℕ}
     (heq : a ≈ b) : trunc a n ≈ trunc b n := by
