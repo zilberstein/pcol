@@ -2,7 +2,9 @@ import Init.Prelude
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.Set.Disjoint
 import Mathlib.Data.Set.Insert
+import Mathlib.Data.Set.Lattice
 import Mathlib.Data.Set.SymmDiff
+import Mathlib.Order.SetNotation
 import Mathlib.Order.SymmDiff
 
 def Form (α : Type) := Set α → Prop
@@ -21,10 +23,10 @@ def or (p : Form α) (q : Form α) : Form α := fun v => p v ∨ q v
 def not (p : Form α) : Form α := fun v => ¬(p v)
 def literal (x : α) : Form α := fun v => x ∈ v
 
-def sOr {β : Type} (s : Set β) (p : β → Form α) : Form α :=
-  fun v ↦ ∃ x ∈ s, p x v
-def sAnd {β : Type} (s : Set β) (p : β → Form α) : Form α :=
-  fun v ↦ ∀ x ∈ s, p x v
+def sOr {ι : Type} (p : ι → Form α) : Form α :=
+  fun v ↦ ∃ x, p x v
+def sAnd {ι : Type} (p : ι → Form α) : Form α :=
+  fun v ↦ ∀ x, p x v
 
 def sat (p : Form α) : Prop := ∃ v, p v
 
@@ -80,6 +82,18 @@ lemma or {φ ψ : Form α} {s t : Set α} (h₁ : φ.DependsOn s) (h₂ : ψ.Dep
 lemma not {φ : Form α} {s : Set α} (h : φ.DependsOn s) :
     φ.not.DependsOn s := by
   intro v v' hd; refine congrArg Not ?_; exact h v v' hd
+
+lemma sOr {ι : Type} {p : ι → Form α} {s : ι → Set α}
+    (h : ∀ i : ι, (p i).DependsOn (s i)) :
+    (sOr p).DependsOn (Set.iUnion s) := by
+  intro v v' hd; ext; refine exists_congr fun i ↦ iff_iff_eq.mpr ?_
+  exact DependsOn.monotone _ (Set.subset_iUnion _ _) (h i) v v' hd
+
+lemma sAnd {ι : Type} {p : ι → Form α} {s : ι → Set α}
+    (h : ∀ i : ι, (p i).DependsOn (s i)) :
+    (sAnd p).DependsOn (Set.iUnion s) := by
+  intro v v' hd; refine forall_congr fun i ↦ ?_
+  exact DependsOn.monotone _ (Set.subset_iUnion _ _) (h i) v v' hd
 
 lemma empty_vars {p : Form α} (hd : p.DependsOn ∅) (hsat : p.sat): p = Form.true := by
   ext v; conv => exact iff_true _
