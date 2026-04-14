@@ -494,7 +494,17 @@ lemma seq_monotone [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : C
         · subst heq; rcases hyx with hyx | ⟨hy, hx'⟩
           · right; refine Set.mem_iUnion.mpr ⟨φ, ?_⟩;
             exact (hext φ).downcl x hx y hyx
-          · left; sorry
+          · left
+            have ⟨s, ⟨_, _, ⟨v, hsat⟩, hstk, _⟩, heq⟩ := (Set.Finite.mem_toFinset _).mp φ.property
+            have hy' : y ∈ α'.nodes := by
+              refine (α'.val.property.form_dom _).mp ?_
+              rw [← heq] at hy; exact ⟨v, hy _ hsat⟩
+            refine or_iff_not_imp_right.mp (hle₁.succ _ hy') ?_
+            intro ⟨z, hz, hrel⟩
+            refine not_exists.mp (hstk _ hsat) ⟨_, hz⟩ ?_
+            refine (congrFun (hle₁.form _ hz.1) _).mpr ?_
+            refine (α'.val.property.form _ (hle₁.nodes hz.1)).2 _ hrel _ ?_
+            rw [← heq] at hy; exact hy _ hsat
         · exfalso
           refine Set.disjoint_left.mp ((g.property ψ).2.2 _ heq)
               ?_
@@ -502,20 +512,78 @@ lemma seq_monotone [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : C
           rcases hyx with hyx | ⟨_, hx'⟩
           · exact ((g ψ).val.property.rel_dom hyx).2
           · exact hx'
-  · simp only [Lpo.nodes, seq, seq_base, Subtype.exists, Set.mem_union, Finset.mem_coe,
-      Set.mem_iUnion, Lpo.rel, eq_iff_iff]
-    intro x hx y hy; sorry
+  · intro x hx y hy; ext; constructor
+    · rintro (hrel | ⟨φ, h⟩)
+      · left; exact le_rel hle₁ hrel
+      · right; refine ⟨⟨φ.val, branches_monotone hle₁ φ.property⟩, ?_⟩
+        rcases h with (hrel | ⟨hform, hy'⟩)
+        · left; exact le_rel (hext _) hrel
+        · right; refine ⟨?_, (hext _).nodes hy'⟩
+          refine le_of_le_of_eq hform (hle₁.form _ ?_)
+          refine (α.val.property.form_dom _).mp ?_
+          have ⟨s, ⟨_, _, ⟨v, hsat⟩, _⟩, heq⟩ := (Set.Finite.mem_toFinset _).mp φ.property
+          rw [← heq] at hform; exact ⟨v, hform _ hsat⟩
+    · simp only [Lpo.nodes, seq, seq_base, nodes, Set.mem_union, Set.mem_iUnion, Lpo.rel] at *
+      obtain (hx | ⟨φ, hx⟩) := hx <;>
+      obtain (hy | ⟨ψ, hy⟩) := hy <;>
+      rintro (hrel | ⟨φ', hrel | ⟨hform, hy'⟩⟩)
+      · left; exact (hle₁.rel _ hx _ hy).mpr hrel
+      · exfalso; have hx' := ((g _).val.property.rel_dom hrel).1
+        exact Set.disjoint_left.mp (g.property _).2.1 (hle₁.nodes hx) hx'
+      · exfalso; exact Set.disjoint_left.mp (g.property _).2.1 (hle₁.nodes hy) hy'
+      · exfalso; have hy' := (α'.val.property.rel_dom hrel).2
+        exact Set.disjoint_left.mp (g.property _).2.1 hy' ((hext _).nodes hy)
+      · exfalso; have hx' := ((g _).val.property.rel_dom hrel).1
+        exact Set.disjoint_left.mp (g.property _).2.1 (hle₁.nodes hx) hx'
+      · refine Or.inr ⟨ψ, Or.inr ⟨?_, hy⟩⟩
+        refine le_of_eq_of_le ?_ (le_of_le_of_eq hform ?_)
+        · refine congrArg Subtype.val (not_not.mp (((g.property φ').2.2 ⟨ψ.val, ?_⟩).mt ?_)).symm
+          · exact branches_monotone hle₁ ψ.property
+          · exact Set.not_disjoint_iff.mpr ⟨y, hy', (hext _).nodes hy⟩
+        · symm; exact hle₁.form _ hx
+      · exfalso; have hx' := (α'.val.property.rel_dom hrel).1
+        exact Set.disjoint_left.mp (g.property _).2.1 hx' ((hext _).nodes hx)
+      · exfalso; have hy' := ((g _).val.property.rel_dom hrel).2
+        exact Set.disjoint_left.mp (g.property _).2.1 (hle₁.nodes hy) hy'
+      · exfalso; exact Set.disjoint_left.mp (g.property _).2.1 (hle₁.nodes hy) hy'
+      · exfalso; have hx' := (α'.val.property.rel_dom hrel).1
+        exact Set.disjoint_left.mp (g.property _).2.1 hx' ((hext _).nodes hx)
+      · refine Or.inr ⟨φ, Or.inl ?_⟩
+        have ⟨hx', hy'⟩ := (g _).val.property.rel_dom hrel
+        have heq : φ.val = φ'.val := by
+          refine congrArg Subtype.val (not_not.mp (((g.property φ').2.2 ⟨φ.val, ?_⟩).mt ?_)).symm
+          · exact branches_monotone hle₁ φ.property
+          · exact Set.not_disjoint_iff.mpr ⟨x, hx', (hext _).nodes hx⟩
+        have : φ = ψ := by
+          ext1; rw [heq]
+          refine congrArg Subtype.val (not_not.mp (((g.property φ').2.2 ⟨ψ.val, ?_⟩).mt ?_))
+          · exact branches_monotone hle₁ ψ.property
+          · exact Set.not_disjoint_iff.mpr ⟨y, hy', (hext _).nodes hy⟩
+        subst this; refine ((hext φ).rel _ hx _ hy).mpr ?_
+        · have {h} : ⟨φ.val, h⟩ = φ' := by ext1; exact heq
+          rw [this]; exact hrel
+      · exfalso; refine Set.disjoint_left.mp (g.property _).2.1 ?_ ((hext _).nodes hx)
+        refine (α'.val.property.form_dom _).mp ?_
+        have ⟨s, ⟨_, _, ⟨v, hsat⟩, _⟩, heq⟩ := (Set.Finite.mem_toFinset _).mp φ'.property
+        rw [← heq] at hform; exact ⟨v, hform _ hsat⟩
   · intro x; by_cases hx : x ∈ (α.seq β f).nodes
     · rcases hx with hx | hx
       · have hx' : x ∈ α'.nodes := hle₁.nodes hx
-        simp only [Lpo.lab, seq, seq_base, hx, ↓reduceIte, hx']
-        sorry -- exact hle₁.lab x
-      · rcases Set.mem_iUnion.mp hx with ⟨φ, hx⟩
-        have hnα := Set.disjoint_right.mp (f.property φ).2.1 hx
-        have hx' := (hext φ).nodes hx
-        have hnα' := Set.disjoint_right.mp (g.property _).2.1 hx'
-        simp only [Lpo.lab, seq, seq_base, hnα, ↓reduceIte, hnα']
-        sorry
+        have hf : ¬ ∃ φ, x ∈ (f φ).nodes := by
+          intro ⟨φ, hφ⟩; exact Set.disjoint_right.mp (f.property φ).2.1 hφ hx
+        have hg : ¬ ∃ φ, x ∈ (g φ).nodes := by
+          intro ⟨φ, hφ⟩; exact Set.disjoint_right.mp (g.property φ).2.1 hφ hx'
+        simp only [Lpo.lab, seq, seq_base, dif_neg hf, dif_neg hg]
+        exact hle₁.lab x
+      · simp only [Set.mem_iUnion] at hx
+        have ⟨φ, hf⟩ := hx; have hg := (hext φ).nodes hf
+        have hx' : ∃ φ, x ∈ (g φ).nodes := ⟨⟨φ.val, _⟩, hg⟩
+        simp only [Lpo.lab, seq, seq_base, dif_pos hx, dif_pos hx']
+        refine le_of_le_of_eq ((hext _).lab x) ?_
+        refine congrArg₂ Lpofin.lab (congrArg _ ?_) rfl
+        refine not_not.mp (((g.property _).2.2 _).mt (Set.not_disjoint_iff.mpr ?_))
+        refine ⟨x, ?_, Exists.choose_spec hx'⟩
+        exact (hext _).nodes (Exists.choose_spec hx)
     · exact le_of_eq_of_le ((α.seq β f).val.property.lab_dom _ hx) bot_le
   · rintro x (hx | hx)
     · have hx' := hle₁.nodes hx
@@ -536,8 +604,45 @@ lemma seq_monotone [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : C
           have hx := Set.disjoint_left.mp hd h
           exact ((f ψ).val.property.form_dom x).mp.mt hx ⟨v, hψ⟩
         subst heq; exact ⟨_, (congrFun ((hext _).form _ h) _).mp hψ, hφ⟩
-      · intro ⟨ψ, hψ⟩; sorry
-  · sorry
+      · intro ⟨ψ, hform, hψ⟩
+        have heq : ψ.val = φ.val := by
+          have hx' := ((g ψ).val.property.form_dom _).mp ⟨_, hform⟩
+          refine congrArg Subtype.val (not_not.mp (((g.property ψ).2.2 ⟨φ, ?_⟩).mt ?_))
+          · exact branches_monotone hle₁ φ.property
+          · exact Set.not_disjoint_iff.mpr ⟨x, hx', (hext _).nodes h⟩
+        refine ⟨φ, ?_, ?_⟩
+        · refine (congrFun ?_ _).mpr hform
+          refine ((hext φ).form _ h).trans ?_
+          have {h} : ⟨φ.val, h⟩ = ψ := by ext1; exact heq.symm
+          rw [this]; rfl
+        · rw [← heq]; exact hψ
+  · simp only [Lpo.nodes, seq, seq_base, Set.mem_union, Set.mem_iUnion, Lpo.bots, Lpo.rel, Lpo.lab]
+    rintro x (hx | ⟨φ, hx⟩)
+    · rcases hle₁.succ _ hx with (hx' | ⟨z, hz, hrel⟩)
+      · left; left; exact hx'
+      · right; refine ⟨z, ⟨Or.inl hz.1, ?_⟩, Or.inl hrel⟩
+        refine (dif_neg ?_).trans hz.2
+        intro ⟨φ, hz'⟩
+        exact Set.disjoint_left.mp (f.property φ).2.1 hz.1 hz'
+    · by_cases hφ : φ.val ∈ α.branches
+      · rcases (hext ⟨_, hφ⟩).succ _ hx with (hx' | ⟨z, hz, hrel⟩)
+        · left; right; exact ⟨_, hx'⟩
+        · right; refine ⟨z, ⟨Or.inr ⟨_, hz.1⟩, ?_⟩, Or.inr ⟨φ, Or.inl hrel⟩⟩
+          refine (dif_pos ⟨_, hz.1⟩).trans ?_; sorry
+      · right
+        have hφ' := (Set.Finite.mem_toFinset _).mpr.mt hφ
+        rw [le_branches_set hle₁] at hφ'
+        have h := (Set.Finite.mem_toFinset _).mp φ.property
+        have ⟨v, hform⟩ := not_forall.mp ((Set.mem_inter h).mt hφ')
+        have ⟨hv, hform⟩ := Classical.not_imp.mp hform
+        have ⟨⟨z, hz⟩, hform⟩ := not_not.mp hform
+        refine ⟨z, ⟨Or.inl hz.1, ?_⟩, ?_⟩
+        · refine (dif_neg ?_).trans hz.2
+          intro ⟨φ, hz'⟩; exact Set.disjoint_left.mp (f.property φ).2.1 hz.1 hz'
+        · right; refine ⟨φ, Or.inr ⟨?_, hx⟩⟩
+          have ⟨s, ⟨_, _, _, hstk, _⟩, heq⟩ := (Set.Finite.mem_toFinset _).mp φ.property
+          rw [← heq]; intro v' hconj
+          have := not_exists.mp (hstk _ hconj); sorry
 
 lemma seq_isomorphic [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : CopyFn α' β'}
     (hα : α ≈ α') (hβ : β ≈ β') : seq α β f ≈ seq α' β' g := by
