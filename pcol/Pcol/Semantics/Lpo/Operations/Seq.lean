@@ -467,7 +467,7 @@ noncomputable def seq [DCPO l] (α β : Lpofin l) (f : CopyFn α β) : Lpofin l 
 }
 
 lemma seq_monotone [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : CopyFn α' β'}
-    (hle₁ : α ≤ α') (hle₂ : β ≤ β') (hext : CopyFn_extends hle₁ f g) :
+    (hle₁ : α ≤ α') (hext : CopyFn_extends hle₁ f g) :
     seq α β f ≤ seq α' β' g := by
   constructor
   · simp only [Lpo.nodes, seq, seq_base, nodes,
@@ -628,21 +628,39 @@ lemma seq_monotone [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : C
       · rcases (hext ⟨_, hφ⟩).succ _ hx with (hx' | ⟨z, hz, hrel⟩)
         · left; right; exact ⟨_, hx'⟩
         · right; refine ⟨z, ⟨Or.inr ⟨_, hz.1⟩, ?_⟩, Or.inr ⟨φ, Or.inl hrel⟩⟩
-          refine (dif_pos ⟨_, hz.1⟩).trans ?_; sorry
+          refine (dif_pos ⟨_, hz.1⟩).trans ?_
+          have {ψ} : (f ψ).lab z = ⊥ := by
+            by_cases heq : ψ = ⟨φ.val, hφ⟩
+            · subst heq; exact hz.2
+            · refine (f ψ).val.property.lab_dom _ ?_
+              exact Set.disjoint_right.mp ((f.property _).2.2 _ heq) hz.1
+          exact this
       · right
+        have ⟨s, ⟨hne, hs, ⟨v, hsat⟩, hstk, hmax⟩, heq⟩ := (Set.Finite.mem_toFinset _).mp φ.property
         have hφ' := (Set.Finite.mem_toFinset _).mpr.mt hφ
         rw [le_branches_set hle₁] at hφ'
         have h := (Set.Finite.mem_toFinset _).mp φ.property
-        have ⟨v, hform⟩ := not_forall.mp ((Set.mem_inter h).mt hφ')
+        have ⟨v', hform⟩ := not_forall.mp ((Set.mem_inter h).mt hφ')
         have ⟨hv, hform⟩ := Classical.not_imp.mp hform
         have ⟨⟨z, hz⟩, hform⟩ := not_not.mp hform
-        refine ⟨z, ⟨Or.inl hz.1, ?_⟩, ?_⟩
-        · refine (dif_neg ?_).trans hz.2
-          intro ⟨φ, hz'⟩; exact Set.disjoint_left.mp (f.property φ).2.1 hz.1 hz'
-        · right; refine ⟨φ, Or.inr ⟨?_, hx⟩⟩
-          have ⟨s, ⟨_, _, _, hstk, _⟩, heq⟩ := (Set.Finite.mem_toFinset _).mp φ.property
-          rw [← heq]; intro v' hconj
-          have := not_exists.mp (hstk _ hconj); sorry
+        by_cases hz' : z ∈ s
+        · refine ⟨z, ⟨Or.inl hz.1, ?_⟩, Or.inr ⟨φ, Or.inr ⟨?_, hx⟩⟩⟩
+          · refine (dif_neg ?_).trans hz.2
+            intro ⟨φ, hz'⟩; exact Set.disjoint_left.mp (f.property φ).2.1 hz.1 hz'
+          · rw [← heq]; intro v hv; exact hv ⟨_, hz'⟩
+        · exfalso; rw [← heq] at hv; refine hstk _ hv ?_
+          have : z ∉ α'.extens := by
+            intro hc
+            refine hmax (insert z s) (Finset.ssubset_insert hz') ?_ ?_
+            · intro y hy; rcases Finset.mem_insert.mp hy with rfl | hy
+              · exact hc
+              · exact hs hy
+            · use v'; intro y hy; rcases Finset.mem_insert.mp hy with rfl | hy
+              · exact (congrFun (hle₁.form _ hz.1) _).mp hform
+              · exact hv ⟨_, hy⟩
+          have := Finset.mem_filter.mpr.mt this; simp only [not_and, Decidable.not_not] at this
+          have := this ((Set.Finite.mem_toFinset _).mpr (hle₁.nodes hz.1))
+          exact this _ ((congrFun (hle₁.form _ hz.1) _).mp hform)
 
 lemma seq_isomorphic [DCPO l] {α α' β β' : Lpofin l} {f : CopyFn α β} {g : CopyFn α' β'}
     (hα : α ≈ α') (hβ : β ≈ β') : seq α β f ≈ seq α' β' g := by
